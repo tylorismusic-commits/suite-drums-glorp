@@ -296,6 +296,20 @@ if(GLORP_BUILD_TESTS)
     target_link_libraries(glorp_core_tests PRIVATE juce::juce_core juce::juce_recommended_warning_flags)
     add_test(NAME core COMMAND glorp_core_tests)
 
+    add_executable(glorp_audio_probe test/audio_probe.cpp)
+    target_include_directories(glorp_audio_probe PRIVATE
+        src src/core src/plugin src/ui
+        $<TARGET_PROPERTY:GlorpDrums,INCLUDE_DIRECTORIES>
+    )
+    target_compile_definitions(glorp_audio_probe PRIVATE
+        $<TARGET_PROPERTY:GlorpDrums,COMPILE_DEFINITIONS>
+    )
+    target_link_libraries(glorp_audio_probe PRIVATE
+        GlorpDrums
+        GlorpDrumsAssets
+        juce::juce_recommended_warning_flags
+    )
+
     foreach(ui_test_target test_editor test_zones_knobs diagnose_crocell_knobs)
         add_executable(${ui_test_target} EXCLUDE_FROM_ALL test/${ui_test_target}.cpp
             src/editor_app/GlorpKitProject.cpp

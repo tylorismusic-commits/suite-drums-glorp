@@ -87,6 +87,7 @@ class PluginProcessor : public juce::AudioProcessor
     static juce::String controlIdForInstrument(const juce::String &suffix, int index);
 
     void loadKit(const juce::String &drumkitPath);
+    void loadKitImpl(const juce::String &drumkitPath);
     void refreshKitList();
 
     const std::vector<KitEntry> &getKitList() const noexcept { return kitList; }

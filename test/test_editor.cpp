@@ -3,10 +3,18 @@
 #include "Editor.h"
 #include <iostream>
 
-int main()
+int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI gui;
     glorp::PluginProcessor proc;
+
+    if (argc > 1)
+    {
+        const juce::File requested = juce::File (juce::String (argv[1]));
+        std::cout << "Loading requested kit: " << requested.getFullPathName().toStdString() << std::endl;
+        proc.loadKit (requested.getFullPathName());
+        std::cout << "Kit error: " << proc.getLastKitError().toStdString() << std::endl;
+    }
     auto pluginEditor = proc.createEditorIfNeeded();
     if (! pluginEditor)
     {
@@ -14,7 +22,16 @@ int main()
         return 1;
     }
 
-    pluginEditor->setSize (1180, 860);
+    int uiWidth = 1180, uiHeight = 860;
+    if (const auto* sizeEnv = std::getenv ("GLORP_UI_SIZE"))
+    {
+        if (std::sscanf (sizeEnv, "%dx%d", &uiWidth, &uiHeight) != 2)
+        {
+            uiWidth = 1180;
+            uiHeight = 860;
+        }
+    }
+    pluginEditor->setSize (uiWidth, uiHeight);
     std::cout << "Editor created. Bounds: " << pluginEditor->getBounds().toString().toStdString() << std::endl;
     std::cout << "Proc current kit: " << proc.getCurrentKitPath().toStdString() << std::endl;
     std::cout << "Proc scanned kit count: " << proc.getKitList().size() << std::endl;
@@ -363,9 +380,10 @@ int main()
         auto cleanEditor = cleanProc.createEditorIfNeeded();
         if (cleanEditor)
         {
-            cleanEditor->setSize (1180, 860);
+            cleanEditor->setSize (uiWidth, uiHeight);
             auto cleanImage = cleanEditor->createComponentSnapshot (cleanEditor->getLocalBounds());
-            juce::File mainShot ("test/docs/screenshot.png");
+            juce::File mainShot (uiWidth == 1180 && uiHeight == 860 ? "test/docs/screenshot.png"
+                                                                             : "test/docs/screenshot_small.png");
             mainShot.deleteFile();
             juce::FileOutputStream fosMain (mainShot);
             if (fosMain.openedOk())

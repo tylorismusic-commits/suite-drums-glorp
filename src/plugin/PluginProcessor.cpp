@@ -213,6 +213,30 @@ void PluginProcessor::refreshKitList()
 
 void PluginProcessor::loadKit(const juce::String &drumkitPath)
 {
+    try
+    {
+        loadKitImpl(drumkitPath);
+    }
+    catch (const std::exception &e)
+    {
+        lastKitError = juce::String("Could not load kit: ") + e.what();
+        audioEngine.getSampler().unloadKit();
+        currentKit = {};
+        currentKitPath.clear();
+        DebugLog::instance().logInfo("KIT", lastKitError);
+    }
+    catch (...)
+    {
+        lastKitError = "Could not load kit: unknown error";
+        audioEngine.getSampler().unloadKit();
+        currentKit = {};
+        currentKitPath.clear();
+        DebugLog::instance().logInfo("KIT", lastKitError);
+    }
+}
+
+void PluginProcessor::loadKitImpl(const juce::String &drumkitPath)
+{
     lastKitError.clear();
 
     if (drumkitPath.isEmpty())

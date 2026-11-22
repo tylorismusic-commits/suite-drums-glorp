@@ -2379,8 +2379,9 @@ void Editor::resized()
     curX += midiW + gap;
     settingsButton.setBounds(curX, menuY, settingsW, menuH);
 
-    // 2. Bottom strip
-    const int bottomH = 135;
+    // 2. Bottom strip. Compact windows give the instrument panel more room.
+    const bool compact = h < 680;
+    const int bottomH = compact ? 112 : 135;
     const int bottomY = h - bottomH - 12;
 
 
@@ -2402,15 +2403,19 @@ void Editor::resized()
 
     // Inside Left Panel:
     // Selector button
-    instSelectorButton.setBounds(panelX + 14, panelY + 52, panelW - 28, 28);
+    const int selectorH = compact ? 24 : 28;
+    const int selectorY = panelY + (compact ? 44 : 52);
+    instSelectorButton.setBounds(panelX + 14, selectorY, panelW - 28, selectorH);
 
     // Output bus button
-    outBusButton.setBounds(panelX + 14, panelY + 84, panelW - 28, 24);
+    const int outBusH = compact ? 20 : 24;
+    const int outBusY = selectorY + selectorH + 4;
+    outBusButton.setBounds(panelX + 14, outBusY, panelW - 28, outBusH);
 
     // Zone buttons layout (2 columns grid)
-    const int zoneY = panelY + 114;
+    const int zoneY = outBusY + outBusH + 6;
     const int zoneW = (panelW - 28 - 6) / 2;
-    const int zoneH = 24;
+    const int zoneH = compact ? 20 : 24;
     const int zoneGap = 4;
 
     int currentZoneBottom = zoneY;
@@ -2445,8 +2450,8 @@ void Editor::resized()
     const int kPadX = 16;
     const int kCol1 = panelX + kPadX;
     const int kCol2 = panelX + panelW - kPadX - kSize;
-    const int kRow1 = currentZoneBottom + 10;
-    const int kRow2 = kRow1 + kSize + 14;
+    const int kRow1 = currentZoneBottom + (compact ? 6 : 10);
+    const int kRow2 = kRow1 + kSize + (compact ? 12 : 14);
 
     instVolumeKnob->setBounds(kCol1, kRow1, kSize, kSize + 14);
     instPanKnob->setBounds(kCol2, kRow1, kSize, kSize + 14);
@@ -2454,18 +2459,18 @@ void Editor::resized()
     instDynamicsKnob->setBounds(kCol2, kRow2, kSize, kSize + 14);
 
     // Velocity Curve row: Preset button + DrumGizmo-style Curve Preview
-    const int curveY = kRow2 + kSize + 12;
-    const int curveH = 24;
+    const int curveY = kRow2 + kSize + (compact ? 10 : 12);
+    const int curveH = compact ? 20 : 24;
     instCurveButton.setBounds(panelX + 14, curveY, panelW - 28, curveH);
 
-    const int previewY = curveY + curveH + 6;
-    const int previewH = 68;
+    const int previewY = curveY + curveH + (compact ? 4 : 6);
+    const int previewH = compact ? 46 : 68;
     instCurvePreview.setBounds(panelX + 14, previewY, panelW - 28, previewH);
 
     // Bottom row: NOTE label on left, LEARN button on right
-    const int noteRowY = previewY + previewH + 8;
+    const int noteRowY = previewY + previewH + (compact ? 5 : 8);
     const int learnW = 68;
-    const int learnH = 26;
+    const int learnH = compact ? 22 : 26;
     instLearnButton.setBounds(panelX + panelW - 14 - learnW, noteRowY, learnW, learnH);
 
     leftPanelHeight = static_cast<float>((noteRowY + learnH + 12) - panelY);

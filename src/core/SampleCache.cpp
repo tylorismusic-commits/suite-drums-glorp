@@ -128,11 +128,25 @@ SampleCache::Handle SampleCache::open(const std::string &path)
         else
         {
             std::string error;
+            bool parsed = false;
 
-            if (!parseWav(path, detail, error))
+            try
             {
-                // Give up quietly rather than spamming: a missing file just means
-                // that instrument stays silent.
+                parsed = parseWav(path, detail, error);
+            }
+            catch (const std::exception &e)
+            {
+                error = e.what();
+            }
+            catch (...)
+            {
+                error = "unknown error while reading wav";
+            }
+
+            if (!parsed)
+            {
+                // Give up quietly rather than spamming: a missing or unreadable
+                // file just means that instrument stays silent.
                 cache[path] = CacheEntry {};
                 return handle;
             }
@@ -170,8 +184,22 @@ SampleCache::Handle SampleCache::openFromArchive(const std::string &archivePath,
         else
         {
             std::string error;
+            bool parsed = false;
 
-            if (!parseWavSlice(archivePath, byteOffset, byteLength, detail, error))
+            try
+            {
+                parsed = parseWavSlice(archivePath, byteOffset, byteLength, detail, error);
+            }
+            catch (const std::exception &e)
+            {
+                error = e.what();
+            }
+            catch (...)
+            {
+                error = "unknown error while reading archive wav";
+            }
+
+            if (!parsed)
             {
                 cache[cacheKey] = CacheEntry {};
                 return handle;
@@ -219,25 +247,10 @@ bool parseWavBytes(const std::string &identifier,
         return false;
     }
 
-    // Advise kernel to preload pages and pre-touch to eliminate audio thread page faults
-#if defined(__linux__) || defined(__unix__)
-    if (mapping != nullptr)
-        madvise(const_cast<void *>(mapping->getData()), mapping->getSize(), MADV_WILLNEED);
-#elif defined(_WIN32)
-    if (mapping != nullptr)
-    {
-        // Windows: PrefetchVirtualMemory to pre-load mapped pages
-        WIN32_MEMORY_RANGE_ENTRY range;
-        range.VirtualAddress = const_cast<void *>(mapping->getData());
-        range.NumberOfBytes = mapping->getSize();
-        PrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0);
-    }
-#endif
-
-    volatile std::uint8_t touchSink = 0;
-    for (std::size_t p = 0; p < size; p += 4096)
-        touchSink += data[p];
-    (void) touchSink;
+    // Do not eagerly touch every page here. Large multi-mic kits map several
+    // GB, and faulting all of it in on the message thread can stall the host
+    // long enough for its watchdog to kill the plugin. Pages fault in lazily
+    // on first playback instead.
 
     auto readU32 = [](const std::uint8_t *p) -> std::uint32_t
     {
