@@ -69,7 +69,7 @@ class CalloutBox : public juce::Component
     bool isSelected = false;
     bool muted = false;
 
-    Theme theme = Theme::sketch();
+    Theme theme = Theme::suite();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CalloutBox)
 };

@@ -1,8 +1,8 @@
 /*
     PluginEditor.h - the thin AudioProcessorEditor wrapper.
 
-    Keeps JUCE's plumbing out of the hand-drawn UI so that Editor can also be
-    hosted by the standalone app without dragging AudioProcessor in with it.
+    Keeps JUCE's plumbing out of the Suite UI so the Editor stays testable
+    without dragging a host wrapper into it.
 */
 
 #pragma once
@@ -31,7 +31,7 @@ class PluginEditor : public juce::AudioProcessorEditor
         setSize(juce::jlimit(900, 2400, settings.editorWidth), juce::jlimit(620, 1800, settings.editorHeight));
     }
 
-    void paint(juce::Graphics &g) override { g.fillAll(Theme::byIndex(proc.getSettings().themeIndex).background); }
+    void paint(juce::Graphics &g) override { g.fillAll(Theme::suite().background); }
 
     void resized() override
     {

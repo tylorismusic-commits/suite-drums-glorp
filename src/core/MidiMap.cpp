@@ -1,4 +1,5 @@
 #include "MidiMap.h"
+#include "Config.h"
 
 #include <algorithm>
 
@@ -225,7 +226,7 @@ juce::File MidiMap::userPresetDirectory()
         return gUserPresetDirectoryOverride;
 
     return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("GlorpDrums")
+        .getChildFile(config::CONFIG_DIR_NAME)
         .getChildFile("presets");
 }
 
@@ -442,7 +443,7 @@ bool MidiMap::loadPresetFile(const juce::File &file, MapPreset &out, juce::Strin
 
     if (root == nullptr || root->getTagName() != "glorpMapPreset")
     {
-        error = file.getFileName() + " is not a GlorpDrums MIDI map preset";
+        error = file.getFileName() + " is not a Suite Drums Glorp MIDI map preset";
         return false;
     }
 

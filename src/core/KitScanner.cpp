@@ -129,6 +129,10 @@ std::vector<std::string> KitScanner::defaultSearchPaths()
 
     if (const auto home = homeDirectory(); !home.empty())
     {
+        // Suite paths first, then the original GlorpDrums locations for people
+        // upgrading with kits already installed.
+        paths.push_back(home + "/.suitedrumsglorp/kits");
+        paths.push_back(home + "/.config/SuiteDrumsGlorp/kits");
         paths.push_back(home + "/.glorpdrums/kits");
         paths.push_back(home + "/.config/GlorpDrums/kits");
         paths.push_back(home + "/DrumGizmo/kits");

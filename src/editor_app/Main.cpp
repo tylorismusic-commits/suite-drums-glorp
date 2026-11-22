@@ -1,5 +1,5 @@
 /*
-    Main.cpp - Entry point for the standalone GlorpKitEditor (.glorpkit Studio) desktop application.
+    Main.cpp - Entry point for Suite Kit Studio, the standalone .glorpkit creator.
 */
 
 #include "GlorpDrumsAssets.h"
@@ -12,12 +12,12 @@ class GlorpKitEditorMainWindow : public juce::DocumentWindow
 {
   public:
     GlorpKitEditorMainWindow(const juce::String &name, const juce::String &commandLine)
-        : DocumentWindow(name, juce::Colour(0xff2b2620), DocumentWindow::allButtons)
+        : DocumentWindow(name, juce::Colour(0xff1a1a1d), DocumentWindow::allButtons)
     {
         setUsingNativeTitleBar(true);
 
-        auto icon = juce::ImageFileFormat::loadFrom(GlorpAssets::glorpkit_studio_icon_png,
-                                                    (size_t) GlorpAssets::glorpkit_studio_icon_pngSize);
+        auto icon = juce::ImageFileFormat::loadFrom(GlorpAssets::suite_kit_studio_icon_png,
+                                                    (size_t) GlorpAssets::suite_kit_studio_icon_pngSize);
         if (icon.isValid())
             setIcon(icon);
 
@@ -63,13 +63,17 @@ class GlorpKitEditorApplication : public juce::JUCEApplication
   public:
     GlorpKitEditorApplication() = default;
 
-    const juce::String getApplicationName() override { return "GlorpKitEditor"; }
-    const juce::String getApplicationVersion() override { return "0.2.0"; }
+    const juce::String getApplicationName() override { return "SuiteKitStudio"; }
+    #if defined(SUITE_DRUMS_VERSION)
+    const juce::String getApplicationVersion() override { return SUITE_DRUMS_VERSION; }
+#else
+    const juce::String getApplicationVersion() override { return "0.1.0"; }
+#endif
     bool moreThanOneInstanceAllowed() override { return true; }
 
     void initialise(const juce::String &commandLine) override
     {
-        mainWindow = std::make_unique<GlorpKitEditorMainWindow>("GlorpKit Studio - .glorpkit v2.0 Editor", commandLine);
+        mainWindow = std::make_unique<GlorpKitEditorMainWindow>("Suite Kit Studio - .glorpkit Creator", commandLine);
     }
 
     void shutdown() override { mainWindow.reset(); }

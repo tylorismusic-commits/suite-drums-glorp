@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(GlorpDrums VERSION 0.2.0 LANGUAGES C CXX)
+project(SuiteDrumsGlorp VERSION 0.1.0 LANGUAGES C CXX)
 
 #==================================================================================
 # Options
@@ -9,7 +9,6 @@ project(GlorpDrums VERSION 0.2.0 LANGUAGES C CXX)
 option(GLORP_BUILD_VST3        "Build the VST3 target"        ON)
 option(GLORP_BUILD_CLAP        "Build the CLAP target (experimental)" OFF)
 option(GLORP_BUILD_LV2         "Build the LV2 target (Linux only)" ON)
-option(GLORP_BUILD_STANDALONE  "Build the standalone app"    ON)
 option(GLORP_BUILD_KIT_EDITOR  "Build standalone GlorpKit editor application" ON)
 option(GLORP_BUILD_TESTS       "Build the headless test suite" ON)
 
@@ -93,12 +92,9 @@ elseif(GLORP_BUILD_LV2 AND GLORP_IS_WINDOWS)
     message(WARNING "LV2 is not supported on Windows; disabling GLORP_BUILD_LV2")
 endif()
 
-if(GLORP_BUILD_STANDALONE)
-    list(APPEND GLORP_PLUGIN_FORMATS Standalone)
-endif()
 
 if(NOT GLORP_PLUGIN_FORMATS)
-    message(FATAL_ERROR "At least one of GLORP_BUILD_VST3 / GLORP_BUILD_CLAP / GLORP_BUILD_LV2 / GLORP_BUILD_STANDALONE must be ON")
+    message(FATAL_ERROR "At least one of GLORP_BUILD_VST3 / GLORP_BUILD_CLAP / GLORP_BUILD_LV2 must be ON")
 endif()
 
 #==================================================================================
@@ -113,11 +109,8 @@ juce_add_binary_data(GlorpDrumsAssets
     HEADER_NAME   "GlorpDrumsAssets.h"
     NAMESPACE     GlorpAssets
     SOURCES
-        resources/logo.svg
-        resources/fonts/PatrickHand-Regular.ttf
-        resources/fonts/LilitaOne-Regular.ttf
         resources/fonts/RedHatText-Medium.otf
-        resources/fonts/RedHatDisplay-Bold.otf
+        resources/fonts/Jost-ExtraBold.ttf
         assets/kick.png
         assets/snare.png
         assets/hihat.png
@@ -127,9 +120,9 @@ juce_add_binary_data(GlorpDrumsAssets
         assets/crash_1.png
         assets/crash_2.png
         assets/ride.png
-        assets/logo.png
-        assets/glorpdrums_icon.png
-        assets/glorpkit_studio_icon.png
+        assets/suite_drums_icon.png
+        assets/suite_kit_studio_icon.png
+        assets/suite_logo.png
 )
 
 #==================================================================================
@@ -137,13 +130,13 @@ juce_add_binary_data(GlorpDrumsAssets
 #==================================================================================
 
 juce_add_plugin(GlorpDrums
-    PRODUCT_NAME            "GlorpDrums"
-    COMPANY_NAME            "GlorpDrums"
-    BUNDLE_ID               "org.glorpdrums.GlorpDrums"
-    PLUGIN_MANUFACTURER_CODE Glrp
-    PLUGIN_CODE             Glrp
+    PRODUCT_NAME            "Suite Drums Glorp"
+    COMPANY_NAME            "Tylorismusic"
+    BUNDLE_ID               "com.tylorismusic.suitedrumsglorp"
+    PLUGIN_MANUFACTURER_CODE Tylr
+    PLUGIN_CODE             SdGl
     FORMATS                ${GLORP_PLUGIN_FORMATS}
-    LV2URI                  "https://github.com/glorpdrums/GlorpDrums"
+    LV2URI                  "https://github.com/tylorismusic-commits/suite-drums-glorp"
     VST3_CATEGORIES         "Instrument" "Sampler" "Drum"
     COPY_PLUGIN_AFTER_BUILD FALSE
     IS_SYNTH                FALSE
@@ -151,7 +144,7 @@ juce_add_plugin(GlorpDrums
     NEEDS_MIDI_OUTPUT       FALSE
     IS_MIDI_EFFECT          FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
-    ICON_BIG                assets/glorpdrums_icon.png
+    ICON_BIG                assets/suite_drums_icon.png
 )
 
 string(REPLACE ";" "," GLORP_PLUGIN_FORMATS_STR "${GLORP_PLUGIN_FORMATS}")
@@ -181,14 +174,6 @@ target_sources(GlorpDrums PRIVATE
     src/core/ChannelFX.cpp
     src/core/BleedMatrix.cpp
     src/core/AcousticCrosstalk.cpp
-    src/practice/TempoDetector.cpp
-    src/practice/Metronome.cpp
-    src/practice/AudioRecorder.cpp
-    src/practice/MidiRecorder.cpp
-    src/practice/BackingTrackPlayer.cpp
-    src/practice/SongDatabase.cpp
-    src/practice/SetlistPlayer.cpp
-    src/practice/StreamOutputBridge.cpp
     src/ui/Editor.cpp
     src/ui/DrumKitView.cpp
     src/ui/CalloutBox.cpp
@@ -197,14 +182,13 @@ target_sources(GlorpDrums PRIVATE
     src/ui/Scope.cpp
     src/ui/EDrumWizard.cpp
     src/ui/MixerView.cpp
-    src/ui/RecordPracticeView.cpp
 )
 
 # Bundled logo and fonts, as a static library so both the VST3/LV2 binaries and
 # the standalone executable can share them.
 target_link_libraries(GlorpDrums PRIVATE GlorpDrumsAssets)
 
-target_include_directories(GlorpDrums PRIVATE src src/core src/plugin src/ui src/practice)
+target_include_directories(GlorpDrums PRIVATE src src/core src/plugin src/ui)
 
 target_compile_definitions(GlorpDrums PUBLIC
     JUCE_WEB_BROWSER=0
@@ -227,28 +211,16 @@ target_link_libraries(GlorpDrums
         juce::juce_recommended_warning_flags
 )
 
-if(GLORP_BUILD_STANDALONE)
-    if(GLORP_IS_WINDOWS)
-        # WASAPI for Windows standalone audio
-        target_compile_definitions(GlorpDrums PRIVATE JUCE_WASAPI=1)
-    else()
-        # ALSA + JACK for Linux standalone audio
-        # JACK is enabled for live performance and low-latency monitoring.
-        target_compile_definitions(GlorpDrums PRIVATE JUCE_ALSA=1 JUCE_JACK=1)
-    endif()
-    target_link_libraries(GlorpDrums PRIVATE juce::juce_audio_devices)
-endif()
-
 #==================================================================================
 # GlorpKit Editor Standalone Application
 #==================================================================================
 
 if(GLORP_BUILD_KIT_EDITOR)
     juce_add_gui_app(GlorpKitEditor
-        PRODUCT_NAME "GlorpKitEditor"
-        COMPANY_NAME "GlorpDrums"
-        BUNDLE_ID "org.glorpdrums.GlorpKitEditor"
-        ICON_BIG assets/glorpkit_studio_icon.png
+        PRODUCT_NAME "SuiteKitStudio"
+        COMPANY_NAME "Tylorismusic"
+        BUNDLE_ID "com.tylorismusic.suitekitstudio"
+        ICON_BIG assets/suite_kit_studio_icon.png
     )
 
     target_sources(GlorpKitEditor PRIVATE
@@ -271,7 +243,6 @@ if(GLORP_BUILD_KIT_EDITOR)
         src
         src/core
         src/ui
-        src/practice
         src/editor_app
     )
 
@@ -280,13 +251,9 @@ if(GLORP_BUILD_KIT_EDITOR)
         JUCE_WEB_BROWSER=0
         GLORP_BUILD_DATE="${GLORP_BUILD_DATE}"
         GLORP_MAX_INSTRUMENT_BUSES=${GLORP_MAX_INSTRUMENT_BUSES}
+        SUITE_DRUMS_VERSION="${PROJECT_VERSION}"
     )
 
-    if(GLORP_IS_WINDOWS)
-        target_compile_definitions(GlorpKitEditor PRIVATE JUCE_WASAPI=1)
-    else()
-        target_compile_definitions(GlorpKitEditor PRIVATE JUCE_ALSA=1 JUCE_JACK=1)
-    endif()
 
     target_link_libraries(GlorpKitEditor PRIVATE
         GlorpDrumsAssets
@@ -296,7 +263,6 @@ if(GLORP_BUILD_KIT_EDITOR)
         juce::juce_gui_basics
         juce::juce_gui_extra
         juce::juce_audio_basics
-        juce::juce_audio_devices
         juce::juce_audio_formats
         juce::juce_audio_processors
         juce::juce_audio_utils
@@ -330,13 +296,13 @@ if(GLORP_BUILD_TESTS)
     target_link_libraries(glorp_core_tests PRIVATE juce::juce_core juce::juce_recommended_warning_flags)
     add_test(NAME core COMMAND glorp_core_tests)
 
-    foreach(ui_test_target test_editor test_zones_knobs diagnose_crocell_knobs verify_fixes)
+    foreach(ui_test_target test_editor test_zones_knobs diagnose_crocell_knobs)
         add_executable(${ui_test_target} EXCLUDE_FROM_ALL test/${ui_test_target}.cpp
             src/editor_app/GlorpKitProject.cpp
             src/editor_app/GlorpKitEditorWindow.cpp
         )
         target_include_directories(${ui_test_target} PRIVATE
-            src src/core src/plugin src/ui src/practice src/editor_app
+            src src/core src/plugin src/ui src/editor_app
             $<TARGET_PROPERTY:GlorpDrums,INCLUDE_DIRECTORIES>
         )
         target_compile_definitions(${ui_test_target} PRIVATE

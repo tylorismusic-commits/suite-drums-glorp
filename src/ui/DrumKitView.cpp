@@ -1,4 +1,5 @@
 #include "DrumKitView.h"
+#include "Config.h"
 
 #include <algorithm>
 #include <cmath>
@@ -148,13 +149,18 @@ void DrumKitView::loadLayoutFromFile()
 
     juce::File layoutFile;
     const auto localAssets = juce::File::getCurrentWorkingDirectory().getChildFile("assets/kit_layout.json");
-    const auto homeConfig = juce::File::getSpecialLocation(juce::File::userHomeDirectory)
-                                .getChildFile(".config/GlorpDrums/kit_layout.json");
+    const auto configDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                               .getChildFile(config::CONFIG_DIR_NAME);
+    const auto homeConfig = configDir.getChildFile("kit_layout.json");
+    const auto legacyConfig = juce::File::getSpecialLocation(juce::File::userHomeDirectory)
+                                  .getChildFile(".config/GlorpDrums/kit_layout.json");
 
     if (localAssets.existsAsFile())
         layoutFile = localAssets;
     else if (homeConfig.existsAsFile())
         layoutFile = homeConfig;
+    else if (legacyConfig.existsAsFile())
+        layoutFile = legacyConfig;
 
     if (!layoutFile.existsAsFile())
         return;
@@ -213,8 +219,8 @@ bool DrumKitView::saveLayoutToFile()
         saved = true;
     }
 
-    const auto homeDir =
-        juce::File::getSpecialLocation(juce::File::userHomeDirectory).getChildFile(".config/GlorpDrums");
+    const auto homeDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                             .getChildFile(config::CONFIG_DIR_NAME);
     homeDir.createDirectory();
     const auto homeConfig = homeDir.getChildFile("kit_layout.json");
     homeConfig.replaceWithText(jsonString);

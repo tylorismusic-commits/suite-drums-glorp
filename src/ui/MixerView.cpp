@@ -115,10 +115,16 @@ void MixerView::HandButton::paintButton(juce::Graphics &g, bool isHover, bool is
     const auto borderCol = isHover ? theme.accent : theme.panelEdge;
     drawSketchRect(g, r, borderCol, active ? 2.0f : 1.4f);
 
-    const bool whiteText =
-        theme.isDark
-        || (active && (activeColour == juce::Colour(0xffe74c3c) || activeColour == juce::Colour(0xff111215)));
-    g.setColour(whiteText ? juce::Colours::white : (active ? juce::Colour(0xff111215) : theme.ink));
+    juce::Colour textCol = theme.ink;
+
+    if (active)
+    {
+        // Amber and other bright active fills need dark text; deep red/black
+        // active fills keep white text.
+        textCol = activeColour.getPerceivedBrightness() > 0.55f ? theme.background : juce::Colours::white;
+    }
+
+    g.setColour(textCol);
     g.setFont(displayFont(std::min(r.getHeight() * 0.58f, 13.0f)));
     g.drawText(getButtonText(), r, juce::Justification::centred, false);
 }
@@ -579,11 +585,11 @@ void MixerView::MasterStripComponent::paint(juce::Graphics &g)
         g.setColour(ink.withAlpha(0.25f));
         g.fillRoundedRectangle(badgeR.translated(1.5f, 1.5f), 4.0f);
     }
-    g.setColour(juce::Colour(0xffffeaa7)); // warm golden comic pill
+    g.setColour(theme.accent);
     g.fillRoundedRectangle(badgeR, 4.0f);
     drawSketchRect(g, badgeR, theme.isDark ? theme.panelEdge : ink, 1.5f, 91);
 
-    g.setColour(juce::Colour(0xff101114));
+    g.setColour(theme.background);
     g.setFont(displayFont(12.5f));
     g.drawText("MASTER BUS", badgeR, juce::Justification::centred, false);
 

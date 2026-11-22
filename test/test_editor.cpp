@@ -24,7 +24,7 @@ int main()
     // 1. Take snapshot of default idle state
     {
         auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-        juce::File outFile ("/home/servandoc/Documents/DEV/GlorpDrums/test/editor_snapshot.png");
+        juce::File outFile ("test/test/editor_snapshot.png");
         outFile.deleteFile();
         juce::FileOutputStream fos (outFile);
         if (fos.openedOk())
@@ -79,7 +79,7 @@ int main()
         }
 
         auto imageHit = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-        juce::File outHitFile ("/home/servandoc/Documents/DEV/GlorpDrums/test/editor_snapshot_hit.png");
+        juce::File outHitFile ("test/test/editor_snapshot_hit.png");
         outHitFile.deleteFile();
         juce::FileOutputStream fos (outHitFile);
         if (fos.openedOk())
@@ -117,7 +117,7 @@ int main()
         }
 
         auto imageHihat = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-        juce::File outHihatFile ("/home/servandoc/Documents/DEV/GlorpDrums/test/editor_snapshot_hihat.png");
+        juce::File outHihatFile ("test/test/editor_snapshot_hihat.png");
         outHihatFile.deleteFile();
         juce::FileOutputStream fos (outHihatFile);
         if (fos.openedOk())
@@ -197,7 +197,7 @@ int main()
         }
 
         auto image4Zones = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-        juce::File out4ZoneFile ("/home/servandoc/Documents/DEV/GlorpDrums/test/editor_snapshot_4zones.png");
+        juce::File out4ZoneFile ("test/test/editor_snapshot_4zones.png");
         out4ZoneFile.deleteFile();
         juce::FileOutputStream fos (out4ZoneFile);
         if (fos.openedOk())
@@ -224,7 +224,7 @@ int main()
         }
 
         auto imageEditMode = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-        juce::File outEditFile ("/home/servandoc/Documents/DEV/GlorpDrums/test/editor_snapshot_wysiwyg.png");
+        juce::File outEditFile ("test/test/editor_snapshot_wysiwyg.png");
         outEditFile.deleteFile();
         juce::FileOutputStream fosEdit (outEditFile);
         if (fosEdit.openedOk())
@@ -280,7 +280,7 @@ int main()
         }
 
         auto imageScope = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-        juce::File outScopeFile ("/home/servandoc/Documents/DEV/GlorpDrums/test/editor_snapshot_scope.png");
+        juce::File outScopeFile ("test/test/editor_snapshot_scope.png");
         outScopeFile.deleteFile();
         juce::FileOutputStream fosScope (outScopeFile);
         if (fosScope.openedOk())
@@ -303,7 +303,7 @@ int main()
         }
 
         auto imageWizard = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-        juce::File outWizardFile ("/home/servandoc/Documents/DEV/GlorpDrums/docs/edrum_wizard_screenshot.png");
+        juce::File outWizardFile ("test/docs/edrum_wizard_screenshot.png");
         outWizardFile.deleteFile();
         juce::FileOutputStream fosWizard (outWizardFile);
         if (fosWizard.openedOk())
@@ -321,7 +321,7 @@ int main()
         {
             ed->setViewMode (glorp::Editor::EditorView::mixerView);
             auto imageMixer = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-            juce::File outMixerFile ("/home/servandoc/Documents/DEV/GlorpDrums/docs/mixer_view_screenshot.png");
+            juce::File outMixerFile ("test/docs/mixer_view_screenshot.png");
             outMixerFile.deleteFile();
             juce::FileOutputStream fosMixer (outMixerFile);
             if (fosMixer.openedOk())
@@ -335,7 +335,7 @@ int main()
             {
                 mv->openChannelFX (0);
                 auto imageFX = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-                juce::File outFXFile ("/home/servandoc/Documents/DEV/GlorpDrums/docs/mixer_fx_screenshot.png");
+                juce::File outFXFile ("test/docs/mixer_fx_screenshot.png");
                 outFXFile.deleteFile();
                 juce::FileOutputStream fosFX (outFXFile);
                 if (fosFX.openedOk())
@@ -345,199 +345,27 @@ int main()
                     std::cout << "Saved Mixer FX Drawer snapshot to: " << outFXFile.getFullPathName().toStdString() << std::endl;
                 }
             }
-
-            // Create and load a test backing track file for authentic waveforms & beat grid
-            juce::File backingWav ("/tmp/demo_backing_track.wav");
-            backingWav.deleteFile();
-            {
-                const double sr = 44100.0;
-                const int numSamples = static_cast<int> (sr * 16.0); // 16 seconds
-                juce::AudioBuffer<float> backingBuf (2, numSamples);
-                backingBuf.clear();
-                const double bpm = 120.0;
-                const int spb = static_cast<int> (sr * 60.0 / bpm);
-                for (int s = 0; s < numSamples; ++s)
-                {
-                    int beatIndex = s / spb;
-                    int beatOffset = s % spb;
-                    float beatEnv = std::exp (-static_cast<float> (beatOffset) / 1200.0f);
-                    float freq = (beatIndex % 4 == 0) ? 120.0f : 240.0f;
-                    float val = std::sin (2.0f * juce::MathConstants<float>::pi * freq * beatOffset / static_cast<float> (sr)) * beatEnv * 0.75f;
-                    backingBuf.setSample (0, s, val);
-                    backingBuf.setSample (1, s, val);
-                }
-                juce::WavAudioFormat wav;
-                auto fos = backingWav.createOutputStream();
-                if (fos)
-                {
-                    std::unique_ptr<juce::AudioFormatWriter> writer (
-                        wav.createWriterFor (fos.get(), sr, 2, 16, {}, 0));
-                    if (writer)
-                    {
-                        fos.release();
-                        writer->writeFromAudioSampleBuffer (backingBuf, 0, numSamples);
-                    }
-                }
-            }
-            proc.getBackingTrackPlayer().loadFile (backingWav);
-
-            // 7. Test Practice & Record View snapshot (Light Theme matching mockup)
-            ed->setViewMode (glorp::Editor::EditorView::practiceView);
-            proc.getMetronome().setEnabled (true);
-            proc.getMetronome().setCountInMode (glorp::Metronome::CountInMode::oneBar);
-            if (auto* pv = ed->getPracticeView())
-            {
-                pv->setBeatsPerMeasure (5);
-                pv->setAlsoRecordBackingTrack (true);
-                pv->triggerBeatFlash (1, true);
-            }
-
-            auto imagePractice = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-            juce::File outPracticeFile ("/home/servandoc/Documents/DEV/GlorpDrums/docs/practice_view_screenshot.png");
-            outPracticeFile.deleteFile();
-            juce::FileOutputStream fosPractice (outPracticeFile);
-            if (fosPractice.openedOk())
-            {
-                juce::PNGImageFormat png;
-                png.writeImageToStream (imagePractice, fosPractice);
-                std::cout << "Saved Practice View snapshot to: " << outPracticeFile.getFullPathName().toStdString() << std::endl;
-            }
-
-            // 8. Test Dark Theme Overhaul (Kit View + Thick White Drumkit Outline + Dark Mixer View + Dark Practice View)
-            ed->applyTheme (glorp::Theme::dark());
-            ed->setViewMode (glorp::Editor::EditorView::kitView);
-
-            // Trigger hit on Snare for dark theme hit snapshot
-            for (auto* edChild : ed->getChildren())
-            {
-                if (auto* kv = dynamic_cast<glorp::DrumKitView*> (edChild))
-                {
-                    kv->triggerHitForPiece (glorp::KitPiece::snare, 1.0f);
-                }
-            }
-
-            auto darkKitImg = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-            juce::File darkKitFile ("/home/servandoc/Documents/DEV/GlorpDrums/test/editor_snapshot_dark.png");
-            darkKitFile.deleteFile();
-            juce::FileOutputStream fosDarkKit (darkKitFile);
-            if (fosDarkKit.openedOk())
-            {
-                juce::PNGImageFormat png;
-                png.writeImageToStream (darkKitImg, fosDarkKit);
-                std::cout << "Saved Dark Kit View snapshot to: " << darkKitFile.getFullPathName().toStdString() << std::endl;
-            }
-
-            // Dark Mixer View snapshot
-            ed->setViewMode (glorp::Editor::EditorView::mixerView);
-            if (auto* mv = ed->getMixerView())
-            {
-                // Dismiss open popup so channel strips are fully exposed
-                mv->closePopups();
-            }
-            auto darkMixerImg = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-            juce::File darkMixerFile ("/home/servandoc/Documents/DEV/GlorpDrums/test/mixer_view_snapshot_dark.png");
-            darkMixerFile.deleteFile();
-            juce::FileOutputStream fosDarkMixer (darkMixerFile);
-            if (fosDarkMixer.openedOk())
-            {
-                juce::PNGImageFormat png;
-                png.writeImageToStream (darkMixerImg, fosDarkMixer);
-                std::cout << "Saved Dark Mixer View snapshot to: " << darkMixerFile.getFullPathName().toStdString() << std::endl;
-            }
-
-            // Dark Mixer View with Split Bleed Matrix open
-            if (auto* mv = ed->getMixerView())
-            {
-                mv->setBleedMatrixOpen (true);
-            }
-            auto darkSplitMixerImg = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-            juce::File darkSplitMixerFile ("/home/servandoc/Documents/DEV/GlorpDrums/docs/mixer_bleed_matrix_dark.png");
-            darkSplitMixerFile.deleteFile();
-            juce::FileOutputStream fosDarkSplit (darkSplitMixerFile);
-            if (fosDarkSplit.openedOk())
-            {
-                juce::PNGImageFormat png;
-                png.writeImageToStream (darkSplitMixerImg, fosDarkSplit);
-                std::cout << "Saved Dark Split Mixer View snapshot to: " << darkSplitMixerFile.getFullPathName().toStdString() << std::endl;
-            }
-
-            // Light (Sketch) Mixer View with Split Bleed Matrix open
-            ed->applyTheme (glorp::Theme::sketch());
-            auto lightSplitMixerImg = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-            juce::File lightSplitMixerFile ("/home/servandoc/Documents/DEV/GlorpDrums/docs/mixer_bleed_matrix_light.png");
-            lightSplitMixerFile.deleteFile();
-            juce::FileOutputStream fosLightSplit (lightSplitMixerFile);
-            if (fosLightSplit.openedOk())
-            {
-                juce::PNGImageFormat png;
-                png.writeImageToStream (lightSplitMixerImg, fosLightSplit);
-                std::cout << "Saved Light Split Mixer View snapshot to: " << lightSplitMixerFile.getFullPathName().toStdString() << std::endl;
-            }
-
-            // Re-apply dark theme before practice view tests
-            ed->applyTheme (glorp::Theme::dark());
-            if (auto* mv = ed->getMixerView())
-            {
-                mv->setBleedMatrixOpen (false);
-            }
-
-            // Dark Practice View snapshot
-            ed->setViewMode (glorp::Editor::EditorView::practiceView);
-            auto darkPracticeImg = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-            juce::File darkPracticeFile ("/home/servandoc/Documents/DEV/GlorpDrums/docs/practice_view_snapshot_dark.png");
-            darkPracticeFile.deleteFile();
-            juce::FileOutputStream fosDarkPractice (darkPracticeFile);
-            if (fosDarkPractice.openedOk())
-            {
-                juce::PNGImageFormat png;
-                png.writeImageToStream (darkPracticeImg, fosDarkPractice);
-                std::cout << "Saved Dark Practice View snapshot to: " << darkPracticeFile.getFullPathName().toStdString() << std::endl;
-            }
-
-            // Dark Practice View with REC armed (red pulsing halo glow)
-            for (auto* edChild : ed->getChildren())
-            {
-                if (auto* pv = dynamic_cast<glorp::RecordPracticeView*> (edChild))
-                {
-                    for (auto* pvChild : pv->getChildren())
-                    {
-                        if (auto* btn = dynamic_cast<juce::Button*> (pvChild))
-                        {
-                            if (btn->getButtonText() == "REC" || btn->getName() == "REC")
-                            {
-                                if (btn->onClick)
-                                    btn->onClick();
-                            }
-                        }
-                    }
-                }
-            }
-
-            auto armedPracticeImg = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-            juce::File armedPracticeFile ("/home/servandoc/Documents/DEV/GlorpDrums/docs/practice_view_rec_armed.png");
-            armedPracticeFile.deleteFile();
-            juce::FileOutputStream fosArmed (armedPracticeFile);
-            if (fosArmed.openedOk())
-            {
-                juce::PNGImageFormat png;
-                png.writeImageToStream (armedPracticeImg, fosArmed);
-                std::cout << "Saved Armed Practice View snapshot to: " << armedPracticeFile.getFullPathName().toStdString() << std::endl;
-            }
-
-            break;
         }
     }
 
-    // Update main docs/screenshot.png with latest UI
+    // Update the main screenshot with the current UI
     {
         // Re-create idle editor for clean main screenshot
         glorp::PluginProcessor cleanProc;
+        for (const auto &entry : cleanProc.getKitList())
+        {
+            if (entry.valid)
+            {
+                cleanProc.loadKit (juce::String (entry.drumkitPath));
+                break;
+            }
+        }
         auto cleanEditor = cleanProc.createEditorIfNeeded();
         if (cleanEditor)
         {
             cleanEditor->setSize (1180, 860);
             auto cleanImage = cleanEditor->createComponentSnapshot (cleanEditor->getLocalBounds());
-            juce::File mainShot ("/home/servandoc/Documents/DEV/GlorpDrums/docs/screenshot.png");
+            juce::File mainShot ("test/docs/screenshot.png");
             mainShot.deleteFile();
             juce::FileOutputStream fosMain (mainShot);
             if (fosMain.openedOk())

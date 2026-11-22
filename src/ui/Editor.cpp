@@ -42,24 +42,6 @@ void Editor::MenuButton::paintButton(juce::Graphics &g, bool isHover, bool isDow
     g.drawFittedText(getName(), b.reduced(2.0f, 0.0f).toNearestInt(), juce::Justification::centred, 1, 0.72f);
 }
 
-void Editor::MinimalThemeToggleButton::paintButton(juce::Graphics &g, bool isHover, bool isDown)
-{
-    const auto b = getLocalBounds().toFloat().reduced(2.0f);
-    g.setColour(isDown ? theme.panelEdge : (isHover ? theme.panel : theme.trough));
-    g.fillRoundedRectangle(b, 5.0f);
-    g.setColour(isHover ? theme.accent : theme.panelEdge);
-    g.drawRoundedRectangle(b.reduced(0.5f), 5.0f, 1.0f);
-
-    const auto c = b.getCentre();
-    const float r = std::min(b.getWidth(), b.getHeight()) * 0.27f;
-    g.setColour(theme.ink);
-    g.drawEllipse(c.x - r, c.y - r, r * 2.0f, r * 2.0f, 1.4f);
-
-    juce::Path half;
-    half.addPieSegment(c.x - r, c.y - r, r * 2.0f, r * 2.0f, 0.0f, juce::MathConstants<float>::pi, 0.0f);
-    g.fillPath(half);
-}
-
 void Editor::InstrumentSelectorButton::paintButton(juce::Graphics &g, bool isHover, bool /*isDown*/)
 {
     auto b = getLocalBounds().toFloat().reduced(1.0f);
@@ -534,7 +516,7 @@ void Editor::VelocityCurvePreview::paint(juce::Graphics &g)
 Editor::Editor(PluginProcessor &p) : processor(p)
 {
     glorp::setUiTextScale(processor.getSettings().uiTextScale);
-    theme = Theme::byIndex(processor.getSettings().themeIndex);
+    theme = Theme::suite();
     glorp::setCleanStyleEnabled(theme.cleanStyle);
     glorp::setMinimalStyleEnabled(theme.minimalStyle);
 
@@ -567,9 +549,6 @@ Editor::Editor(PluginProcessor &p) : processor(p)
 
     mixerView = std::make_unique<MixerView>(processor);
     addChildComponent(*mixerView);
-
-    practiceView = std::make_unique<RecordPracticeView>(processor);
-    addChildComponent(*practiceView);
 
     edrumWizard = std::make_unique<EDrumWizard>(processor);
     addChildComponent(*edrumWizard);
@@ -712,8 +691,6 @@ Editor::Editor(PluginProcessor &p) : processor(p)
     };
 
     processor.addListener(this);
-    logo = logoDrawable();
-
     kitView.setMouseClickGrabsKeyboardFocus(false);
     scope.setInterceptsMouseClicks(false, false);
     setWantsKeyboardFocus(true);
@@ -734,45 +711,10 @@ Editor::~Editor()
     stopTimer();
     processor.removeListener(this);
 
-    if (attachedStandaloneWindow != nullptr && &attachedStandaloneWindow->getLookAndFeel() == lookAndFeel.get())
-        attachedStandaloneWindow->setLookAndFeel(nullptr);
-    attachedStandaloneWindow = nullptr;
-
-    if (processor.wrapperType == juce::AudioProcessor::wrapperType_Standalone
-        && &juce::LookAndFeel::getDefaultLookAndFeel() == lookAndFeel.get())
-    {
-        juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
-    }
-
     setLookAndFeel(nullptr);
 }
 
-void Editor::syncTopLevelWindowTheme()
-{
-    if (lookAndFeel == nullptr)
-        return;
-
-    if (processor.wrapperType == juce::AudioProcessor::wrapperType_Standalone)
-        juce::LookAndFeel::setDefaultLookAndFeel(lookAndFeel.get());
-
-    if (processor.isStandaloneApp())
-    {
-        if (auto *dw = dynamic_cast<juce::DocumentWindow *>(getTopLevelComponent()))
-        {
-            dw->setBackgroundColour(theme.background);
-            if (&dw->getLookAndFeel() != lookAndFeel.get())
-            {
-                dw->setLookAndFeel(lookAndFeel.get());
-                attachedStandaloneWindow = dw;
-            }
-            else
-            {
-                dw->sendLookAndFeelChange();
-            }
-            dw->repaint();
-        }
-    }
-}
+void Editor::syncTopLevelWindowTheme() {}
 
 void Editor::parentHierarchyChanged()
 {
@@ -781,8 +723,8 @@ void Editor::parentHierarchyChanged()
 
     if (auto *top = getTopLevelComponent())
     {
-        auto icon = juce::ImageFileFormat::loadFrom(GlorpAssets::glorpdrums_icon_png,
-                                                    (size_t) GlorpAssets::glorpdrums_icon_pngSize);
+        auto icon = juce::ImageFileFormat::loadFrom(GlorpAssets::suite_drums_icon_png,
+                                                    (size_t) GlorpAssets::suite_drums_icon_pngSize);
         if (icon.isValid())
         {
             if (auto *dw = dynamic_cast<juce::DocumentWindow *>(top))
@@ -830,22 +772,6 @@ bool Editor::isOpenGlEnabled() const noexcept
     return processor.getSettings().openGlEnabled;
 }
 
-void Editor::rebuildLogoCache()
-{
-    if (logo == nullptr)
-    {
-        cachedLogoImage = juce::Image();
-        return;
-    }
-
-    cachedLogoImage = juce::Image(juce::Image::ARGB, 124, 96, true);
-    juce::Graphics g(cachedLogoImage);
-    logo->drawWithin(g,
-                     juce::Rectangle<float>(0.0f, 0.0f, 124.0f, 96.0f),
-                     juce::RectanglePlacement::xLeft | juce::RectanglePlacement::yMid,
-                     1.0f);
-}
-
 void Editor::applyTheme(const Theme &newTheme)
 {
     theme = newTheme;
@@ -854,14 +780,6 @@ void Editor::applyTheme(const Theme &newTheme)
 
     if (lookAndFeel != nullptr)
         lookAndFeel->setTheme(theme);
-
-    logo = logoDrawable();
-    if (logo != nullptr && theme.isDark)
-    {
-        logo->replaceColour(juce::Colours::black, theme.ink);
-        logo->replaceColour(juce::Colour(0xff000000), theme.ink);
-    }
-    rebuildLogoCache();
 
     kitSelectorButton.setTheme(theme);
     instSelectorButton.setTheme(theme);
@@ -875,12 +793,10 @@ void Editor::applyTheme(const Theme &newTheme)
 
     homeTabButton.setTheme(theme);
     viewToggleButton.setTheme(theme);
-    practiceToggleButton.setTheme(theme);
     fileButton.setTheme(theme);
     presetsButton.setTheme(theme);
     midiButton.setTheme(theme);
     settingsButton.setTheme(theme);
-    minimalThemeToggleButton.setTheme(theme);
 
     if (instVolumeKnob != nullptr)
     {
@@ -918,9 +834,6 @@ void Editor::applyTheme(const Theme &newTheme)
     if (mixerView != nullptr)
         mixerView->setTheme(theme);
 
-    if (practiceView != nullptr)
-        practiceView->applyTheme(theme);
-
     sendLookAndFeelChange();
     syncTopLevelWindowTheme();
 
@@ -941,8 +854,6 @@ void Editor::applyTextScale(float newScale)
     scope.setTheme(theme);
     if (mixerView != nullptr)
         mixerView->setTheme(theme);
-    if (practiceView != nullptr)
-        practiceView->applyTheme(theme);
     if (edrumWizard != nullptr)
         edrumWizard->repaint();
 
@@ -960,10 +871,8 @@ void Editor::refreshHeaderButtonLabels()
 {
     const bool isKit = (currentView == EditorView::kitView);
     const bool isMixer = (currentView == EditorView::mixerView);
-    const bool isPractice = (currentView == EditorView::practiceView);
 
     homeTabButton.setVisible(theme.minimalStyle);
-    minimalThemeToggleButton.setVisible(theme.minimalStyle);
 
     if (theme.minimalStyle)
     {
@@ -971,15 +880,11 @@ void Editor::refreshHeaderButtonLabels()
         homeTabButton.setActive(isKit);
         viewToggleButton.setButtonText("MIXER");
         viewToggleButton.setActive(isMixer);
-        practiceToggleButton.setButtonText("PRACTICE");
-        practiceToggleButton.setActive(isPractice);
     }
     else
     {
         viewToggleButton.setButtonText(isKit ? "MIXER VIEW" : "KIT VIEW");
         viewToggleButton.setActive(isMixer);
-        practiceToggleButton.setButtonText("PRACTICE");
-        practiceToggleButton.setActive(isPractice);
     }
 }
 
@@ -988,7 +893,6 @@ void Editor::setViewMode(EditorView mode)
     currentView = mode;
     const bool isKit = (currentView == EditorView::kitView);
     const bool isMixer = (currentView == EditorView::mixerView);
-    const bool isPractice = (currentView == EditorView::practiceView);
     const bool isMinimal = theme.minimalStyle;
 
     if (edrumWizard != nullptr)
@@ -1017,7 +921,7 @@ void Editor::setViewMode(EditorView mode)
     instCurveButton.setVisible(isKit);
     instCurvePreview.setVisible(isKit);
     instLearnButton.setVisible(isKit);
-    scope.setVisible(!isMinimal && (isKit || isPractice));
+    scope.setVisible(!isMinimal && isKit);
     if (masterVolumeKnob != nullptr)
         masterVolumeKnob->setVisible(isKit);
 
@@ -1026,11 +930,6 @@ void Editor::setViewMode(EditorView mode)
         mixerView->setVisible(isMixer);
         if (isMixer)
             mixerView->refreshChannels();
-    }
-
-    if (practiceView != nullptr)
-    {
-        practiceView->setVisible(isPractice);
     }
 
     resized();
@@ -1047,18 +946,12 @@ bool Editor::keyPressed(const juce::KeyPress &key)
         return true;
     }
 
-    if (currentView == EditorView::practiceView && practiceView != nullptr)
-    {
-        if (practiceView->keyPressed(key))
-            return true;
-    }
-
     return false;
 }
 
 void Editor::mouseDown(const juce::MouseEvent &e)
 {
-    // Developer gesture: Alt-click or triple-click the top-left Glorp Logo/Title to toggle WYSIWYG edit mode
+    // Developer gesture: Alt-click or triple-click the top-left wordmark to toggle WYSIWYG edit mode
     const auto logoTarget = juce::Rectangle<float>(24.0f, 8.0f, 220.0f, 54.0f);
     if (logoTarget.contains(e.position) && (e.mods.isAltDown() || e.getNumberOfClicks() >= 3))
     {
@@ -1096,12 +989,10 @@ void Editor::buildHeaderMenu()
 {
     addChildComponent(homeTabButton);
     addAndMakeVisible(viewToggleButton);
-    addAndMakeVisible(practiceToggleButton);
     addAndMakeVisible(fileButton);
     addAndMakeVisible(presetsButton);
     addAndMakeVisible(midiButton);
     addAndMakeVisible(settingsButton);
-    addChildComponent(minimalThemeToggleButton);
 
     homeTabButton.onClick = [this] { setViewMode(EditorView::kitView); };
 
@@ -1111,25 +1002,6 @@ void Editor::buildHeaderMenu()
             setViewMode(EditorView::mixerView);
         else
             setViewMode(currentView == EditorView::mixerView ? EditorView::kitView : EditorView::mixerView);
-    };
-
-    practiceToggleButton.onClick = [this]
-    {
-        if (theme.minimalStyle)
-            setViewMode(EditorView::practiceView);
-        else
-            setViewMode(currentView == EditorView::practiceView ? EditorView::kitView : EditorView::practiceView);
-    };
-
-    minimalThemeToggleButton.onClick = [this]
-    {
-        auto &settings = processor.getSettings();
-        settings.themeIndex = (settings.themeIndex == 4) ? 5 : 4;
-        settings.markDirty();
-        settings.saveIfChanged();
-        applyTheme(Theme::byIndex(settings.themeIndex));
-        statusText = "Skin: " + Theme::skinName(settings.themeIndex);
-        repaint();
     };
 
     auto showMenu = [this](juce::PopupMenu &m, juce::Component *target)
@@ -1404,60 +1276,6 @@ juce::PopupMenu Editor::buildSettingsMenu()
 {
     juce::PopupMenu menu;
 
-    if (processor.isStandaloneApp())
-    {
-        menu.addItem("Audio / MIDI Device Options...",
-                     [this]
-                     {
-                         std::function<juce::Button *(juce::Component *)> findOptionsBtn =
-                             [&](juce::Component *comp) -> juce::Button *
-                         {
-                             if (comp == nullptr)
-                                 return nullptr;
-                             if (auto *btn = dynamic_cast<juce::Button *>(comp))
-                                 if (btn->getButtonText() == "Options" || btn->getName() == "Options")
-                                     return btn;
-                             for (int i = 0; i < comp->getNumChildComponents(); ++i)
-                                 if (auto *found = findOptionsBtn(comp->getChildComponent(i)))
-                                     return found;
-                             return nullptr;
-                         };
-
-                         if (auto *btn = findOptionsBtn(getTopLevelComponent()))
-                             btn->triggerClick();
-                         else
-                             juce::AlertWindow::showMessageBoxAsync(
-                                 juce::AlertWindow::InfoIcon,
-                                 "Audio / MIDI Settings",
-                                 "Use the Standalone window's top-left Options button to configure Audio & MIDI.",
-                                 "OK",
-                                 this);
-                     });
-        menu.addSeparator();
-    }
-
-    {
-        juce::PopupMenu skinMenu;
-        const int curThemeIdx = processor.getSettings().themeIndex;
-        for (int i = 0; i < Theme::numSkins(); ++i)
-        {
-            skinMenu.addItem(Theme::skinName(i),
-                             true,
-                             curThemeIdx == i,
-                             [this, i]
-                             {
-                                 auto &settings = processor.getSettings();
-                                 settings.themeIndex = i;
-                                 settings.markDirty();
-                                 settings.saveIfChanged();
-                                 applyTheme(Theme::byIndex(settings.themeIndex));
-                                 statusText = "Skin: " + Theme::skinName(i);
-                                 repaint();
-                             });
-        }
-        menu.addSubMenu("Skin / Theme", skinMenu);
-    }
-
     {
         juce::PopupMenu scaleMenu;
         struct ScaleOption
@@ -1486,6 +1304,7 @@ juce::PopupMenu Editor::buildSettingsMenu()
                               });
         }
         menu.addSubMenu("Text Size (UI Scale)", scaleMenu);
+        menu.addSeparator();
     }
 
     const bool glEnabled = isOpenGlEnabled();
@@ -1517,14 +1336,13 @@ juce::PopupMenu Editor::buildSettingsMenu()
             auto &engine = processor.getAudioEngine();
 
             juce::String report;
-            report << "App Mode: " << (processor.isStandaloneApp() ? "Standalone" : "Plugin") << "\n"
-                   << "OS: " << juce::SystemStats::getOperatingSystemName()
+            report << "OS: " << juce::SystemStats::getOperatingSystemName()
                    << " | Arch: " << (juce::SystemStats::isOperatingSystem64Bit() ? "x86_64/64-bit" : "32-bit") << "\n"
                    << "Sample Rate: " << juce::String(engine.getCurrentSampleRate(), 1) << " Hz"
                    << " | Block Size: " << juce::String(engine.getCurrentBlockSize()) << " samples\n"
                    << "OpenGL: " << (isOpenGlEnabled() ? "ON" : "OFF") << "\n"
-                   << "Skin: " << Theme::skinName(processor.getSettings().themeIndex)
-                   << " | Text Scale: " << juce::String(juce::roundToInt(glorp::getUiTextScale() * 100.0f)) << "%\n"
+                   << "Suite theme | Text Scale: "
+                   << juce::String(juce::roundToInt(glorp::getUiTextScale() * 100.0f)) << "%\n"
                    << "Window Size: " << juce::String(getWidth()) << "x" << juce::String(getHeight()) << "\n"
                    << "Hi-Hat Mode: "
                    << (sampler.getHiHatMode() == HiHatMode::continuousCC4 ? "Continuous CC#4" : "Discrete Notes")
@@ -1552,7 +1370,7 @@ juce::PopupMenu Editor::buildSettingsMenu()
             repaint();
 
             juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
-                                                   "GlorpDrums Debug Log",
+                                                   "Suite Drums Glorp Debug Log",
                                                    "Diagnostic snapshot and live MIDI log saved to:\n\n"
                                                        + logFile.getFullPathName()
                                                        + "\n\nAttach this file when reporting issues on GitHub.",
@@ -1561,14 +1379,17 @@ juce::PopupMenu Editor::buildSettingsMenu()
         });
 
     menu.addSeparator();
-    menu.addItem("About GlorpDrums",
+    menu.addItem("About Suite Drums Glorp",
                  [this]
                  {
                      juce::AlertWindow::showMessageBoxAsync(
                          juce::AlertWindow::InfoIcon,
-                         "GlorpDrums",
-                         "GlorpDrums VSTi / LV2 Drum Plugin\n\nPlays DrumGizmo kits with natural WSOLA tuning,\n"
-                         "interactive MIDI learn, and individual output buses.",
+                         "Suite Drums Glorp",
+                         "Suite Drums Glorp VST3 / LV2 Drum Instrument\n\n"
+                         "Plays GlorpKit and DrumGizmo kits with natural WSOLA tuning,\n"
+                         "interactive MIDI learn, and individual output buses.\n\n"
+                         "Part of the Suite series. Based on GlorpDrums by asuka-glorp.\n"
+                         "AGPL-3.0.",
                          "OK",
                          this);
                  });
@@ -2240,7 +2061,7 @@ void Editor::kitChanged()
         if (p.isNotEmpty())
             title = juce::File(p).getParentDirectory().getFileName();
         else
-            title = "GLORP DEMO KIT";
+            title = "SUITE STARTER KIT";
     }
     kitSelectorButton.setKitName(title);
 
@@ -2286,8 +2107,8 @@ void Editor::timerCallback()
         {
             if (auto *peer = top->getPeer())
             {
-                auto icon = juce::ImageFileFormat::loadFrom(GlorpAssets::glorpdrums_icon_png,
-                                                            (size_t) GlorpAssets::glorpdrums_icon_pngSize);
+                auto icon = juce::ImageFileFormat::loadFrom(GlorpAssets::suite_drums_icon_png,
+                                                            (size_t) GlorpAssets::suite_drums_icon_pngSize);
                 if (icon.isValid())
                 {
                     if (auto *dw = dynamic_cast<juce::DocumentWindow *>(top))
@@ -2410,13 +2231,11 @@ void Editor::resized()
         const int presetsW = juce::roundToInt(74.0f * hdrScale);
         const int midiW = juce::roundToInt(48.0f * hdrScale);
         const int settingsW = juce::roundToInt(78.0f * hdrScale);
-        const int themeW = menuH;
         const int gap = 6;
 
-        // Right group: Utility menus + Dark/Light toggle
-        int rightX = w - 20 - themeW;
-        minimalThemeToggleButton.setBounds(rightX, menuY, themeW, menuH);
-        rightX -= gap + settingsW;
+        // Right group: utility menus
+        int rightX = w - 20;
+        rightX -= settingsW;
         settingsButton.setBounds(rightX, menuY, settingsW, menuH);
         rightX -= gap + midiW;
         midiButton.setBounds(rightX, menuY, midiW, menuH);
@@ -2430,7 +2249,6 @@ void Editor::resized()
         const int tabStartX = std::max(222, std::min(rightX - 18 - tabsTotalW, (w - tabsTotalW) / 2 - 30));
         homeTabButton.setBounds(tabStartX, menuY, tabW, menuH);
         viewToggleButton.setBounds(tabStartX + tabW + 4, menuY, tabW, menuH);
-        practiceToggleButton.setBounds(tabStartX + (tabW + 4) * 2, menuY, tabW + 8, menuH);
 
         // Left Column: Controls Card + Master Card
         const int panelX = 20;
@@ -2532,9 +2350,6 @@ void Editor::resized()
         if (mixerView != nullptr)
             mixerView->setBounds(16, 62, w - 32, h - 76);
 
-        if (practiceView != nullptr)
-            practiceView->setBounds(16, 62, w - 32, h - 76);
-
         if (edrumWizard != nullptr)
             edrumWizard->setBounds(getLocalBounds());
         return;
@@ -2546,19 +2361,16 @@ void Editor::resized()
     const int menuY = 16;
     const int menuH = juce::roundToInt(30.0f * juce::jlimit(1.0f, 1.14f, hdrScale));
     const int viewW = juce::roundToInt(104.0f * hdrScale);
-    const int practiceW = juce::roundToInt(92.0f * hdrScale);
     const int fileW = juce::roundToInt(50.0f * hdrScale);
     const int presetsW = juce::roundToInt(80.0f * hdrScale);
     const int midiW = juce::roundToInt(50.0f * hdrScale);
     const int settingsW = juce::roundToInt(86.0f * hdrScale);
     const int gap = 8;
 
-    const int totalMenuW = viewW + gap + practiceW + gap + fileW + gap + presetsW + gap + midiW + gap + settingsW;
+    const int totalMenuW = viewW + gap + fileW + gap + presetsW + gap + midiW + gap + settingsW;
     int curX = std::max(256, w - 24 - totalMenuW);
     viewToggleButton.setBounds(curX, menuY, viewW, menuH);
     curX += viewW + gap;
-    practiceToggleButton.setBounds(curX, menuY, practiceW, menuH);
-    curX += practiceW + gap;
     fileButton.setBounds(curX, menuY, fileW, menuH);
     curX += fileW + gap;
     presetsButton.setBounds(curX, menuY, presetsW, menuH);
@@ -2571,26 +2383,17 @@ void Editor::resized()
     const int bottomH = 135;
     const int bottomY = h - bottomH - 12;
 
-    const bool isPractice = (currentView == EditorView::practiceView);
 
-    if (isPractice)
-    {
-        // In practice mode, MIDI Activity scope spans across the full bottom strip
-        scope.setBounds(24, bottomY, w - 48, bottomH);
-    }
-    else
-    {
-        // Master Volume in bottom right
-        const int masterW = 110;
-        const int masterX = w - masterW - 24;
-        if (masterVolumeKnob != nullptr)
-            masterVolumeKnob->setBounds(masterX, bottomY + 16, masterW, bottomH - 20);
+    // Master Volume in bottom right
+    const int masterW = 110;
+    const int masterX = w - masterW - 24;
+    if (masterVolumeKnob != nullptr)
+        masterVolumeKnob->setBounds(masterX, bottomY + 16, masterW, bottomH - 20);
 
-        // MIDI Activity scope spanning bottom
-        const int scopeX = 24;
-        const int scopeW = masterX - scopeX - 18;
-        scope.setBounds(scopeX, bottomY, scopeW, bottomH);
-    }
+    // MIDI Activity scope spanning bottom
+    const int scopeX = 24;
+    const int scopeW = masterX - scopeX - 18;
+    scope.setBounds(scopeX, bottomY, scopeW, bottomH);
 
     // 3. Left Panel ("INSTRUMENT SETTINGS")
     const int panelX = 24;
@@ -2682,9 +2485,6 @@ void Editor::resized()
     if (mixerView != nullptr)
         mixerView->setBounds(16, 56, w - 32, h - 68);
 
-    if (practiceView != nullptr)
-        practiceView->setBounds(16, 56, w - 32, bottomY - 56 - 6);
-
     if (edrumWizard != nullptr)
         edrumWizard->setBounds(getLocalBounds());
 }
@@ -2713,25 +2513,8 @@ void Editor::paint(juce::Graphics &g)
         g.fillEllipse(8.0f, 8.0f, 3.0f, 3.0f);
         g.fillEllipse(b.getWidth() - 11.0f, 8.0f, 3.0f, 3.0f);
 
-        // Top-Left: Authentic GlorpDrums SVG Logo + Wordmark
-        const auto logoTarget = juce::Rectangle<float>(16.0f, 5.0f, 54.0f, 44.0f);
-        if (cachedLogoImage.isValid())
-        {
-            g.drawImage(cachedLogoImage, logoTarget);
-        }
-        else if (logo != nullptr)
-        {
-            logo->drawWithin(g, logoTarget, juce::RectanglePlacement::xLeft | juce::RectanglePlacement::yMid, 1.0f);
-        }
-
-        g.setFont(displayFont(16.0f));
-        g.setColour(theme.ink);
-        g.drawFittedText(
-            "GLORP DRUMS", juce::Rectangle<int>(76, 12, 140, 18), juce::Justification::centredLeft, 1, 0.78f);
-        g.setFont(uiFont(9.5f).boldened());
-        g.setColour(theme.inkSoft);
-        g.drawFittedText(
-            "MINIMAL STUDIO", juce::Rectangle<int>(76, 30, 140, 14), juce::Justification::centredLeft, 1, 0.82f);
+        // Top-left Suite wordmark
+        drawSuiteWordmark(g, juce::Rectangle<float>(16.0f, 6.0f, 220.0f, 42.0f), theme, true);
 
         if (currentView == EditorView::kitView)
         {
@@ -2828,21 +2611,8 @@ void Editor::paint(juce::Graphics &g)
     // 2. Outer window sketchy border
     drawSketchRect(g, b.reduced(3.0f), theme.panelEdge, 2.0f, 1);
 
-    // 3. Top-left: Glorp Drummer Logo & Stacked "GLORP DRUMS" Title
-    if (cachedLogoImage.isValid())
-    {
-        g.drawImage(cachedLogoImage, juce::Rectangle<float>(24.0f, 10.0f, 62.0f, 48.0f));
-    }
-    else if (logo != nullptr)
-    {
-        auto logoTarget = juce::Rectangle<float>(24.0f, 10.0f, 62.0f, 48.0f);
-        logo->drawWithin(g, logoTarget, juce::RectanglePlacement::xLeft | juce::RectanglePlacement::yMid, 1.0f);
-    }
-
-    g.setFont(displayFont(24.0f));
-    g.setColour(theme.ink);
-    g.drawFittedText("GLORP", juce::Rectangle<int>(92, 8, 160, 24), juce::Justification::centredLeft, 1, 0.72f);
-    g.drawFittedText("DRUMS", juce::Rectangle<int>(92, 30, 160, 24), juce::Justification::centredLeft, 1, 0.72f);
+    // 3. Top-left Suite wordmark
+    drawSuiteWordmark(g, juce::Rectangle<float>(24.0f, 9.0f, 232.0f, 50.0f), theme);
 
     if (currentView == EditorView::kitView)
     {

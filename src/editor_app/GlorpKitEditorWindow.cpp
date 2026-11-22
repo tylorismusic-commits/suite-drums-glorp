@@ -1,6 +1,6 @@
 /*
     GlorpKitEditorWindow.cpp - Standalone graphical .glorpkit Studio editor UI & audio preview engine.
-    Follows the hand-drawn comic/sketch aesthetic of GlorpDrums (Theme::sketch() & Theme::dark()).
+    Uses the shared Suite dark/amber theme so kit authoring matches the instrument.
 */
 
 #include "GlorpKitEditorWindow.h"
@@ -410,7 +410,8 @@ bool GlorpKitEditorComponent::saveGlorpKitFile(const juce::File &targetFile)
 
 void GlorpKitEditorComponent::setDarkTheme(bool dark)
 {
-    theme = dark ? Theme::dark() : Theme::sketch();
+    juce::ignoreUnused(dark);
+    theme = Theme::suite();
     for (auto *ed : {&pieceNameEditor, &pieceIdEditor, &zoneNameEditor})
     {
         ed->setColour(juce::TextEditor::textColourId, theme.ink);
@@ -467,7 +468,7 @@ void GlorpKitEditorComponent::prevTutorialStep()
 
 void GlorpKitEditorComponent::loadFirstTimeTutorialPreference()
 {
-    auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("GlorpDrums");
+    auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("SuiteDrumsGlorp");
     auto settingsFile = dir.getChildFile("kit_editor_settings.xml");
     if (settingsFile.existsAsFile())
     {
@@ -486,10 +487,10 @@ void GlorpKitEditorComponent::loadFirstTimeTutorialPreference()
 
 void GlorpKitEditorComponent::saveFirstTimeTutorialPreference(bool completed)
 {
-    auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("GlorpDrums");
+    auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("SuiteDrumsGlorp");
     dir.createDirectory();
     auto settingsFile = dir.getChildFile("kit_editor_settings.xml");
-    juce::XmlElement root("GlorpKitEditorSettings");
+    juce::XmlElement root("SuiteKitStudioSettings");
     root.setAttribute("tutorialCompleted", completed);
     root.writeTo(settingsFile);
 }
@@ -798,10 +799,10 @@ void GlorpKitEditorComponent::paintHeader(juce::Graphics &g)
     auto titleArea = headerBounds.withLeft(16.0f).withWidth(228.0f);
     g.setColour(theme.ink);
     g.setFont(Fonts::title(21.0f));
-    g.drawText("GLORPKIT STUDIO", titleArea.withTop(6.0f).withHeight(24.0f), juce::Justification::centredLeft, false);
+    g.drawText("SUITE KIT STUDIO", titleArea.withTop(6.0f).withHeight(24.0f), juce::Justification::centredLeft, false);
     g.setColour(theme.accent);
     g.setFont(Fonts::body(12.5f));
-    g.drawText("v2.0 Standalone Kit Architect",
+    g.drawText(".glorpkit Creator",
                titleArea.withTop(28.0f).withHeight(18.0f),
                juce::Justification::centredLeft,
                false);
@@ -829,10 +830,6 @@ void GlorpKitEditorComponent::paintHeader(juce::Graphics &g)
     drawHeaderBtn(btnRedo, 62.0f, "Redo", redoCol, 29);
 
     float rx = headerBounds.getRight() - 12.0f;
-    btnThemeToggle = {rx - 68.0f, btnY, 68.0f, btnH};
-    rx = btnThemeToggle.getX() - 7.0f;
-    Sketch::button(
-        g, btnThemeToggle, theme.isDark ? "Sketch" : "Dark", theme.trough, theme.ink, false, 31, Fonts::title(13.0f));
 
     btnTour = {rx - 68.0f, btnY, 68.0f, btnH};
     rx = btnTour.getX() - 7.0f;
@@ -2003,7 +2000,7 @@ void GlorpKitEditorComponent::paintGuidedTutorialOverlay(juce::Graphics &g)
     };
 
     const StepSpec steps[5] = {
-        {"Step 1 of 5: Welcome to GlorpKit Studio!",
+        {"Step 1 of 5: Welcome to Suite Kit Studio!",
          "Design custom v2.0 .glorpkit drum instruments with custom PNG sprites, Z-layer ordering, multi-zone "
          "articulations, and zero-copy uncompressed audio. Use the top header to create a New Kit, open an existing "
          ".glorpkit, import DrumGizmo XMLs, or pick a Kit-Wide Hit Glow Color!",
@@ -2026,7 +2023,7 @@ void GlorpKitEditorComponent::paintGuidedTutorialOverlay(juce::Graphics &g)
         {"Step 5 of 5: Piece Graphics, Custom PNGs & Export",
          "Use the Right Inspector to load custom transparent PNG artwork (embedded inside the .glorpkit under "
          "assets/), assign MIDI notes with 1-click MIDI Learn, inspect sample waveforms, and click 'Save .glorpkit' "
-         "when ready to play in GlorpDrums!",
+         "when ready to play in Suite Drums Glorp!",
          rightPanelBounds}};
 
     const auto &cur = steps[juce::jlimit(0, 4, tutorialStep)];
@@ -2286,11 +2283,6 @@ void GlorpKitEditorComponent::mouseDown(const juce::MouseEvent &e)
     if (btnTour.contains(pt))
     {
         setTutorialVisible(true, 0);
-        return;
-    }
-    if (btnThemeToggle.contains(pt))
-    {
-        setDarkTheme(!theme.isDark);
         return;
     }
     if (pillKitMeta.contains(pt))

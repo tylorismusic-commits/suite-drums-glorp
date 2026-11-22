@@ -7,307 +7,68 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name for release (e.g. v0.2.0)'
+        description: 'Release tag (for example v0.1.0-alpha.1)'
         required: true
-        default: 'v0.2.0'
+        default: 'v0.1.0-alpha.1'
 
 permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, windows-latest]
-        include:
-          - os: ubuntu-24.04
-            cmake_args: -DGLORP_BUILD_VST3=ON -DGLORP_BUILD_LV2=ON -DGLORP_BUILD_STANDALONE=ON -DGLORP_BUILD_KIT_EDITOR=ON
-            staging_dirs: |
-              mkdir -p "${RELEASE_STAGING}/kits"
-              mkdir -p "${RELEASE_STAGING}/VST3"
-              mkdir -p "${RELEASE_STAGING}/LV2"
-              mkdir -p "${RELEASE_STAGING}/Standalone"
-              mkdir -p "${RELEASE_STAGING}/GlorpKit Studio"
-            copy_plugins: |
-              cp -r build/GlorpDrums_artefacts/Release/VST3/GlorpDrums.vst3 "${RELEASE_STAGING}/VST3/"
-              cp -r build/GlorpDrums_artefacts/Release/LV2/GlorpDrums.lv2 "${RELEASE_STAGING}/LV2/"
-              cp build/GlorpDrums_artefacts/Release/Standalone/GlorpDrums "${RELEASE_STAGING}/Standalone/"
-            copy_editor: |
-              cp build/GlorpKitEditor_artefacts/Release/GlorpKitEditor "${RELEASE_STAGING}/GlorpKit Studio/"
-              chmod +x "${RELEASE_STAGING}/GlorpKit Studio/GlorpKitEditor"
-          - os: windows-latest
-            cmake_args: -DGLORP_BUILD_VST3=ON -DGLORP_BUILD_STANDALONE=ON -DGLORP_BUILD_KIT_EDITOR=ON
-            staging_dirs: |
-              mkdir -p "${RELEASE_STAGING}/kits"
-              mkdir -p "${RELEASE_STAGING}/VST3"
-              mkdir -p "${RELEASE_STAGING}/Standalone"
-              mkdir -p "${RELEASE_STAGING}/GlorpKit Studio"
-            copy_plugins: |
-              cp -r build/GlorpDrums_artefacts/Release/VST3/GlorpDrums.vst3 "${RELEASE_STAGING}/VST3/"
-              cp build/GlorpDrums_artefacts/Release/Standalone/GlorpDrums.exe "${RELEASE_STAGING}/Standalone/"
-            copy_editor: |
-              cp build/GlorpKitEditor_artefacts/Release/GlorpKitEditor.exe "${RELEASE_STAGING}/GlorpKit Studio/"
-
+  linux:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           lfs: true
 
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            pkg-config \
-            ccache \
-            libasound2-dev \
-            libfreetype-dev \
-            libfontconfig1-dev \
-            libgl1-mesa-dev \
-            libx11-dev \
-            libxcomposite-dev \
-            libxcursor-dev \
-            libxext-dev \
-            libxinerama-dev \
-            libxrandr-dev \
-            libxrender-dev \
-            libcurl4-openssl-dev \
-            libjack-jackd2-dev \
-            rpm
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config ccache zip \
+            libasound2-dev libfreetype-dev libfontconfig1-dev \
+            libgl1-mesa-dev libx11-dev libxcomposite-dev libxcursor-dev \
+            libxext-dev libxinerama-dev libxrandr-dev libxrender-dev \
+            libcurl4-openssl-dev libjack-jackd2-dev
 
-      - name: Setup ccache
+      - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ${{ matrix.os }}-release-ccache
-
-      - name: Fetch JUCE
-        run: |
-          if [ ! -d "libs/JUCE" ]; then
-            git clone --depth 1 --branch 8.0.6 https://github.com/juce-framework/JUCE.git libs/JUCE
-          fi
-        shell: bash
+          key: linux-release
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ${{ matrix.cmake_args }}
-        shell: bash
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DGLORP_BUILD_VST3=ON \
+            -DGLORP_BUILD_LV2=ON \
+            -DGLORP_BUILD_CLAP=OFF \
+            -DGLORP_BUILD_KIT_EDITOR=ON \
+            -DGLORP_BUILD_TESTS=ON
 
       - name: Build
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cmake --build build --config Release -j$(nproc)
-          else
-            cmake --build build -j$(nproc)
-          fi
-        shell: bash
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
 
       - name: Package
         run: |
-          RELEASE_STAGING="build/release_staging"
-          rm -rf "${RELEASE_STAGING}"
-          ${{ matrix.staging_dirs }}
+          TAG="${{ inputs.tag_name || github.ref_name }}"
+          VERSION="${TAG#v}"
+          tools/package_linux.sh "${VERSION}"
 
-          # 1. Copy default demo kit (.glorpkit) into staging
-          if [ -f "test/kits/GlorpDemoKit.glorpkit" ]; then
-            KIT_BYTES=$(wc -c < "test/kits/GlorpDemoKit.glorpkit")
-            if [ "${KIT_BYTES}" -lt 1048576 ]; then
-              echo "ERROR: test/kits/GlorpDemoKit.glorpkit is only ${KIT_BYTES} bytes (Git LFS checkout failed?)." >&2
-              exit 1
-            fi
-            cp "test/kits/GlorpDemoKit.glorpkit" "${RELEASE_STAGING}/kits/"
-          fi
-          if [ -d "test/kits/GlorpDemoKit" ]; then
-            cp -r "test/kits/GlorpDemoKit" "${RELEASE_STAGING}/kits/"
-          fi
-
-          # 2. Copy compiled plugins and standalone binaries
-          ${{ matrix.copy_plugins }}
-
-          # 3. Copy GlorpKit Editor binary into "GlorpKit Studio"
-          ${{ matrix.copy_editor }}
-
-          # 4. Package standalone demo kit archive
-          mkdir -p build/dist
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            if [ -f "test/kits/GlorpDemoKit.glorpkit" ]; then
-              7z a -tzip build/dist/GlorpDemoKit.zip ./test/kits/GlorpDemoKit.glorpkit
-            elif [ -d "test/kits/GlorpDemoKit" ]; then
-              cd test/kits && 7z a -tzip ../../build/dist/GlorpDemoKit.zip GlorpDemoKit && cd -
-            fi
-          elif [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then
-            if [ -f "test/kits/GlorpDemoKit.glorpkit" ]; then
-              tar czf build/dist/GlorpDemoKit.tar.gz -C test/kits GlorpDemoKit.glorpkit
-            elif [ -d "test/kits/GlorpDemoKit" ]; then
-              tar czf build/dist/GlorpDemoKit.tar.gz -C test/kits GlorpDemoKit
-            fi
-          fi
-
-          # 5. Package main release bundle
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cd "${RELEASE_STAGING}" && 7z a -tzip "../dist/GlorpDrums-${{ matrix.os }}.zip" \
-              kits \
-              VST3 \
-              Standalone \
-              "GlorpKit Studio" && cd -
-          else
-            tar czf "build/dist/GlorpDrums-${{ matrix.os }}.tar.gz" -C "${RELEASE_STAGING}" \
-              kits \
-              LV2 \
-              VST3 \
-              Standalone \
-              "GlorpKit Studio"
-
-            # 6. Build native Linux packages (.deb and .rpm) on ubuntu-24.04
-            RAW_TAG="${{ inputs.tag_name || github.ref_name }}"
-            PKG_VER="$(echo "${RAW_TAG#v}" | grep -oE '^[0-9]+(\.[0-9]+)*' || true)"
-            PKG_VER="${PKG_VER:-0.8.2}"
-
-            # --- Debian/Ubuntu .deb ---
-            DEB_ROOT="build/pkg_deb"
-            rm -rf "${DEB_ROOT}"
-            mkdir -p "${DEB_ROOT}/DEBIAN" \
-                     "${DEB_ROOT}/usr/bin" \
-                     "${DEB_ROOT}/usr/lib/vst3" \
-                     "${DEB_ROOT}/usr/lib/lv2" \
-                     "${DEB_ROOT}/usr/share/glorpdrums/kits" \
-                     "${DEB_ROOT}/usr/share/applications" \
-                     "${DEB_ROOT}/usr/share/icons/hicolor/256x256/apps"
-
-            cp "${RELEASE_STAGING}/Standalone/GlorpDrums" "${DEB_ROOT}/usr/bin/glorpdrums"
-            cp "${RELEASE_STAGING}/GlorpKit Studio/GlorpKitEditor" "${DEB_ROOT}/usr/bin/glorpkit-editor"
-            chmod 0755 "${DEB_ROOT}/usr/bin/glorpdrums" "${DEB_ROOT}/usr/bin/glorpkit-editor"
-            cp -r "${RELEASE_STAGING}/VST3/GlorpDrums.vst3" "${DEB_ROOT}/usr/lib/vst3/"
-            cp -r "${RELEASE_STAGING}/LV2/GlorpDrums.lv2" "${DEB_ROOT}/usr/lib/lv2/"
-            cp -r "${RELEASE_STAGING}/kits/"* "${DEB_ROOT}/usr/share/glorpdrums/kits/" 2>/dev/null || true
-            cp assets/glorpdrums_icon.png "${DEB_ROOT}/usr/share/icons/hicolor/256x256/apps/glorpdrums.png"
-            cp assets/glorpkit_studio_icon.png "${DEB_ROOT}/usr/share/icons/hicolor/256x256/apps/glorpkit-editor.png"
-
-            printf '%s\n' \
-              '[Desktop Entry]' \
-              'Type=Application' \
-              'Name=GlorpDrums' \
-              'Comment=Acoustic & E-Drum Sampler Standalone' \
-              'Exec=/usr/bin/glorpdrums' \
-              'Icon=glorpdrums' \
-              'Categories=AudioVideo;Audio;Music;' \
-              'Terminal=false' \
-              > "${DEB_ROOT}/usr/share/applications/glorpdrums.desktop"
-
-            printf '%s\n' \
-              '[Desktop Entry]' \
-              'Type=Application' \
-              'Name=GlorpKit Studio' \
-              'Comment=GlorpDrums Drum Kit Authoring Studio' \
-              'Exec=/usr/bin/glorpkit-editor' \
-              'Icon=glorpkit-editor' \
-              'Categories=AudioVideo;Audio;Music;' \
-              'Terminal=false' \
-              > "${DEB_ROOT}/usr/share/applications/glorpkit-editor.desktop"
-
-            printf '%s\n' \
-              'Package: glorpdrums' \
-              "Version: ${PKG_VER}" \
-              'Section: sound' \
-              'Priority: optional' \
-              'Architecture: amd64' \
-              'Maintainer: asuka-glorp <https://github.com/asuka-glorp/GlorpDrums>' \
-              'Depends: libc6, libstdc++6, libasound2t64 | libasound2, libfreetype6, libfontconfig1, libgl1, libx11-6, libxext6' \
-              'Description: GlorpDrums acoustic drum sampler (Standalone, VST3, LV2) and GlorpKit Studio' \
-              > "${DEB_ROOT}/DEBIAN/control"
-
-            dpkg-deb --build --root-owner-group "${DEB_ROOT}" "build/dist/GlorpDrums-ubuntu-x86-64.deb"
-
-            # --- Fedora .rpm ---
-            RPM_TOP="${PWD}/build/pkg_rpm"
-            rm -rf "${RPM_TOP}"
-            mkdir -p "${RPM_TOP}/BUILD" "${RPM_TOP}/RPMS" "${RPM_TOP}/SOURCES" "${RPM_TOP}/SPECS" "${RPM_TOP}/SRPMS"
-
-            printf '%s\n' \
-              '%define _build_id_links none' \
-              '%global debug_package %{nil}' \
-              '' \
-              'Name:           glorpdrums' \
-              "Version:        ${PKG_VER}" \
-              'Release:        1%{?dist}' \
-              'Summary:        GlorpDrums acoustic drum sampler (Standalone, VST3, LV2) and GlorpKit Studio' \
-              'License:        GPL-3.0-or-later' \
-              'AutoReqProv:    no' \
-              'Requires:       alsa-lib, freetype, fontconfig, libX11, libXext, mesa-libGL' \
-              '' \
-              '%description' \
-              'GlorpDrums acoustic drum sampler (Standalone, VST3, LV2 plugins) and GlorpKit Studio.' \
-              '' \
-              '%install' \
-              'rm -rf %{buildroot}' \
-              'mkdir -p %{buildroot}/usr/bin \' \
-              '         %{buildroot}/usr/lib/vst3 \' \
-              '         %{buildroot}/usr/lib/lv2 \' \
-              '         %{buildroot}/usr/share/glorpdrums/kits \' \
-              '         %{buildroot}/usr/share/applications \' \
-              '         %{buildroot}/usr/share/icons/hicolor/256x256/apps' \
-              "cp \"${PWD}/${DEB_ROOT}/usr/bin/glorpdrums\" %{buildroot}/usr/bin/glorpdrums" \
-              "cp \"${PWD}/${DEB_ROOT}/usr/bin/glorpkit-editor\" %{buildroot}/usr/bin/glorpkit-editor" \
-              "cp -r \"${PWD}/${DEB_ROOT}/usr/lib/vst3/GlorpDrums.vst3\" %{buildroot}/usr/lib/vst3/" \
-              "cp -r \"${PWD}/${DEB_ROOT}/usr/lib/lv2/GlorpDrums.lv2\" %{buildroot}/usr/lib/lv2/" \
-              "cp -r \"${PWD}/${DEB_ROOT}/usr/share/glorpdrums/kits/\"* %{buildroot}/usr/share/glorpdrums/kits/ 2>/dev/null || true" \
-              "cp \"${PWD}/${DEB_ROOT}/usr/share/icons/hicolor/256x256/apps/glorpdrums.png\" %{buildroot}/usr/share/icons/hicolor/256x256/apps/glorpdrums.png" \
-              "cp \"${PWD}/${DEB_ROOT}/usr/share/icons/hicolor/256x256/apps/glorpkit-editor.png\" %{buildroot}/usr/share/icons/hicolor/256x256/apps/glorpkit-editor.png" \
-              "cp \"${PWD}/${DEB_ROOT}/usr/share/applications/glorpdrums.desktop\" %{buildroot}/usr/share/applications/glorpdrums.desktop" \
-              "cp \"${PWD}/${DEB_ROOT}/usr/share/applications/glorpkit-editor.desktop\" %{buildroot}/usr/share/applications/glorpkit-editor.desktop" \
-              '' \
-              '%files' \
-              '/usr/bin/glorpdrums' \
-              '/usr/bin/glorpkit-editor' \
-              '/usr/lib/vst3/GlorpDrums.vst3' \
-              '/usr/lib/lv2/GlorpDrums.lv2' \
-              '/usr/share/glorpdrums' \
-              '/usr/share/applications/glorpdrums.desktop' \
-              '/usr/share/applications/glorpkit-editor.desktop' \
-              '/usr/share/icons/hicolor/256x256/apps/glorpdrums.png' \
-              '/usr/share/icons/hicolor/256x256/apps/glorpkit-editor.png' \
-              > "${RPM_TOP}/SPECS/glorpdrums.spec"
-
-            rpmbuild -bb --target x86_64 --define "_topdir ${RPM_TOP}" "${RPM_TOP}/SPECS/glorpdrums.spec"
-            RPM_OUT="$(find "${RPM_TOP}/RPMS" -name '*.rpm' | head -n 1)"
-            cp "${RPM_OUT}" "build/dist/GlorpDrums-fedora-x86_64.rpm"
-          fi
-        shell: bash
-
-      - name: Upload build dist artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-dist-${{ matrix.os }}
-          path: build/dist/*
-          if-no-files-found: error
-
-  publish:
-    name: Publish Release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download all release artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: 'release-dist-*'
-          path: dist
-          merge-multiple: true
-
-      - name: Display downloaded release assets
-        run: ls -la dist/
-
-      - name: Publish GitHub Release
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag_name || github.ref_name }}
-          files: dist/*
-          make_latest: true
+          name: Suite Drums Glorp ${{ inputs.tag_name || github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(inputs.tag_name || github.ref_name, 'alpha') || contains(inputs.tag_name || github.ref_name, 'beta') }}
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            build/dist/*.zip
+            build/dist/*.sha256

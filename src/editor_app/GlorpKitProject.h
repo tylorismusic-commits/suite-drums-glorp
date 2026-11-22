@@ -110,10 +110,10 @@ class GlorpKitProject
 
     // -- Kit-wide Metadata & Visual Settings ---------------------------------
     std::string title = "Custom Birch Studio";
-    std::string author = "GlorpDrums User";
+    std::string author = "Suite Kit Studio User";
     std::string version = "2.0";
     std::string license = "CC-BY-4.0";
-    std::string description = "Custom drumkit created in GlorpKit Studio";
+    std::string description = "Custom drumkit created in Suite Kit Studio";
     std::string hitGlowColor = "#ff8200"; // Kit-wide hit glow hex color
     int sampleRate = 48000;
     std::string loadedFilePath;

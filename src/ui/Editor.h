@@ -1,5 +1,5 @@
 /*
-    Editor.h - GlorpDrums hand-drawn comic UI window.
+    Editor.h - Suite Drums Glorp main editor window.
 */
 
 #pragma once
@@ -11,7 +11,6 @@
 #include "MinimalInstrumentGrid.h"
 #include "MixerView.h"
 #include "PluginProcessor.h"
-#include "RecordPracticeView.h"
 #include "Scope.h"
 
 #include <juce_opengl/juce_opengl.h>
@@ -35,8 +34,7 @@ class Editor
     enum class EditorView
     {
         kitView,
-        mixerView,
-        practiceView
+        mixerView
     };
 
     void setViewMode(EditorView mode);
@@ -77,7 +75,6 @@ class Editor
     MinimalInstrumentGrid *getMinimalGrid() noexcept { return minimalGrid.get(); }
     Scope &getScope() noexcept { return scope; }
     MixerView *getMixerView() noexcept { return mixerView.get(); }
-    RecordPracticeView *getPracticeView() noexcept { return practiceView.get(); }
     GlorpLookAndFeel *getGlorpLookAndFeel() const noexcept { return lookAndFeel.get(); }
     void applyTheme(const Theme &newTheme);
     void applyTextScale(float newScale);
@@ -92,7 +89,6 @@ class Editor
 
     void updateOpenGlAttachment();
     void syncTopLevelWindowTheme();
-    void rebuildLogoCache();
 
     void buildHeaderMenu();
     void buildControls();
@@ -137,7 +133,7 @@ class Editor
 
       private:
         bool active = false;
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
     };
 
     class InstrumentSelectorButton : public juce::Button
@@ -159,7 +155,7 @@ class Editor
 
       private:
         juce::String currentName {"SNARE"};
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
     };
 
     class KitSelectorButton : public juce::Button
@@ -181,7 +177,7 @@ class Editor
 
       private:
         juce::String currentName {"NO KIT LOADED"};
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
     };
 
     class OutputBusButton : public juce::Button
@@ -203,7 +199,7 @@ class Editor
 
       private:
         int currentBus = 0;
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
     };
 
     class ZoneButton : public juce::Button
@@ -221,7 +217,7 @@ class Editor
 
       private:
         bool isActive = false;
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
     };
 
     class LearnButton : public juce::Button
@@ -238,7 +234,7 @@ class Editor
 
       private:
         bool isLearning_ = false;
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
     };
 
     class CurveButton : public juce::Button
@@ -260,7 +256,7 @@ class Editor
 
       private:
         VelocityCurve currentCurve = VelocityCurve::linear;
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
     };
 
     class VelocityCurvePreview : public juce::Component
@@ -286,35 +282,15 @@ class Editor
 
       private:
         VelocityCurve currentCurve = VelocityCurve::linear;
-        Theme theme = Theme::sketch();
-    };
-
-    class MinimalThemeToggleButton : public juce::Button
-    {
-      public:
-        MinimalThemeToggleButton() : juce::Button("ThemeToggle")
-        {
-            setMouseCursor(juce::MouseCursor::PointingHandCursor);
-        }
-        void setTheme(const Theme &t)
-        {
-            theme = t;
-            repaint();
-        }
-        void paintButton(juce::Graphics &g, bool isHover, bool isDown) override;
-
-      private:
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
     };
 
     MenuButton homeTabButton {"HOME"};
     MenuButton viewToggleButton {"MIXER VIEW"};
-    MenuButton practiceToggleButton {"PRACTICE"};
     MenuButton fileButton {"FILE"};
     MenuButton presetsButton {"PRESETS"};
     MenuButton midiButton {"MIDI"};
     MenuButton settingsButton {"SETTINGS"};
-    MinimalThemeToggleButton minimalThemeToggleButton;
 
     KitSelectorButton kitSelectorButton;
     DrumKitView kitView;
@@ -322,11 +298,8 @@ class Editor
     Scope scope;
 
     std::unique_ptr<MixerView> mixerView;
-    std::unique_ptr<RecordPracticeView> practiceView;
     EditorView currentView = EditorView::kitView;
 
-    std::unique_ptr<juce::Drawable> logo;
-    juce::Image cachedLogoImage;
     juce::OpenGLContext openGlContext;
     bool windowIconApplied = false;
 
@@ -366,9 +339,8 @@ class Editor
     juce::String statusText;
     juce::String kitErrorText;
 
-    Theme theme = Theme::sketch();
+    Theme theme = Theme::suite();
     std::unique_ptr<GlorpLookAndFeel> lookAndFeel;
-    juce::Component::SafePointer<juce::DocumentWindow> attachedStandaloneWindow;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Editor)
 };

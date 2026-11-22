@@ -8,7 +8,7 @@
       ~/DrumGizmo/kits        <- the DrumGizmo app default on Linux
       ~/.local/share/drumgizmo/kits
       /usr/share/drumgizmo/kits
-      plus whatever they configure in GlorpDrums' own settings
+      plus whatever they configure in Suite Drums Glorp's own settings
 
     So we probe a list of likely roots and let the user add more. Each root is
     scanned once at startup; an explicit rescan happens when the FILE menu is

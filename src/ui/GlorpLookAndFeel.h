@@ -17,7 +17,7 @@ namespace glorp
 class GlorpLookAndFeel final : public juce::LookAndFeel_V4
 {
   public:
-    GlorpLookAndFeel() { setTheme(Theme::sketch()); }
+    GlorpLookAndFeel() { setTheme(Theme::suite()); }
 
     void setTheme(const Theme &newTheme)
     {
@@ -433,7 +433,7 @@ class GlorpLookAndFeel final : public juce::LookAndFeel_V4
         return bg.getPerceivedBrightness() > 0.62f ? juce::Colour(0xff101114) : juce::Colours::white;
     }
 
-    Theme theme = Theme::sketch();
+    Theme theme = Theme::suite();
 };
 
 } // namespace glorp

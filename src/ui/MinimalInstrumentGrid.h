@@ -66,7 +66,7 @@ class MinimalInstrumentGrid : public juce::Component
 
     juce::Colour cellAccentColour(size_t index) const noexcept;
 
-    Theme theme = Theme::minimalDark();
+    Theme theme = Theme::suite();
     std::vector<Item> items;
     int selectedIndex = 0;
 

@@ -3,6 +3,7 @@
 */
 
 #include "PluginProcessor.h"
+#include "Config.h"
 #include "DebugLog.h"
 #include "KitScanner.h"
 #include "PluginEditor.h"
@@ -26,10 +27,10 @@ juce::AudioProcessor::BusesProperties PluginProcessor::createBusesProperties()
 //==============================================================================
 PluginProcessor::PluginProcessor() : juce::AudioProcessor(createBusesProperties())
 {
-    DebugLog::instance().setLogFile(settings.getConfigDirectory().getChildFile("glorpdrums_debug.log"));
+    DebugLog::instance().setLogFile(settings.getConfigDirectory().getChildFile("suitedrumsglorp_debug.log"));
     DebugLog::instance().logInfo("APP",
-                                 "PluginProcessor init (" + juce::String(isStandaloneApp() ? "Standalone" : "Plugin")
-                                     + ", OS=" + juce::SystemStats::getOperatingSystemName() + ")");
+                                 "PluginProcessor init (Plugin, OS="
+                                     + juce::SystemStats::getOperatingSystemName() + ")");
 
     parameterManager.createParameterLayout(*this);
 
@@ -37,12 +38,6 @@ PluginProcessor::PluginProcessor() : juce::AudioProcessor(createBusesProperties(
 
     audioEngine.getSampler().setSampleRateAndBlock(44100.0, 512);
     audioEngine.getSampler().setMultiOutMode(true);
-    audioEngine.setRouteCleanMixToBus2(settings.obsCleanOutBus2Enabled);
-    if (settings.obsStreamDeviceName.isNotEmpty() && settings.obsStreamDeviceName != "Off")
-    {
-        juce::String obsErr;
-        audioEngine.getStreamOutputBridge().setOutputDevice(settings.obsStreamDeviceName, obsErr);
-    }
     refreshKitList();
 
     if (settings.lastKitPath.isNotEmpty() && juce::File(settings.lastKitPath).existsAsFile())
@@ -63,11 +58,18 @@ PluginProcessor::PluginProcessor() : juce::AudioProcessor(createBusesProperties(
 
     if (!audioEngine.getSampler().isKitLoaded())
     {
-        const auto homeDemo = juce::File::getSpecialLocation(juce::File::userHomeDirectory)
-                                  .getChildFile(".config/GlorpDrums/kits/GlorpDemoKit/drumkit.xml");
+        const auto homeDemo = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                                  .getChildFile(config::CONFIG_DIR_NAME)
+                                  .getChildFile("kits/GlorpDemoKit/drumkit.xml");
+        const auto legacyDemo = juce::File::getSpecialLocation(juce::File::userHomeDirectory)
+                                    .getChildFile(".config/GlorpDrums/kits/GlorpDemoKit/drumkit.xml");
         if (homeDemo.existsAsFile())
         {
             loadKit(homeDemo.getFullPathName());
+        }
+        else if (legacyDemo.existsAsFile())
+        {
+            loadKit(legacyDemo.getFullPathName());
         }
         else
         {
@@ -113,7 +115,7 @@ double PluginProcessor::getTailLengthSeconds() const
 
 bool PluginProcessor::isBusesLayoutSupported(const BusesLayout &layouts) const
 {
-    // GlorpDrums has no audio inputs
+    // Suite Drums Glorp has no audio inputs
     if (!layouts.getMainInputChannelSet().isDisabled())
         return false;
 
@@ -177,52 +179,6 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::MidiB
     if (getLatencySamples() != samplerLatency)
         setLatencySamples(samplerLatency);
 
-    // If recording drums only (default), stream rendered drum audio now (Main mix)
-    if (audioEngine.getAudioRecorder().isRecording()
-        && audioEngine.getAudioRecorder().getSource() == AudioRecorder::RecordingSource::drumsOnly)
-        audioEngine.getAudioRecorder().pushAudio(busOutputs.data(), 2, numSamples);
-
-    // Play backing track (mixes into Main Out 1/2)
-    audioEngine.getBackingTrackPlayer().render(busOutputs.data(), 2, numSamples);
-
-    // If recording full mix, stream combined drums + backing track (WITHOUT metronome)
-    if (audioEngine.getAudioRecorder().isRecording()
-        && audioEngine.getAudioRecorder().getSource() == AudioRecorder::RecordingSource::fullMix)
-        audioEngine.getAudioRecorder().pushAudio(busOutputs.data(), 2, numSamples);
-
-    // Standalone OBS / Stream Clean Output (Drums + Backing Track, NO Metronome Click)
-    if (isStandaloneApp())
-    {
-        if (audioEngine.isRoutingCleanMixToBus2() && busOutputs[0] != nullptr && busOutputs[1] != nullptr
-            && busOutputs[2] != nullptr && busOutputs[3] != nullptr)
-        {
-            const float gain = audioEngine.getStreamOutputBridge().getStreamGain();
-            if (std::abs(gain - 1.0f) < 1e-4f)
-            {
-                juce::FloatVectorOperations::copy(busOutputs[2], busOutputs[0], numSamples);
-                juce::FloatVectorOperations::copy(busOutputs[3], busOutputs[1], numSamples);
-            }
-            else
-            {
-                juce::FloatVectorOperations::copyWithMultiply(busOutputs[2], busOutputs[0], gain, numSamples);
-                juce::FloatVectorOperations::copyWithMultiply(busOutputs[3], busOutputs[1], gain, numSamples);
-            }
-        }
-
-        audioEngine.getStreamOutputBridge().pushAudio(busOutputs.data(), 2, numSamples);
-    }
-
-    // Play metronome / count-in clicks for the player's monitor output ONLY (Main Out 1/2).
-    // When "Listen to OBS Clean Mix" is active in Standalone mode, suppress the click in Out 1/2
-    // so the player hears the exact Drum + Backing Track balance sent to OBS while visual beat
-    // indicators and count-in timing continue normally.
-    const bool soloCleanMixInHeadphones =
-        isStandaloneApp() && audioEngine.getStreamOutputBridge().isMonitoringCleanMixInHeadphones();
-    audioEngine.getMetronome().render(soloCleanMixInHeadphones ? nullptr : busOutputs.data(),
-                                      soloCleanMixInHeadphones ? 0 : 2,
-                                      numSamples,
-                                      audioEngine.getBackingTrackPlayer().getPlayheadSeconds(),
-                                      audioEngine.getBackingTrackPlayer().isPlaying());
 }
 
 //==============================================================================
@@ -433,7 +389,7 @@ void PluginProcessor::drainControlQueue()
 //==============================================================================
 void PluginProcessor::getStateInformation(juce::MemoryBlock &destination)
 {
-    juce::XmlElement state("GlorpDrumsState");
+    juce::XmlElement state("SuiteDrumsGlorpState");
     state.setAttribute("version", 1);
     state.setAttribute("kit", currentKitPath);
     state.setAttribute("hiHatMode", static_cast<int>(audioEngine.getSampler().getHiHatMode()));
@@ -475,7 +431,8 @@ void PluginProcessor::setStateInformation(const void *data, int sizeInBytes)
 
     auto xml = getXmlFromBinary(data, sizeInBytes);
 
-    if (xml == nullptr || !xml->hasTagName("GlorpDrumsState"))
+    if (xml == nullptr
+        || (!xml->hasTagName("SuiteDrumsGlorpState") && !xml->hasTagName("GlorpDrumsState")))
         return;
 
     auto kitPath = xml->getStringAttribute("kit");

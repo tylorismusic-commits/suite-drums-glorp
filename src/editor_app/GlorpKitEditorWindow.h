@@ -1,6 +1,6 @@
 /*
     GlorpKitEditorWindow.h - Standalone graphical .glorpkit Studio editor UI & audio preview engine.
-    Follows the hand-drawn comic/sketch aesthetic of GlorpDrums (Theme::sketch() & Theme::dark()).
+    Uses the shared Suite dark/amber theme.
 */
 
 #pragma once
@@ -156,7 +156,7 @@ class GlorpKitEditorComponent
     juce::AudioDeviceManager deviceManager;
     bool audioDeviceActive = false;
 
-    Theme theme = Theme::sketch();
+    Theme theme = Theme::suite();
     juce::Colour hitGlowColour {0xffff8200};
 
     // -- Selection State -----------------------------------------------------
@@ -207,7 +207,7 @@ class GlorpKitEditorComponent
     juce::Rectangle<float> headerBounds;
     juce::Rectangle<float> btnNewKit, btnOpenKit, btnImportDg, btnImportOra, btnSaveKit;
     juce::Rectangle<float> btnUndo, btnRedo;
-    juce::Rectangle<float> pillKitMeta, btnGlowColor, btnAudioSettings, btnTour, btnThemeToggle;
+    juce::Rectangle<float> pillKitMeta, btnGlowColor, btnAudioSettings, btnTour;
 
     // Left Panel (Z-Layer Stack & Mic Buses)
     juce::Rectangle<float> leftPanelBounds;

@@ -170,7 +170,7 @@ class GlorpKitReader
     /// Extracts all entries to targetDirectory (used when archive is compressed).
     bool extractToDirectory(const std::string &targetDirectory) const;
 
-    /// Returns cache directory path for extracted archives: ~/.cache/GlorpDrums/kits/<name>
+    /// Returns cache directory path for extracted archives: ~/.cache/SuiteDrumsGlorp/kits/<name>
     static std::string getCacheDirectoryFor(const std::string &archivePath);
 
   private:

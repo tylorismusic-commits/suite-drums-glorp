@@ -181,7 +181,7 @@ class DrumKitView
     juce::Rectangle<float> resetBtnBounds;
     juce::Rectangle<float> exitBtnBounds;
 
-    Theme theme = Theme::sketch();
+    Theme theme = Theme::suite();
     juce::Colour hitGlowColour {0xffff8200};
     std::array<int, static_cast<size_t>(KitPiece::count)> pieceZOrder {{1, 4, 5, 6, 9, 3, 7, 2, 8}};
     bool hasLayout = false;

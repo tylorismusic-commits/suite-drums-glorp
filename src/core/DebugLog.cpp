@@ -1,4 +1,5 @@
 #include "DebugLog.h"
+#include "Config.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -26,8 +27,8 @@ juce::File DebugLog::getLogFile() const
         return logFile;
 
     return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("GlorpDrums")
-        .getChildFile("glorpdrums_debug.log");
+        .getChildFile(config::CONFIG_DIR_NAME)
+        .getChildFile("suitedrumsglorp_debug.log");
 }
 
 void DebugLog::pushRealtimeEvent(const char *category, const char *detail) noexcept

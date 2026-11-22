@@ -1,5 +1,5 @@
 /*
-    BleedMatrix.h - Multi-mic acoustic leakage and bleed matrix for GlorpDrums.
+    BleedMatrix.h - Multi-mic acoustic leakage and bleed matrix for Suite Drums Glorp.
 */
 
 #pragma once

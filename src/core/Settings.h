@@ -51,18 +51,12 @@ class Settings
     int editorWidth = 1180;
     int editorHeight = 860;
     bool editorMaximised = false;
-    int themeIndex =
-        0; ///< 0 = sketch, 1 = dark, 2 = studio clean, 3 = high contrast, 4 = minimal dark, 5 = minimal light
     float uiTextScale = 1.0f; ///< UI font scale multiplier (0.85..1.35)
 #if defined(__linux__)
     bool openGlEnabled = false; ///< Hardware GPU acceleration disabled by default on Linux (X11/Xfce resize stability)
 #else
     bool openGlEnabled = true; ///< Hardware GPU acceleration via juce::OpenGLContext
 #endif
-
-    // -- standalone OBS / Stream clean output ------------------------------
-    juce::String obsStreamDeviceName;   ///< Secondary output device identifier for clean mix (no click)
-    bool obsCleanOutBus2Enabled = true; ///< Mirror clean mix (Drums + Backing, no click) to Out 3/4 in Standalone
 
     void markDirty() noexcept { dirty = true; }
 
@@ -76,6 +70,7 @@ class Settings
     void readState(const juce::MemoryBlock &source);
 
   private:
+    void migrateLegacyConfig();
     bool dirty = false;
 };
 

@@ -104,7 +104,7 @@ class Scope
     float lastCc4Value = -1.0f;
     double lastCc4Time = 0.0;
 
-    Theme theme = Theme::sketch();
+    Theme theme = Theme::suite();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Scope)
 };

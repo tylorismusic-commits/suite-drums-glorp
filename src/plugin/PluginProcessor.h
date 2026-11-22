@@ -18,10 +18,7 @@
 #include "MidiMap.h"
 #include "MidiRouter.h"
 #include "ParameterManager.h"
-#include "SetlistPlayer.h"
 #include "Settings.h"
-#include "SongDatabase.h"
-#include "TempoDetector.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -79,29 +76,10 @@ class PluginProcessor : public juce::AudioProcessor
 
     juce::AudioProcessorParameter *findParameter(const juce::String &paramID) const;
 
-    // -- GlorpDrums --------------------------------------------------------
+    // -- Suite Drums Glorp --------------------------------------------------
     Sampler &getSampler() noexcept { return audioEngine.getSampler(); }
     MidiMap &getMidiMap() noexcept { return midiRouter.getMidiMap(); }
     Settings &getSettings() noexcept { return settings; }
-    BackingTrackPlayer &getBackingTrackPlayer() noexcept { return audioEngine.getBackingTrackPlayer(); }
-    Metronome &getMetronome() noexcept { return audioEngine.getMetronome(); }
-    SongDatabase &getSongDatabase() noexcept { return songDatabase; }
-    SetlistPlayer &getSetlistPlayer() noexcept { return setlistPlayer; }
-    AudioRecorder &getAudioRecorder() noexcept { return audioEngine.getAudioRecorder(); }
-    MidiRecorder &getMidiRecorder() noexcept { return audioEngine.getMidiRecorder(); }
-    StreamOutputBridge &getStreamOutputBridge() noexcept { return audioEngine.getStreamOutputBridge(); }
-    TempoDetector::Worker &getTempoWorker() noexcept { return tempoWorker; }
-
-    /// Returns true when running as the Standalone application (or forced in unit tests).
-    bool isStandaloneApp() const noexcept
-    {
-        return wrapperType == wrapperType_Standalone || forceStandaloneModeForTest.load(std::memory_order_relaxed);
-    }
-    void setForceStandaloneModeForTest(bool force) noexcept
-    {
-        forceStandaloneModeForTest.store(force, std::memory_order_relaxed);
-    }
-
     AudioEngine &getAudioEngine() noexcept { return audioEngine; }
     const AudioEngine &getAudioEngine() const noexcept { return audioEngine; }
 
@@ -161,9 +139,6 @@ class PluginProcessor : public juce::AudioProcessor
     AudioEngine audioEngine;
 
     Settings settings;
-    SongDatabase songDatabase;
-    SetlistPlayer setlistPlayer {songDatabase, audioEngine.getBackingTrackPlayer(), audioEngine.getMetronome()};
-    TempoDetector::Worker tempoWorker;
 
     std::vector<KitEntry> kitList;
     juce::String currentKitPath;
@@ -172,7 +147,6 @@ class PluginProcessor : public juce::AudioProcessor
 
     std::atomic<float> lastHiHatCC4 {0.0f};
     std::atomic<float> lastSnareCC16 {0.5f};
-    std::atomic<bool> forceStandaloneModeForTest {false};
 
     juce::ListenerList<Listener> listeners;
 

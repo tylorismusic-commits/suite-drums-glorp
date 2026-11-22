@@ -19,10 +19,7 @@ constexpr double pi = 3.14159265358979323846;
 }
 
 //==============================================================================
-AudioEngine::AudioEngine()
-{
-    busOutputs.fill(nullptr);
-}
+AudioEngine::AudioEngine() = default;
 
 //==============================================================================
 void AudioEngine::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -36,19 +33,11 @@ void AudioEngine::prepareToPlay(double sampleRate, int samplesPerBlock)
                                      + " Hz, blockSize=" + juce::String(samplesPerBlock));
 
     sampler.setSampleRateAndBlock(sampleRate, samplesPerBlock);
-    backingTrackPlayer.prepareToPlay(sampleRate, samplesPerBlock);
-    metronome.prepareToPlay(sampleRate, samplesPerBlock);
-    audioRecorder.prepareToPlay(sampleRate, samplesPerBlock);
-    streamOutputBridge.prepareToPlay(sampleRate, samplesPerBlock);
 }
 
 void AudioEngine::releaseResources()
 {
     sampler.allNotesOff();
-    metronome.stop();
-    backingTrackPlayer.stop();
-    audioRecorder.stopRecording();
-    midiRecorder.stopRecording();
 }
 
 void AudioEngine::sampleRateChanged(double newRate)
@@ -61,10 +50,6 @@ void AudioEngine::sampleRateChanged(double newRate)
                                      + " Hz (blockSize=" + juce::String(currentBlockSize) + ")");
 
     sampler.setSampleRateAndBlock(newRate, currentBlockSize);
-    backingTrackPlayer.prepareToPlay(newRate, currentBlockSize);
-    metronome.prepareToPlay(newRate, currentBlockSize);
-    audioRecorder.prepareToPlay(newRate, currentBlockSize);
-    streamOutputBridge.prepareToPlay(newRate, currentBlockSize);
 }
 
 void AudioEngine::blockSizeChanged(int)
@@ -153,9 +138,6 @@ void AudioEngine::render(float *const *busOutputs,
     {
         const auto message = metadata.getMessage();
         const auto sampleOffset = metadata.samplePosition;
-
-        if (midiRecorder.isRecording())
-            midiRecorder.logMessage(message, sampler.currentSamplePosition() + sampleOffset);
 
         // Delegate MIDI routing to MidiRouter (handles learn, CC routing, E-drum CCs, chokes, note triggering)
         midiRouter.processMidiMessage(message, sampleOffset, sampler, parameterManager, lastHiHatCC4, lastSnareCC16);

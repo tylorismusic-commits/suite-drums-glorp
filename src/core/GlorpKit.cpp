@@ -99,7 +99,16 @@ std::string GlorpKitReader::getCacheDirectoryFor(const std::string &archivePath)
 {
     const auto stem = fs::path(archivePath).stem().string();
     const auto home = juce::File::getSpecialLocation(juce::File::userHomeDirectory).getFullPathName().toStdString();
-    return home + "/.cache/GlorpDrums/kits/" + stem;
+    const auto current = home + "/.cache/SuiteDrumsGlorp/kits/" + stem;
+    const auto legacy = home + "/.cache/GlorpDrums/kits/" + stem;
+
+    // Keep using an archive that was already extracted by GlorpDrums rather
+    // than unpacking a duplicate copy into the Suite cache.
+    std::error_code ec;
+    if (fs::is_directory(legacy, ec) && !fs::is_directory(current, ec))
+        return legacy;
+
+    return current;
 }
 
 bool GlorpKitReader::quickReadManifest(const std::string &archivePath, GlorpKitManifest &manifest)

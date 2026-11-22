@@ -1,10 +1,9 @@
 /*
-    Theme.h - colours, fonts and the hand-drawn look.
+    Theme.h - the single Suite palette, fonts and shared drawing helpers.
 
-    The mockup is ink on paper: black outlines, white callout boxes, one warm
-    off-white background. Everything here exists to reproduce that, plus a dark
-    variant for people who work at night, because a drum plugin that glares at
-    you during a night session is no fun.
+    Suite Drums Glorp uses one dark charcoal/amber theme across the plugin and
+    the kit editor. Jost ExtraBold is the display face; Red Hat Text is used for
+    controls and body copy.
 */
 
 #pragma once
@@ -44,181 +43,29 @@ struct Theme
     bool cleanStyle = false;   ///< Clean sans-serif fonts & straight geometric borders for high readability
     bool minimalStyle = false; ///< Flat hardware-minimal skin: kit grid instead of drum art & no timeline
 
-    static Theme sketch() noexcept
-    {
-        Theme t;
-        t.isDark = false;
-        t.cleanStyle = false;
-        t.background = juce::Colour(0xffe2e5e2);
-        t.panel = juce::Colour(0xfffcfdfc);
-        t.panelEdge = juce::Colour(0xff111215);
-        t.ink = juce::Colour(0xff101114);
-        t.inkSoft = juce::Colour(0xff4b4e54);
-        t.accent = juce::Colour(0xffea8c16);
-        t.accentAlt = juce::Colour(0xff2ecc71);
-        t.accentWarm = juce::Colour(0xffe67e22);
-        t.warning = juce::Colour(0xffd03020);
-        t.trough = juce::Colour(0xffede8dc);
-        t.shell = juce::Colour(0xfff9fafb);
-        t.shellShade = juce::Colour(0xffcbd0d6);
-        t.cymbal = juce::Colour(0xfff4f5f6);
-        t.head = juce::Colour(0xffffffff);
-        return t;
-    }
-
-    static Theme dark() noexcept
-    {
-        Theme t;
-        t.isDark = true;
-        t.cleanStyle = false;
-        t.background = juce::Colour(0xff161719);
-        t.panel = juce::Colour(0xff1c1d21);
-        t.panelEdge = juce::Colour(0xffffffff);
-        t.ink = juce::Colour(0xffffffff);
-        t.inkSoft = juce::Colour(0xffb0b4ba);
-        t.accent = juce::Colour(0xffea8c16);
-        t.accentAlt = juce::Colour(0xff2ecc71);
-        t.accentWarm = juce::Colour(0xffe67e22);
-        t.warning = juce::Colour(0xffe8a33f);
-        t.trough = juce::Colour(0xff121316);
-        t.shell = juce::Colour(0xff3a3a41);
-        t.shellShade = juce::Colour(0xff2a2a30);
-        t.cymbal = juce::Colour(0xff9c8f52);
-        t.head = juce::Colour(0xff45454d);
-        return t;
-    }
-
-    static Theme studioClean() noexcept
-    {
-        Theme t;
-        t.isDark = false;
-        t.cleanStyle = true;
-        t.background = juce::Colour(0xfff0f2f5);
-        t.panel = juce::Colour(0xffffffff);
-        t.panelEdge = juce::Colour(0xff2d3748);
-        t.ink = juce::Colour(0xff0d1117);
-        t.inkSoft = juce::Colour(0xff4a5568);
-        t.accent = juce::Colour(0xffd96b08);
-        t.accentAlt = juce::Colour(0xff2ecc71);
-        t.accentWarm = juce::Colour(0xffe67e22);
-        t.warning = juce::Colour(0xffc92a2a);
-        t.trough = juce::Colour(0xffe2e8f0);
-        t.shell = juce::Colour(0xfff8fafc);
-        t.shellShade = juce::Colour(0xffcbd5e1);
-        t.cymbal = juce::Colour(0xfff1f5f9);
-        t.head = juce::Colour(0xffffffff);
-        return t;
-    }
-
-    static Theme highContrast() noexcept
+    static Theme suite() noexcept
     {
         Theme t;
         t.isDark = true;
         t.cleanStyle = true;
-        t.background = juce::Colour(0xff0a0c10);
-        t.panel = juce::Colour(0xff161b22);
-        t.panelEdge = juce::Colour(0xffcbd5e1);
-        t.ink = juce::Colour(0xffffffff);
-        t.inkSoft = juce::Colour(0xffcbd5e1);
-        t.accent = juce::Colour(0xffffb020);
-        t.accentAlt = juce::Colour(0xff2ecc71);
-        t.accentWarm = juce::Colour(0xffe67e22);
-        t.warning = juce::Colour(0xffff5252);
-        t.trough = juce::Colour(0xff0d1117);
-        t.shell = juce::Colour(0xff30363d);
-        t.shellShade = juce::Colour(0xff21262d);
-        t.cymbal = juce::Colour(0xffa69658);
-        t.head = juce::Colour(0xff3b424c);
+        t.minimalStyle = false;
+        t.background = juce::Colour(0xff1a1a1d);
+        t.panel = juce::Colour(0xff242427);
+        t.panelEdge = juce::Colour(0xff3b3b40);
+        t.ink = juce::Colour(0xfff2f2f0);
+        t.inkSoft = juce::Colour(0xff9a9aa0);
+        t.accent = juce::Colour(0xffe0a128);
+        t.accentAlt = juce::Colour(0xff6fcf97);
+        t.accentWarm = juce::Colour(0xffd98c2b);
+        t.warning = juce::Colour(0xffe05a4f);
+        t.trough = juce::Colour(0xff141416);
+        t.shell = juce::Colour(0xff333338);
+        t.shellShade = juce::Colour(0xff252529);
+        t.cymbal = juce::Colour(0xffb08a3e);
+        t.head = juce::Colour(0xff45454a);
         return t;
     }
 
-    static Theme minimalDark() noexcept
-    {
-        Theme t;
-        t.isDark = true;
-        t.cleanStyle = true;
-        t.minimalStyle = true;
-        t.background = juce::Colour(0xff1e222b);
-        t.panel = juce::Colour(0xff282c37);
-        t.panelEdge = juce::Colour(0xff3b4152);
-        t.ink = juce::Colour(0xfff1f3f8);
-        t.inkSoft = juce::Colour(0xff8c93a4);
-        t.accent = juce::Colour(0xff6b5bff);
-        t.accentAlt = juce::Colour(0xff2ed3b7);
-        t.accentWarm = juce::Colour(0xffff6b2c);
-        t.warning = juce::Colour(0xffff5252);
-        t.trough = juce::Colour(0xff171a21);
-        t.shell = juce::Colour(0xff323746);
-        t.shellShade = juce::Colour(0xff232732);
-        t.cymbal = juce::Colour(0xff3fa9f5);
-        t.head = juce::Colour(0xff3a4050);
-        return t;
-    }
-
-    static Theme minimalLight() noexcept
-    {
-        Theme t;
-        t.isDark = false;
-        t.cleanStyle = true;
-        t.minimalStyle = true;
-        t.background = juce::Colour(0xffdce1ea);
-        t.panel = juce::Colour(0xfff4f6fa);
-        t.panelEdge = juce::Colour(0xffc2c9d6);
-        t.ink = juce::Colour(0xff1c2029);
-        t.inkSoft = juce::Colour(0xff646d80);
-        t.accent = juce::Colour(0xff6b5bff);
-        t.accentAlt = juce::Colour(0xff19b59d);
-        t.accentWarm = juce::Colour(0xffff6b2c);
-        t.warning = juce::Colour(0xffd93025);
-        t.trough = juce::Colour(0xffe3e7f0);
-        t.shell = juce::Colour(0xffffffff);
-        t.shellShade = juce::Colour(0xffd5dce6);
-        t.cymbal = juce::Colour(0xff3fa9f5);
-        t.head = juce::Colour(0xffffffff);
-        return t;
-    }
-
-    static constexpr int numSkins() noexcept { return 6; }
-
-    static juce::String skinName(int index)
-    {
-        switch (index)
-        {
-            case 1:
-                return "Dark (Night)";
-            case 2:
-                return "Studio Clean (Light)";
-            case 3:
-                return "High Contrast Pro (Dark)";
-            case 4:
-                return "Minimal (Dark)";
-            case 5:
-                return "Minimal (Light)";
-            case 0:
-            default:
-                return "Sketch (Light)";
-        }
-    }
-
-    static Theme byIndex(int index) noexcept
-    {
-        switch (index)
-        {
-            case 1:
-                return dark();
-            case 2:
-                return studioClean();
-            case 3:
-                return highContrast();
-            case 4:
-                return minimalDark();
-            case 5:
-                return minimalLight();
-            case 0:
-            default:
-                return sketch();
-        }
-    }
 };
 
 //==============================================================================
@@ -231,7 +78,7 @@ inline std::atomic<float> &globalUiTextScale() noexcept
 
 inline std::atomic<bool> &globalCleanStyle() noexcept
 {
-    static std::atomic<bool> clean {false};
+    static std::atomic<bool> clean {true};
     return clean;
 }
 
@@ -272,23 +119,7 @@ inline bool isMinimalStyleEnabled() noexcept
 }
 
 //==============================================================================
-/** Loads one of the bundled fonts. */
-inline juce::Typeface::Ptr uiTypeface()
-{
-    static const juce::Typeface::Ptr face = juce::Typeface::createSystemTypefaceFor(
-        GlorpAssets::PatrickHandRegular_ttf, GlorpAssets::PatrickHandRegular_ttfSize);
-
-    return face;
-}
-
-inline juce::Typeface::Ptr displayTypeface()
-{
-    static const juce::Typeface::Ptr face = juce::Typeface::createSystemTypefaceFor(
-        GlorpAssets::LilitaOneRegular_ttf, GlorpAssets::LilitaOneRegular_ttfSize);
-
-    return face;
-}
-
+/** Loads the bundled fonts. */
 inline juce::Typeface::Ptr cleanUiTypeface()
 {
     static const juce::Typeface::Ptr face = juce::Typeface::createSystemTypefaceFor(
@@ -299,8 +130,9 @@ inline juce::Typeface::Ptr cleanUiTypeface()
 
 inline juce::Typeface::Ptr cleanDisplayTypeface()
 {
+    // Suite display face: Jost ExtraBold, as used across the Suite series.
     static const juce::Typeface::Ptr face = juce::Typeface::createSystemTypefaceFor(
-        GlorpAssets::RedHatDisplayBold_otf, GlorpAssets::RedHatDisplayBold_otfSize);
+        GlorpAssets::JostExtraBold_ttf, GlorpAssets::JostExtraBold_ttfSize);
 
     return face;
 }
@@ -309,14 +141,7 @@ inline juce::Font uiFont(float height)
 {
     const auto size = juce::jmax(9.0f, height * getUiTextScale());
 
-    if (isCleanStyleEnabled())
-    {
-        if (auto face = cleanUiTypeface())
-            return juce::Font(juce::FontOptions(face).withHeight(size));
-        return juce::Font(juce::FontOptions(size));
-    }
-
-    if (auto face = uiTypeface())
+    if (auto face = cleanUiTypeface())
         return juce::Font(juce::FontOptions(face).withHeight(size));
 
     return juce::Font(juce::FontOptions(size));
@@ -326,29 +151,46 @@ inline juce::Font displayFont(float height)
 {
     const auto size = juce::jmax(10.5f, height * getUiTextScale());
 
-    if (isCleanStyleEnabled())
-    {
-        if (auto face = cleanDisplayTypeface())
-            return juce::Font(juce::FontOptions(face).withHeight(size));
-        return juce::Font(juce::FontOptions(size).withStyle("Bold"));
-    }
-
-    if (auto face = displayTypeface())
+    if (auto face = cleanDisplayTypeface())
         return juce::Font(juce::FontOptions(face).withHeight(size));
 
     return juce::Font(juce::FontOptions(size).withStyle("Bold"));
 }
 
-/// The bundled logo. Parsed fresh each call, because it is only ever needed once
-/// per editor and an SVG parse is not worth caching across plugin instances.
-inline std::unique_ptr<juce::Drawable> logoDrawable()
+/** Draws the Suite Drums Glorp wordmark: an amber S badge plus the suite
+    name and instrument line. Kept here so every window brands itself the same way.
+*/
+inline void drawSuiteWordmark(juce::Graphics &g,
+                              juce::Rectangle<float> area,
+                              const Theme &t,
+                              bool compact = false)
 {
-    auto root = juce::parseXML(juce::String::fromUTF8(GlorpAssets::logo_svg, GlorpAssets::logo_svgSize));
+    const float badge = juce::jmin(area.getHeight(), compact ? 38.0f : 48.0f);
+    const auto badgeRect = area.removeFromLeft(badge).withSizeKeepingCentre(badge, badge);
 
-    if (root != nullptr)
-        return juce::Drawable::createFromSVG(*root);
+    g.setColour(t.accent);
+    g.fillRoundedRectangle(badgeRect, badge * 0.24f);
 
-    return {};
+    if (auto face = cleanDisplayTypeface())
+    {
+        g.setFont(juce::Font(juce::FontOptions(face).withHeight(badge * 0.64f)));
+        g.setColour(t.background);
+        g.drawText("S", badgeRect.translated(0.0f, -badge * 0.03f), juce::Justification::centred, false);
+    }
+
+    area.removeFromLeft(compact ? 8.0f : 11.0f);
+    auto textArea = area.withTrimmedTop(compact ? 4.0f : 6.0f);
+    const float nameH = compact ? 19.0f : 24.0f;
+
+    if (auto face = cleanDisplayTypeface())
+        g.setFont(juce::Font(juce::FontOptions(face).withHeight(nameH)));
+
+    g.setColour(t.ink);
+    g.drawText("SUITE", textArea.removeFromTop(nameH + 1.0f), juce::Justification::centredLeft, false);
+
+    g.setFont(uiFont(compact ? 8.5f : 9.5f).boldened());
+    g.setColour(t.accent.withAlpha(0.95f));
+    g.drawText("DRUMS GLORP", textArea.removeFromTop(compact ? 13.0f : 15.0f), juce::Justification::centredLeft, false);
 }
 
 inline juce::Image imageFromMemory(const char *data, int size)

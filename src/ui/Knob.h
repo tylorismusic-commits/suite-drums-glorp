@@ -79,7 +79,7 @@ class Knob
     void showPopupMenu();
 
     juce::String labelText;
-    Theme theme = Theme::sketch();
+    Theme theme = Theme::suite();
     juce::Colour customAccent {0xff6b5bff};
     bool hasCustomAccent = false;
     bool bipolar = false;

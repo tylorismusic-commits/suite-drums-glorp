@@ -28,6 +28,9 @@ tools/__pycache__/
 *.pyc
 *.pyo
 
+# Generated UI snapshots
+test/docs/
+
 # Scratch & test binaries
 check_raw_wav
 test_crocell

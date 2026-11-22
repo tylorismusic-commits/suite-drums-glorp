@@ -1,4 +1,5 @@
 #include "Settings.h"
+#include "Config.h"
 #include "KitScanner.h"
 
 namespace glorp
@@ -9,14 +10,37 @@ namespace
 constexpr int kVersionTag = 1;
 }
 
+namespace
+{
+juce::File applicationDataDirectory()
+{
+    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+}
+} // namespace
+
 Settings::Settings()
 {
+    migrateLegacyConfig();
     load();
+}
+
+void Settings::migrateLegacyConfig()
+{
+    const auto current = getConfigDirectory();
+    const auto legacy = applicationDataDirectory().getChildFile(config::LEGACY_CONFIG_DIR_NAME);
+
+    if (current.exists() || !legacy.isDirectory())
+        return;
+
+    // First run after the rename: carry the old settings, presets and layout
+    // across so existing users keep their kit list and MIDI map edits.
+    if (!legacy.copyDirectoryTo(current))
+        current.createDirectory();
 }
 
 juce::File Settings::getConfigDirectory() const
 {
-    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("GlorpDrums");
+    return applicationDataDirectory().getChildFile(config::CONFIG_DIR_NAME);
 }
 
 juce::File Settings::getConfigFile() const
@@ -61,7 +85,7 @@ void Settings::saveIfChanged()
 
 void Settings::writeState(juce::MemoryBlock &destination) const
 {
-    juce::XmlElement root("GlorpDrumsSettings");
+    juce::XmlElement root("SuiteDrumsGlorpSettings");
     root.setAttribute("version", kVersionTag);
 
     auto *kits = root.createNewChildElement("KitPaths");
@@ -79,11 +103,8 @@ void Settings::writeState(juce::MemoryBlock &destination) const
     root.setAttribute("editorWidth", editorWidth);
     root.setAttribute("editorHeight", editorHeight);
     root.setAttribute("editorMaximised", editorMaximised);
-    root.setAttribute("theme", themeIndex);
     root.setAttribute("uiTextScale", static_cast<double>(uiTextScale));
     root.setAttribute("openGlEnabled", openGlEnabled);
-    root.setAttribute("obsStreamDeviceName", obsStreamDeviceName);
-    root.setAttribute("obsCleanOutBus2Enabled", obsCleanOutBus2Enabled);
 
     juce::MemoryOutputStream stream(destination, false);
     root.writeToStream(stream, {});
@@ -95,7 +116,8 @@ void Settings::readState(const juce::MemoryBlock &source)
         juce::String::fromUTF8(static_cast<const char *>(source.getData()), static_cast<int>(source.getSize()));
     auto root = juce::parseXML(xmlString);
 
-    if (root == nullptr || root->getTagName() != "GlorpDrumsSettings")
+    if (root == nullptr
+        || (root->getTagName() != "SuiteDrumsGlorpSettings" && root->getTagName() != "GlorpDrumsSettings"))
         return;
 
     if (auto *kits = root->getChildByName("KitPaths"))
@@ -113,11 +135,8 @@ void Settings::readState(const juce::MemoryBlock &source)
     editorWidth = root->getIntAttribute("editorWidth", editorWidth);
     editorHeight = root->getIntAttribute("editorHeight", editorHeight);
     editorMaximised = root->getBoolAttribute("editorMaximised", editorMaximised);
-    themeIndex = juce::jlimit(0, 5, root->getIntAttribute("theme", themeIndex));
     uiTextScale = juce::jlimit(0.85f, 1.35f, static_cast<float>(root->getDoubleAttribute("uiTextScale", uiTextScale)));
     openGlEnabled = root->getBoolAttribute("openGlEnabled", openGlEnabled);
-    obsStreamDeviceName = root->getStringAttribute("obsStreamDeviceName", obsStreamDeviceName);
-    obsCleanOutBus2Enabled = root->getBoolAttribute("obsCleanOutBus2Enabled", obsCleanOutBus2Enabled);
 }
 
 void Settings::addKitPath(const juce::String &path)

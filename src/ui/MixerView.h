@@ -1,5 +1,5 @@
 /*
-    MixerView.h - Full-featured per-mic drum mixer console and DSP rack for GlorpDrums.
+    MixerView.h - Full-featured per-mic drum mixer console and DSP rack for Suite Drums Glorp.
 */
 
 #pragma once
@@ -43,7 +43,7 @@ class MixerView
     void timerCallback() override;
 
     PluginProcessor &processor;
-    Theme theme = Theme::sketch();
+    Theme theme = Theme::suite();
     bool bleedMatrixOpen = false;
 
     //==========================================================================
@@ -70,7 +70,7 @@ class MixerView
       private:
         bool isToggle_ = false;
         bool active = false;
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
     };
 
     //==========================================================================
@@ -93,7 +93,7 @@ class MixerView
         MixerView &owner;
         PluginProcessor &processor;
         int currentChannel = -1;
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
 
         HandButton closeBtn {"CLOSE"};
         HandButton eqToggle {"EQ ON", true};
@@ -137,7 +137,7 @@ class MixerView
       private:
         MixerView &owner;
         PluginProcessor &processor;
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
 
         HandButton closeBtn {"CLOSE"};
         HandButton limiterToggle {"LIMITER", true};
@@ -174,7 +174,7 @@ class MixerView
       private:
         MixerView &owner;
         PluginProcessor &processor;
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
         int highlightedMicIndex = -1;
 
         HandButton closeBtn {"CLOSE"};
@@ -244,7 +244,7 @@ class MixerView
         MixerView &owner;
         PluginProcessor &processor;
         int channelIndex_ = 0;
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
 
         HandButton phaseBtn {"0", true};
         HandButton fxBtn {"FX", true};
@@ -285,7 +285,7 @@ class MixerView
       private:
         MixerView &owner;
         PluginProcessor &processor;
-        Theme theme = Theme::sketch();
+        Theme theme = Theme::suite();
 
         HandButton fxBtn {"REVERB FX"};
         HandButton limiterBtn {"LIMITER", true};

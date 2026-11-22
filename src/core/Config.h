@@ -1,5 +1,5 @@
 /*
-    Config.h - Centralized configuration constants for GlorpDrums.
+    Config.h - Centralized configuration constants for Suite Drums Glorp.
 
     This header provides a single source of truth for all magic numbers,
     buffer sizes, limits, and compile-time constants used throughout the
@@ -15,6 +15,24 @@ namespace glorp
 {
 namespace config
 {
+
+//==============================================================================
+// Product Identity
+//==============================================================================
+
+/// User-facing product name. Used in window titles, reports and install rules.
+constexpr const char *PRODUCT_NAME = "Suite Drums Glorp";
+
+/// Per-user configuration directory (under the platform application-data dir).
+constexpr const char *CONFIG_DIR_NAME = "SuiteDrumsGlorp";
+
+/// Previous GlorpDrums directory. Read for migration and legacy kit discovery.
+constexpr const char *LEGACY_CONFIG_DIR_NAME = "GlorpDrums";
+
+/// Plugin URI used by the LV2 bundle and VST3 metadata.
+constexpr const char *PLUGIN_URI = "https://github.com/tylorismusic-commits/suite-drums-glorp";
+constexpr const char *COMPANY_NAME = "Tylorismusic";
+constexpr const char *BUNDLE_ID = "com.tylorismusic.suitedrumsglorp";
 
 //==============================================================================
 // Plugin & Audio Engine Limits

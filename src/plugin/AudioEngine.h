@@ -8,13 +8,8 @@
 
 #pragma once
 
-#include "AudioRecorder.h"
-#include "BackingTrackPlayer.h"
 #include "Config.h"
-#include "Metronome.h"
-#include "MidiRecorder.h"
 #include "Sampler.h"
-#include "StreamOutputBridge.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -46,26 +41,13 @@ class AudioEngine
 
     // -- Audio rendering ------------------------------------------------------
 
-    // Note: processBlock() was removed as it's not used - PluginProcessor calls render() directly.
-    // If needed for standalone, it can be re-added with ParameterManager/MidiRouter parameters.
+    // PluginProcessor calls render() directly; processBlock() is owned by the
+    // JUCE wrapper so the engine stays independent of host plumbing.
 
     // -- Sub-component access -------------------------------------------------
 
     Sampler &getSampler() noexcept { return sampler; }
     const Sampler &getSampler() const noexcept { return sampler; }
-
-    BackingTrackPlayer &getBackingTrackPlayer() noexcept { return backingTrackPlayer; }
-    Metronome &getMetronome() noexcept { return metronome; }
-    AudioRecorder &getAudioRecorder() noexcept { return audioRecorder; }
-    MidiRecorder &getMidiRecorder() noexcept { return midiRecorder; }
-    StreamOutputBridge &getStreamOutputBridge() noexcept { return streamOutputBridge; }
-    const StreamOutputBridge &getStreamOutputBridge() const noexcept { return streamOutputBridge; }
-
-    void setRouteCleanMixToBus2(bool enabled) noexcept
-    {
-        routeCleanMixToBus2.store(enabled, std::memory_order_relaxed);
-    }
-    bool isRoutingCleanMixToBus2() const noexcept { return routeCleanMixToBus2.load(std::memory_order_relaxed); }
 
     // -- Engine state ---------------------------------------------------------
 
@@ -97,12 +79,6 @@ class AudioEngine
   private:
     // -- Sub-components -------------------------------------------------------
     Sampler sampler;
-    BackingTrackPlayer backingTrackPlayer;
-    Metronome metronome;
-    AudioRecorder audioRecorder;
-    MidiRecorder midiRecorder;
-    StreamOutputBridge streamOutputBridge;
-    std::atomic<bool> routeCleanMixToBus2 {true};
 
     // -- Engine state ---------------------------------------------------------
     double currentSampleRate = 44100.0;
@@ -117,8 +93,6 @@ class AudioEngine
     std::array<float, config::MAX_SUPPORTED_INSTRUMENTS> cachedDynamics {};
     std::array<int, config::MAX_SUPPORTED_INSTRUMENTS> cachedBus {};
 
-    // -- Rendering helpers ----------------------------------------------------
-    std::array<float *, config::MAX_OUTPUT_BUSES * 2> busOutputs {};
 };
 
 } // namespace glorp

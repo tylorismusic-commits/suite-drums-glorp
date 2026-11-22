@@ -115,7 +115,7 @@ EDrumWizard::~EDrumWizard()
 
 void EDrumWizard::open()
 {
-    theme = Theme::byIndex(processor.getSettings().themeIndex);
+    theme = Theme::suite();
 
     // Backup current note assignments & preset in case user cancels
     backupNotes = processor.getMidiMap().noteAssignments();

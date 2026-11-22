@@ -282,7 +282,7 @@ GlorpKitProject::GlorpKitProject()
 void GlorpKitProject::createNewBlankKit()
 {
     title = "Untitled Kit";
-    author = "GlorpDrums User";
+    author = "Suite Kit Studio User";
     version = "2.0";
     license = "CC-BY-4.0";
     description = "";
@@ -367,7 +367,7 @@ int GlorpKitProject::addPieceWithAutoLayout(const std::string &nameOrStem,
 void GlorpKitProject::createNewDefaultKit()
 {
     title = "Custom Birch Studio";
-    author = "GlorpDrums User";
+    author = "Suite Kit Studio User";
     version = "2.0";
     license = "CC-BY-4.0";
     description = "Custom drumkit created in GlorpKit Studio";

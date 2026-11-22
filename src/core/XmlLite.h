@@ -1,7 +1,7 @@
 /*
     XmlLite.h - a deliberately small XML DOM reader.
 
-    GlorpDrums only ever needs to read DrumGizmo's machine-generated XML:
+    Suite Drums Glorp only ever needs to read DrumGizmo's machine-generated XML:
     no namespaces, no CDATA, no DTDs, no entity soup beyond the five
     predefined ones plus numeric character references.
 

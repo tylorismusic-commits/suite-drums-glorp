@@ -2,97 +2,59 @@ name: Build and Test
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [master, main, develop]
   pull_request:
-    branches: [main, master]
+    branches: [master, main]
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, windows-latest]
-        include:
-          - os: ubuntu-24.04
-            cmake_args: -DGLORP_BUILD_VST3=ON -DGLORP_BUILD_LV2=ON -DGLORP_BUILD_STANDALONE=ON
-            artifact_paths: |
-              build/GlorpDrums_artefacts/Release/VST3/GlorpDrums.vst3
-              build/GlorpDrums_artefacts/Release/LV2/GlorpDrums.lv2
-              build/GlorpDrums_artefacts/Release/Standalone/GlorpDrums
-              build/GlorpKitEditor_artefacts/Release/GlorpKitEditor
-          - os: windows-latest
-            cmake_args: -DGLORP_BUILD_VST3=ON -DGLORP_BUILD_STANDALONE=ON -DGLORP_BUILD_KIT_EDITOR=ON
-            artifact_paths: |
-              build/GlorpDrums_artefacts/Release/VST3/GlorpDrums.vst3
-              build/GlorpDrums_artefacts/Release/Standalone/GlorpDrums.exe
-              build/GlorpKitEditor_artefacts/Release/GlorpKitEditor.exe
-
+  linux:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          lfs: true
 
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            pkg-config \
-            ccache \
-            libasound2-dev \
-            libfreetype-dev \
-            libfontconfig1-dev \
-            libgl1-mesa-dev \
-            libx11-dev \
-            libxcomposite-dev \
-            libxcursor-dev \
-            libxext-dev \
-            libxinerama-dev \
-            libxrandr-dev \
-            libxrender-dev \
-            libcurl4-openssl-dev \
-            libjack-jackd2-dev
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config ccache zip \
+            libasound2-dev libfreetype-dev libfontconfig1-dev \
+            libgl1-mesa-dev libx11-dev libxcomposite-dev libxcursor-dev \
+            libxext-dev libxinerama-dev libxrandr-dev libxrender-dev \
+            libcurl4-openssl-dev libjack-jackd2-dev
 
-      - name: Setup ccache
+      - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ${{ matrix.os }}-build-ccache
-
-      - name: Fetch JUCE
-        run: |
-          if [ ! -d "libs/JUCE" ]; then
-            git clone --depth 1 --branch 8.0.6 https://github.com/juce-framework/JUCE.git libs/JUCE
-          fi
-        shell: bash
+          key: linux-release
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ${{ matrix.cmake_args }}
-        shell: bash
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DGLORP_BUILD_VST3=ON \
+            -DGLORP_BUILD_LV2=ON \
+            -DGLORP_BUILD_CLAP=OFF \
+            -DGLORP_BUILD_KIT_EDITOR=ON \
+            -DGLORP_BUILD_TESTS=ON
 
       - name: Build
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cmake --build build --config Release -j$(nproc)
-          else
-            cmake --build build -j$(nproc)
-          fi
-        shell: bash
+        run: cmake --build build -j"$(nproc)"
 
       - name: Test
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            ctest --test-dir build --output-on-failure -C Release
-          else
-            ctest --test-dir build --output-on-failure
-          fi
-        shell: bash
+        run: ctest --test-dir build --output-on-failure
 
-      - name: Upload artifacts
+      - name: Package
+        run: tools/package_linux.sh 0.1.0-alpha.1
+
+      - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: GlorpDrums-${{ matrix.os }}
-          path: ${{ matrix.artifact_paths }}
-          if-no-files-found: warn
+          name: suite-drums-glorp-linux-x86_64
+          path: |
+            build/dist/*.zip
+            build/dist/*.sha256
+          if-no-files-found: error

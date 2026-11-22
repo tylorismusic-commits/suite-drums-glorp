@@ -53,7 +53,7 @@ class EDrumWizard
     void finishAndClose();
 
     PluginProcessor &processor;
-    Theme theme = Theme::sketch();
+    Theme theme = Theme::suite();
 
     std::vector<Step> steps;
     int currentStepIndex = 0;
