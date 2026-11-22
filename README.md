@@ -120,6 +120,16 @@ Suite Drums Glorp scans these roots in order:
 
 Add extra roots from the FILE menu. Existing GlorpDrums settings, presets and kit layout are migrated automatically on first run.
 
+## No sound?
+
+Suite Drums Glorp is a virtual instrument, so the host must actually process the track:
+
+1. Insert it as an instrument (VST3i / LV2 instrument), not as an audio-only effect.
+2. Arm the track and enable input monitoring, or place a MIDI item on the track and press play.
+3. Clicking the drum art auditions only while the host is processing audio.
+4. Check the plugin's **MASTER** knob and make sure no mixer channel is muted or soloed.
+5. For multi-output setups, the dry main mix is **Out 1/2**.
+
 ## Starter kit
 
 The optional starter kit is the **Glorp Demo Kit**, a compact two-overhead DrumGizmo kit. Its metadata credits Alexander Holm / GlorpDrums and licenses it as CC-BY-SA / CC0. See `NOTICE.md` for attribution. You can install it into `~/.config/SuiteDrumsGlorp/kits/` or point the plugin at any DrumGizmo kit folder.
