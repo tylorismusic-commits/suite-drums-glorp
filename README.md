@@ -16,6 +16,7 @@
 - **Per-piece controls** for level, pan, pitch and dynamic response.
 - **Mixer** with per-mic channels, solo/mute, stems and master bus.
 - **Channel FX**: 3-band EQ, VCA compressor, tape saturation and transient shaper.
+- **MIDI mapping page**: up to three notes per hit, per-slot MIDI learn and an eight-point velocity curve editor.
 - **E-drum support**: CC#4 continuous hi-hat, cymbal chokes, note mapping and calibration wizard.
 - **Multi-mic bleed matrix** for acoustic leakage between close mics, overheads, room and PZM channels.
 - **GlorpKit and DrumGizmo kits**: `.glorpkit`, folder kits with `drumkit.xml`, and packaged archives.
@@ -28,9 +29,9 @@ No practice view, setlists, song database, backing tracks, tempo detection, metr
 | :---: | :---: |
 | ![Mixer](docs/mixer_view.png) | ![Channel FX](docs/mixer_fx.png) |
 
-| E-drum wizard |
-| :---: |
-| ![E-drum wizard](docs/edrum_wizard.png) |
+| E-drum wizard | MIDI mapping |
+| :---: | :---: |
+| ![E-drum wizard](docs/edrum_wizard.png) | ![MIDI mapping](docs/midi_page.png) |
 
 **Suite Kit Studio** — the standalone `.glorpkit` creator:
 

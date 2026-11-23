@@ -25,6 +25,52 @@ int main (int argc, char** argv)
     std::cout << "Instruments: " << proc.getSampler().numInstruments()
               << ", mics: " << proc.getCurrentKit().channels.size() << std::endl;
 
+    if (std::getenv ("GLORP_PROBE_SELFTEST") != nullptr)
+    {
+        auto &map = proc.getMidiMap();
+        map.assignNote (36, 0);
+
+        if (! map.setNoteSlot (0, 1, 50) || ! map.setNoteSlot (0, 2, 51))
+        {
+            std::cout << "SELFTEST: could not fill three note slots" << std::endl;
+            return 2;
+        }
+
+        const auto slots = map.noteSlotsForInstrument (0);
+        std::cout << "SELFTEST slots: " << slots[0] << ", " << slots[1] << ", " << slots[2] << std::endl;
+
+        if (slots[0] != 36 || slots[1] != 50 || slots[2] != 51)
+            return 3;
+
+        map.setNoteSlot (0, 1, -1);
+        if (map.noteSlotsForInstrument (0)[1] != -1)
+            return 4;
+
+        auto params = proc.getSampler().getInstrumentParams (0);
+        params.useCustomVelocityCurve = true;
+        params.customVelocityCurve.fill (1.0f);
+        proc.getSampler().setInstrumentParams (0, params);
+
+        if (! proc.getSampler().getInstrumentParams (0).useCustomVelocityCurve)
+            return 5;
+
+        std::cout << "SELFTEST before state: " << map.noteSlotsForInstrument (0)[0] << ", "
+                  << map.noteSlotsForInstrument (0)[1] << ", " << map.noteSlotsForInstrument (0)[2] << std::endl;
+
+        juce::MemoryBlock state;
+        proc.getStateInformation (state);
+        proc.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+
+        std::cout << "SELFTEST after state: " << proc.getMidiMap().noteSlotsForInstrument (0)[0] << ", "
+                  << proc.getMidiMap().noteSlotsForInstrument (0)[1] << ", "
+                  << proc.getMidiMap().noteSlotsForInstrument (0)[2] << std::endl;
+
+        if (! proc.getSampler().getInstrumentParams (0).useCustomVelocityCurve)
+            return 6;
+
+        std::cout << "SELFTEST: MIDI slots, velocity curve and state OK" << std::endl;
+    }
+
     proc.prepareToPlay (48000.0, 512);
 
     juce::AudioBuffer<float> buffer (32, 512);

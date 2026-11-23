@@ -25,6 +25,17 @@ inline float velocityWithCurve(float velocity, float curve) noexcept
     const auto v = std::clamp(velocity, 0.0f, 1.0f);
     return std::pow(v, std::max(0.05f, curve));
 }
+
+float evaluateVelocityPoints(const std::array<float, 8> &points, float x) noexcept
+{
+    x = std::clamp(x, 0.0f, 1.0f);
+    const auto scaled = x * static_cast<float>(points.size() - 1);
+    const auto index = static_cast<int>(scaled);
+    const auto frac = scaled - static_cast<float>(index);
+    const auto a = points[static_cast<size_t>(std::clamp(index, 0, 7))];
+    const auto b = points[static_cast<size_t>(std::clamp(index + 1, 0, 7))];
+    return std::clamp(a + (b - a) * frac, 0.0f, 1.0f);
+}
 } // namespace
 
 //==============================================================================
@@ -339,6 +350,7 @@ void Sampler::resetInstrumentParams()
         p = ChannelParams {};
         p.level = 1.0f;
         p.velocityCurve = VelocityCurve::linear;
+        p.useCustomVelocityCurve = false;
     }
 
     anySolo.store(false);
@@ -522,6 +534,8 @@ void Sampler::setInstrumentParams(int index, const InstrumentParams &params)
     p.spread = std::clamp(params.tuneSpread, 0.0f, 100.0f);
     p.dynamics = std::clamp(params.dynamics, 0.0f, 1.0f);
     p.velocityCurve = params.velocityCurve;
+    p.useCustomVelocityCurve = params.useCustomVelocityCurve;
+    p.customVelocityCurve = params.customVelocityCurve;
     p.roundRobin = params.autoRoundRobin;
     p.selectedSample = params.selectedSample;
     p.mute = params.mute;
@@ -556,6 +570,8 @@ InstrumentParams Sampler::getInstrumentParams(int index) const
     out.tuneSpread = p.spread;
     out.dynamics = p.dynamics;
     out.velocityCurve = p.velocityCurve;
+    out.useCustomVelocityCurve = p.useCustomVelocityCurve;
+    out.customVelocityCurve = p.customVelocityCurve;
     out.autoRoundRobin = p.roundRobin;
     out.mute = p.mute;
     out.solo = p.solo;
@@ -1021,22 +1037,31 @@ void Sampler::triggerVoice(int instrument, int note, float velocity, int64_t tim
     if (p.muted)
         return;
 
-    // Apply e-drum velocity curve (linear, logarithmic, exponential, s-curve)
+    // Apply the per-hit velocity response. The eight-point curve is the
+    // editable version; the enum presets remain as quick starting points.
     float effectiveVel = std::clamp(velocity, 0.0f, 1.0f);
-    switch (p.velocityCurve)
+
+    if (p.useCustomVelocityCurve)
     {
-        case VelocityCurve::logarithmic:
-            effectiveVel = std::sqrt(effectiveVel);
-            break;
-        case VelocityCurve::exponential:
-            effectiveVel = effectiveVel * effectiveVel;
-            break;
-        case VelocityCurve::sCurve:
-            effectiveVel = effectiveVel * effectiveVel * (3.0f - 2.0f * effectiveVel);
-            break;
-        case VelocityCurve::linear:
-        default:
-            break;
+        effectiveVel = evaluateVelocityPoints(p.customVelocityCurve, effectiveVel);
+    }
+    else
+    {
+        switch (p.velocityCurve)
+        {
+            case VelocityCurve::logarithmic:
+                effectiveVel = std::sqrt(effectiveVel);
+                break;
+            case VelocityCurve::exponential:
+                effectiveVel = effectiveVel * effectiveVel;
+                break;
+            case VelocityCurve::sCurve:
+                effectiveVel = effectiveVel * effectiveVel * (3.0f - 2.0f * effectiveVel);
+                break;
+            case VelocityCurve::linear:
+            default:
+                break;
+        }
     }
 
     if (std::abs(p.dynamics - 0.5f) > 0.01f)

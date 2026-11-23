@@ -439,6 +439,23 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock &destination)
         }
     }
 
+    auto *curves = state.createNewChildElement("VelocityCurves");
+
+    for (int i = 0; i < audioEngine.getSampler().numInstruments(); ++i)
+    {
+        const auto params = audioEngine.getSampler().getInstrumentParams(i);
+
+        if (!params.useCustomVelocityCurve)
+            continue;
+
+        auto *curve = curves->createNewChildElement("curve");
+        curve->setAttribute("instrument", i);
+
+        for (size_t point = 0; point < params.customVelocityCurve.size(); ++point)
+            curve->setAttribute("p" + juce::String(static_cast<int>(point)),
+                                static_cast<double>(params.customVelocityCurve[point]));
+    }
+
     if (auto *map = getMidiMap().exportXml())
     {
         map->setTagName("MidiMap");
@@ -488,6 +505,32 @@ void PluginProcessor::setStateInformation(const void *data, int sizeInBytes)
         }
     }
 
+    struct StoredCurve
+    {
+        int instrument = -1;
+        std::array<float, 8> points {};
+    };
+
+    std::vector<StoredCurve> storedCurves;
+
+    if (auto *curves = xml->getChildByName("VelocityCurves"))
+    {
+        for (auto *curve : curves->getChildIterator())
+        {
+            StoredCurve stored;
+            stored.instrument = curve->getIntAttribute("instrument", -1);
+
+            if (stored.instrument < 0)
+                continue;
+
+            for (size_t point = 0; point < stored.points.size(); ++point)
+                stored.points[point] = static_cast<float>(
+                    curve->getDoubleAttribute("p" + juce::String(static_cast<int>(point)), 0.0));
+
+            storedCurves.push_back(stored);
+        }
+    }
+
     if (kitPath.isNotEmpty() && kitPath != currentKitPath)
     {
         loadKit(kitPath);
@@ -502,6 +545,17 @@ void PluginProcessor::setStateInformation(const void *data, int sizeInBytes)
             getMidiMap().importXml(*map);
         listeners.call(&Listener::kitChanged);
         listeners.call(&Listener::parametersChanged);
+    }
+
+    for (const auto &stored : storedCurves)
+    {
+        if (stored.instrument >= audioEngine.getSampler().numInstruments())
+            continue;
+
+        auto params = audioEngine.getSampler().getInstrumentParams(stored.instrument);
+        params.useCustomVelocityCurve = true;
+        params.customVelocityCurve = stored.points;
+        audioEngine.getSampler().setInstrumentParams(stored.instrument, params);
     }
 }
 

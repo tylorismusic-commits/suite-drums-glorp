@@ -52,6 +52,33 @@ int main (int argc, char** argv)
         }
     }
 
+    if (const auto* viewEnv = std::getenv ("GLORP_UI_VIEW"))
+    {
+        if (juce::String (viewEnv).equalsIgnoreCase ("midi"))
+        {
+            for (auto* child : pluginEditor->getChildren())
+            {
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                {
+                    ed->setViewMode (glorp::Editor::EditorView::midiView);
+                    break;
+                }
+            }
+
+            auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+            juce::File outFile ("test/docs/midi_page.png");
+            outFile.deleteFile();
+            juce::FileOutputStream fos (outFile);
+            if (fos.openedOk())
+            {
+                juce::PNGImageFormat png;
+                png.writeImageToStream (image, fos);
+                std::cout << "Saved MIDI page snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
+            }
+            return 0;
+        }
+    }
+
     // 2. Simulate hitting Snare drum (trigger hit + select instrument)
     // Find Snare instrument index
     int snareIdx = -1;

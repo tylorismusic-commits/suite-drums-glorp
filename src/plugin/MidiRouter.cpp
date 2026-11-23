@@ -68,12 +68,17 @@ bool MidiRouter::processMidiMessage(const juce::MidiMessage &message,
         // trigger the instrument, which is what the user actually meant.
         if (message.isNoteOn() && learnedControl.startsWith("note"))
         {
-            const auto index = learnedControl.substring(4).getIntValue();
+            const auto payload = learnedControl.substring(4);
+            const auto colon = payload.indexOfChar(':');
+            const auto index = (colon >= 0 ? payload.substring(0, colon) : payload).getIntValue();
+            const auto slot = colon >= 0 ? payload.substring(colon + 1).getIntValue() : -1;
 
             if (index >= 0 && index < sampler.numInstruments())
             {
-                midiMap.clearInstrument(index);
-                midiMap.assignNote(message.getNoteNumber(), index);
+                if (slot >= 0 && slot < 3)
+                    midiMap.setNoteSlot(index, slot, message.getNoteNumber());
+                else
+                    midiMap.addNote(message.getNoteNumber(), index);
             }
 
             consumedByLearn = false; // let it sound as well as being learned
@@ -222,7 +227,7 @@ void MidiRouter::setupNoteMappingFromKit(const DrumKit &kit, Sampler &sampler)
         {
             if (stripName(sampler.instrumentName(i)) == targetStripped)
             {
-                midiMap.assignNote(note, i);
+                midiMap.addNote(note, i);
                 break;
             }
         }

@@ -550,6 +550,10 @@ Editor::Editor(PluginProcessor &p) : processor(p)
     mixerView = std::make_unique<MixerView>(processor);
     addChildComponent(*mixerView);
 
+    midiPage = std::make_unique<MidiPage>(processor);
+    addChildComponent(*midiPage);
+    midiPage->onCloseRequested = [this] { setViewMode(EditorView::kitView); };
+
     edrumWizard = std::make_unique<EDrumWizard>(processor);
     addChildComponent(*edrumWizard);
     edrumWizard->onClose = [this]
@@ -793,6 +797,7 @@ void Editor::applyTheme(const Theme &newTheme)
 
     homeTabButton.setTheme(theme);
     viewToggleButton.setTheme(theme);
+    midiMapButton.setTheme(theme);
     fileButton.setTheme(theme);
     presetsButton.setTheme(theme);
     midiButton.setTheme(theme);
@@ -834,6 +839,9 @@ void Editor::applyTheme(const Theme &newTheme)
     if (mixerView != nullptr)
         mixerView->setTheme(theme);
 
+    if (midiPage != nullptr)
+        midiPage->setTheme(theme);
+
     sendLookAndFeelChange();
     syncTopLevelWindowTheme();
 
@@ -854,6 +862,8 @@ void Editor::applyTextScale(float newScale)
     scope.setTheme(theme);
     if (mixerView != nullptr)
         mixerView->setTheme(theme);
+    if (midiPage != nullptr)
+        midiPage->refresh();
     if (edrumWizard != nullptr)
         edrumWizard->repaint();
 
@@ -871,8 +881,10 @@ void Editor::refreshHeaderButtonLabels()
 {
     const bool isKit = (currentView == EditorView::kitView);
     const bool isMixer = (currentView == EditorView::mixerView);
+    const bool isMidi = (currentView == EditorView::midiView);
 
     homeTabButton.setVisible(theme.minimalStyle);
+    midiMapButton.setActive(isMidi);
 
     if (theme.minimalStyle)
     {
@@ -883,7 +895,7 @@ void Editor::refreshHeaderButtonLabels()
     }
     else
     {
-        viewToggleButton.setButtonText(isKit ? "MIXER VIEW" : "KIT VIEW");
+        viewToggleButton.setButtonText((isKit || isMidi) ? "MIXER VIEW" : "KIT VIEW");
         viewToggleButton.setActive(isMixer);
     }
 }
@@ -893,6 +905,7 @@ void Editor::setViewMode(EditorView mode)
     currentView = mode;
     const bool isKit = (currentView == EditorView::kitView);
     const bool isMixer = (currentView == EditorView::mixerView);
+    const bool isMidi = (currentView == EditorView::midiView);
     const bool isMinimal = theme.minimalStyle;
 
     if (edrumWizard != nullptr)
@@ -930,6 +943,13 @@ void Editor::setViewMode(EditorView mode)
         mixerView->setVisible(isMixer);
         if (isMixer)
             mixerView->refreshChannels();
+    }
+
+    if (midiPage != nullptr)
+    {
+        midiPage->setVisible(isMidi);
+        if (isMidi)
+            midiPage->refresh();
     }
 
     resized();
@@ -989,6 +1009,7 @@ void Editor::buildHeaderMenu()
 {
     addChildComponent(homeTabButton);
     addAndMakeVisible(viewToggleButton);
+    addAndMakeVisible(midiMapButton);
     addAndMakeVisible(fileButton);
     addAndMakeVisible(presetsButton);
     addAndMakeVisible(midiButton);
@@ -2088,6 +2109,9 @@ void Editor::kitChanged()
     if (mixerView != nullptr)
         mixerView->refreshChannels();
 
+    if (midiPage != nullptr)
+        midiPage->refresh();
+
     repaint();
 }
 
@@ -2361,16 +2385,20 @@ void Editor::resized()
     const int menuY = 16;
     const int menuH = juce::roundToInt(30.0f * juce::jlimit(1.0f, 1.14f, hdrScale));
     const int viewW = juce::roundToInt(104.0f * hdrScale);
+    const int midiMapW = juce::roundToInt(88.0f * hdrScale);
     const int fileW = juce::roundToInt(50.0f * hdrScale);
     const int presetsW = juce::roundToInt(80.0f * hdrScale);
     const int midiW = juce::roundToInt(50.0f * hdrScale);
     const int settingsW = juce::roundToInt(86.0f * hdrScale);
     const int gap = 8;
 
-    const int totalMenuW = viewW + gap + fileW + gap + presetsW + gap + midiW + gap + settingsW;
+    const int totalMenuW =
+        viewW + gap + midiMapW + gap + fileW + gap + presetsW + gap + midiW + gap + settingsW;
     int curX = std::max(256, w - 24 - totalMenuW);
     viewToggleButton.setBounds(curX, menuY, viewW, menuH);
     curX += viewW + gap;
+    midiMapButton.setBounds(curX, menuY, midiMapW, menuH);
+    curX += midiMapW + gap;
     fileButton.setBounds(curX, menuY, fileW, menuH);
     curX += fileW + gap;
     presetsButton.setBounds(curX, menuY, presetsW, menuH);
@@ -2378,6 +2406,12 @@ void Editor::resized()
     midiButton.setBounds(curX, menuY, midiW, menuH);
     curX += midiW + gap;
     settingsButton.setBounds(curX, menuY, settingsW, menuH);
+
+    if (midiPage != nullptr)
+        midiPage->setBounds(16, 56, w - 32, h - 68);
+
+    if (currentView == EditorView::midiView)
+        return;
 
     // 2. Bottom strip. Compact windows give the instrument panel more room.
     const bool compact = h < 680;

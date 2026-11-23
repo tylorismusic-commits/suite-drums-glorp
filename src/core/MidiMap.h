@@ -16,6 +16,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <array>
 #include <map>
 #include <set>
 #include <string>
@@ -59,12 +60,24 @@ class MidiMap
     MidiMap();
 
     // -- note assignments --------------------------------------------------
-    /// Assigns a note to an instrument. Returns false if the note was already
-    /// taken by a different instrument and `steal` is false.
+    /// Assigns a single note to an instrument, replacing its existing notes.
+    /// Returns false if the note was already taken by a different instrument
+    /// and `steal` is false.
     bool assignNote(int note, int instrumentIndex, bool steal = true);
 
-    /// Removes any note assigned to this instrument.
+    /// Adds a note to an instrument, up to three notes per instrument. Returns
+    /// false when all three slots are full or the note belongs to another
+    /// instrument and `steal` is false.
+    bool addNote(int note, int instrumentIndex, bool steal = true);
+
+    /// Sets one of the three note slots. A negative note clears the slot.
+    bool setNoteSlot(int instrumentIndex, int slot, int note, bool steal = true);
+
+    /// Removes every note assigned to this instrument.
     void clearInstrument(int instrumentIndex);
+
+    /// The three note slots for an instrument. Empty slots are -1.
+    std::array<int, 3> noteSlotsForInstrument(int instrumentIndex) const;
 
     /// Replaces the entire CC/control automation binding list.
     void setBindings(std::vector<MidiBinding> newBindings);
@@ -72,8 +85,11 @@ class MidiMap
     /// Instrument triggered by a note, or -1.
     int instrumentForNote(int note) const noexcept;
 
-    /// Note assigned to an instrument, or -1.
+    /// First note assigned to an instrument, or -1.
     int noteForInstrument(int instrumentIndex) const noexcept;
+
+    /// Every note assigned to an instrument, in slot order, ignoring empties.
+    std::vector<int> notesForInstrument(int instrumentIndex) const;
 
     const std::map<int, int> &noteAssignments() const noexcept { return noteToInstrument; }
 
@@ -153,8 +169,10 @@ class MidiMap
 
   private:
     std::map<int, int> noteToInstrument;
-    std::map<int, int> instrumentToNote;
+    std::map<int, std::array<int, 3>> instrumentToNotes;
     std::vector<MidiBinding> bindings_;
+
+    void rebuildReverseIndex();
 
     std::unique_ptr<std::string> learningControlId_;
     bool learningUsesNote = false;

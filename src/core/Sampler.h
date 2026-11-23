@@ -30,6 +30,7 @@
 #include "SampleCache.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <memory>
 #include <vector>
@@ -61,7 +62,9 @@ struct InstrumentParams
     float pitchSemitones = 0.0f;
     float tuneSpread = 0.0f;                             ///< cents of random detune per hit
     float dynamics = 0.5f;                               ///< 0..1 per-zone velocity response & humanize
-    VelocityCurve velocityCurve = VelocityCurve::linear; ///< E-drum velocity curve
+    VelocityCurve velocityCurve = VelocityCurve::linear; ///< E-drum velocity curve preset
+    bool useCustomVelocityCurve = false;                 ///< use the eight-point curve below
+    std::array<float, 8> customVelocityCurve {{0.0f, 0.14f, 0.28f, 0.43f, 0.57f, 0.71f, 0.86f, 1.0f}};
     bool autoRoundRobin = false;                         ///< "AUTO": cycle the instrument's samples
     bool mute = false;
     bool solo = false;
@@ -273,6 +276,8 @@ class Sampler
         float spread = 0.0f;
         float dynamics = 0.5f;
         VelocityCurve velocityCurve = VelocityCurve::linear;
+        bool useCustomVelocityCurve = false;
+        std::array<float, 8> customVelocityCurve {{0.0f, 0.14f, 0.28f, 0.43f, 0.57f, 0.71f, 0.86f, 1.0f}};
         bool roundRobin = false;
         bool mute = false; ///< as the user set it
         bool solo = false;

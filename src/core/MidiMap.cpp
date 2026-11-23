@@ -19,28 +19,59 @@ bool MidiMap::assignNote(int note, int instrumentIndex, bool steal)
     if (note < 0 || note > 127 || instrumentIndex < 0)
         return false;
 
+    for (auto it = noteToInstrument.begin(); it != noteToInstrument.end();)
+    {
+        if (it->second == instrumentIndex)
+            it = noteToInstrument.erase(it);
+        else
+            ++it;
+    }
+
+    instrumentToNotes[instrumentIndex] = {{-1, -1, -1}};
+    return addNote(note, instrumentIndex, steal);
+}
+
+bool MidiMap::addNote(int note, int instrumentIndex, bool steal)
+{
+    if (note < 0 || note > 127 || instrumentIndex < 0)
+        return false;
+
+    auto [entry, inserted] = instrumentToNotes.try_emplace(instrumentIndex, std::array<int, 3> {{-1, -1, -1}});
+    auto &slots = entry->second;
+    (void) inserted;
+
+    for (const auto slot : slots)
+        if (slot == note)
+            return true;
+
+    int freeSlot = -1;
+    for (int i = 0; i < static_cast<int>(slots.size()); ++i)
+    {
+        if (slots[static_cast<size_t>(i)] < 0)
+        {
+            freeSlot = i;
+            break;
+        }
+    }
+
+    if (freeSlot < 0)
+        return false;
+
     if (const auto existing = noteToInstrument.find(note);
         existing != noteToInstrument.end() && existing->second != instrumentIndex)
     {
         if (!steal)
             return false;
 
-        // Whoever had this note before loses it, rather than both instruments
-        // silently claiming the same key.
-        if (auto it = instrumentToNote.find(existing->second); it != instrumentToNote.end())
-            instrumentToNote.erase(it);
-
-        existing->second = instrumentIndex;
-    }
-    else
-    {
-        noteToInstrument[note] = instrumentIndex;
+        // Remove the note from the instrument that currently owns it.
+        if (auto owner = instrumentToNotes.find(existing->second); owner != instrumentToNotes.end())
+            for (auto &slot : owner->second)
+                if (slot == note)
+                    slot = -1;
     }
 
-    if (auto it = instrumentToNote.find(instrumentIndex); it != instrumentToNote.end() && it->second != note)
-        instrumentToNote.erase(it);
-
-    instrumentToNote[instrumentIndex] = note;
+    noteToInstrument[note] = instrumentIndex;
+    slots[static_cast<size_t>(freeSlot)] = note;
 
     if (onChanged)
         onChanged();
@@ -48,9 +79,76 @@ bool MidiMap::assignNote(int note, int instrumentIndex, bool steal)
     return true;
 }
 
+bool MidiMap::setNoteSlot(int instrumentIndex, int slot, int note, bool steal)
+{
+    if (instrumentIndex < 0 || slot < 0 || slot >= 3 || note < -1 || note > 127)
+        return false;
+
+    auto [entry, inserted] = instrumentToNotes.try_emplace(instrumentIndex, std::array<int, 3> {{-1, -1, -1}});
+    auto &slots = entry->second;
+    (void) inserted;
+    const auto oldNote = slots[static_cast<size_t>(slot)];
+
+    if (oldNote == note)
+        return true;
+
+    if (oldNote >= 0 && noteToInstrument.count(oldNote) > 0
+        && noteToInstrument[oldNote] == instrumentIndex)
+        noteToInstrument.erase(oldNote);
+
+    slots[static_cast<size_t>(slot)] = -1;
+
+    if (note < 0)
+    {
+        if (onChanged)
+            onChanged();
+        return true;
+    }
+
+    // If the note is already in another slot on this instrument, move it here.
+    for (int i = 0; i < static_cast<int>(slots.size()); ++i)
+        if (slots[static_cast<size_t>(i)] == note)
+            slots[static_cast<size_t>(i)] = -1;
+
+    if (const auto existing = noteToInstrument.find(note);
+        existing != noteToInstrument.end() && existing->second != instrumentIndex)
+    {
+        if (!steal)
+        {
+            slots[static_cast<size_t>(slot)] = oldNote;
+            if (oldNote >= 0)
+                noteToInstrument[oldNote] = instrumentIndex;
+            return false;
+        }
+
+        if (auto owner = instrumentToNotes.find(existing->second); owner != instrumentToNotes.end())
+            for (auto &ownerSlot : owner->second)
+                if (ownerSlot == note)
+                    ownerSlot = -1;
+    }
+
+    slots[static_cast<size_t>(slot)] = note;
+    noteToInstrument[note] = instrumentIndex;
+
+    if (onChanged)
+        onChanged();
+
+    return true;
+}
+
+std::array<int, 3> MidiMap::noteSlotsForInstrument(int instrumentIndex) const
+{
+    const auto it = instrumentToNotes.find(instrumentIndex);
+    if (it != instrumentToNotes.end())
+        return it->second;
+
+    return {{-1, -1, -1}};
+}
+
 void MidiMap::clearInstrument(int instrumentIndex)
 {
     bool removed = false;
+
     for (auto it = noteToInstrument.begin(); it != noteToInstrument.end();)
     {
         if (it->second == instrumentIndex)
@@ -64,8 +162,11 @@ void MidiMap::clearInstrument(int instrumentIndex)
         }
     }
 
-    if (instrumentToNote.erase(instrumentIndex) > 0)
+    if (const auto it = instrumentToNotes.find(instrumentIndex); it != instrumentToNotes.end())
+    {
+        it->second = {{-1, -1, -1}};
         removed = true;
+    }
 
     if (removed && onChanged)
         onChanged();
@@ -86,20 +187,63 @@ int MidiMap::instrumentForNote(int note) const noexcept
 
 int MidiMap::noteForInstrument(int instrumentIndex) const noexcept
 {
-    const auto it = instrumentToNote.find(instrumentIndex);
-    return it != instrumentToNote.end() ? it->second : -1;
+    const auto it = instrumentToNotes.find(instrumentIndex);
+    if (it == instrumentToNotes.end())
+        return -1;
+
+    for (const auto note : it->second)
+        if (note >= 0)
+            return note;
+
+    return -1;
+}
+
+std::vector<int> MidiMap::notesForInstrument(int instrumentIndex) const
+{
+    std::vector<int> notes;
+    const auto it = instrumentToNotes.find(instrumentIndex);
+    if (it == instrumentToNotes.end())
+        return notes;
+
+    for (const auto note : it->second)
+        if (note >= 0)
+            notes.push_back(note);
+
+    return notes;
 }
 
 void MidiMap::clearAssignments()
 {
     noteToInstrument.clear();
-    instrumentToNote.clear();
+    instrumentToNotes.clear();
 
     if (onChanged)
         onChanged();
 }
 
-//==============================================================================
+void MidiMap::rebuildReverseIndex()
+{
+    instrumentToNotes.clear();
+
+    for (const auto &[note, instrument] : noteToInstrument)
+    {
+        if (note < 0 || note > 127 || instrument < 0)
+            continue;
+
+        auto [entry, inserted] = instrumentToNotes.try_emplace(instrument, std::array<int, 3> {{-1, -1, -1}});
+        (void) inserted;
+
+        for (auto &slot : entry->second)
+        {
+            if (slot < 0)
+            {
+                slot = note;
+                break;
+            }
+        }
+    }
+}
+
 void MidiMap::clearBindings()
 {
     bindings_.clear();
@@ -852,10 +996,7 @@ void MidiMap::applyPreset(const MapPreset &preset, const std::vector<juce::Strin
     }
 
     // Keep the reverse index consistent with whatever survived.
-    instrumentToNote.clear();
-
-    for (const auto &[note, instrument] : noteToInstrument)
-        instrumentToNote[instrument] = note;
+    rebuildReverseIndex();
 
     if (onChanged)
         onChanged();
@@ -920,10 +1061,7 @@ void MidiMap::importXml(const juce::XmlElement &xml)
         }
     }
 
-    instrumentToNote.clear();
-
-    for (const auto &[note, instrument] : noteToInstrument)
-        instrumentToNote[instrument] = note;
+    rebuildReverseIndex();
 
     if (onChanged)
         onChanged();

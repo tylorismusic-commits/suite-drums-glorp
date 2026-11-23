@@ -188,7 +188,13 @@ class DrumKitView
 
     juce::Image unifiedKitOutlineImage;
     juce::Image staticKitImage;
+    juce::Image singleKitImage;
+    juce::Image singleKitScaled;
+    juce::Rectangle<float> singleKitBounds;
+    std::array<juce::Rectangle<float>, static_cast<size_t>(KitPiece::count)> singlePieceBounds;
+    bool useSingleKitImage = true;
     void rebuildKitOutline();
+    void layoutSingleKit(float W, float H);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DrumKitView)
 };

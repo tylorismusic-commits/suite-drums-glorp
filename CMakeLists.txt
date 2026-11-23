@@ -123,6 +123,7 @@ juce_add_binary_data(GlorpDrumsAssets
         assets/suite_drums_icon.png
         assets/suite_kit_studio_icon.png
         assets/suite_logo.png
+        assets/drumstructor_kit.png
 )
 
 #==================================================================================
@@ -194,6 +195,7 @@ target_sources(GlorpDrums PRIVATE
     src/ui/Scope.cpp
     src/ui/EDrumWizard.cpp
     src/ui/MixerView.cpp
+    src/ui/MidiPage.cpp
 )
 
 # Bundled logo and fonts, as a static library so both the VST3/LV2 binaries and

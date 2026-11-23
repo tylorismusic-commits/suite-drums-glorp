@@ -10,6 +10,7 @@
 #include "Knob.h"
 #include "MinimalInstrumentGrid.h"
 #include "MixerView.h"
+#include "MidiPage.h"
 #include "PluginProcessor.h"
 #include "Scope.h"
 
@@ -34,7 +35,8 @@ class Editor
     enum class EditorView
     {
         kitView,
-        mixerView
+        mixerView,
+        midiView
     };
 
     void setViewMode(EditorView mode);
@@ -287,6 +289,7 @@ class Editor
 
     MenuButton homeTabButton {"HOME"};
     MenuButton viewToggleButton {"MIXER VIEW"};
+    MenuButton midiMapButton {"MIDI MAP"};
     MenuButton fileButton {"FILE"};
     MenuButton presetsButton {"PRESETS"};
     MenuButton midiButton {"MIDI"};
@@ -298,6 +301,7 @@ class Editor
     Scope scope;
 
     std::unique_ptr<MixerView> mixerView;
+    std::unique_ptr<MidiPage> midiPage;
     EditorView currentView = EditorView::kitView;
 
     juce::OpenGLContext openGlContext;

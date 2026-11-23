@@ -60,6 +60,25 @@ juce::Image makeGlowImage(const juce::Image &src, juce::Colour glowColour = juce
 
     return glow;
 }
+const std::array<juce::Rectangle<float>, static_cast<size_t>(KitPiece::count)> &singleImageRegions()
+{
+    // Normalised hit regions on the bundled Drumstructor kit artwork. These are
+    // deliberately generous: the image itself is alpha-tested before a hit is
+    // accepted, so transparent pixels between pieces still fall through.
+    static const std::array<juce::Rectangle<float>, static_cast<size_t>(KitPiece::count)> regions {{
+        juce::Rectangle<float>(0.37f, 0.45f, 0.26f, 0.33f), // kick
+        juce::Rectangle<float>(0.22f, 0.38f, 0.24f, 0.22f), // snare
+        juce::Rectangle<float>(0.34f, 0.20f, 0.18f, 0.21f), // tom1
+        juce::Rectangle<float>(0.52f, 0.20f, 0.19f, 0.21f), // tom2
+        juce::Rectangle<float>(0.62f, 0.39f, 0.27f, 0.39f), // floor tom
+        juce::Rectangle<float>(0.02f, 0.16f, 0.26f, 0.14f), // hi-hat
+        juce::Rectangle<float>(0.72f, 0.21f, 0.26f, 0.15f), // ride
+        juce::Rectangle<float>(0.22f, 0.03f, 0.24f, 0.13f), // crash 1
+        juce::Rectangle<float>(0.58f, 0.03f, 0.29f, 0.13f), // crash 2
+    }};
+
+    return regions;
+}
 } // namespace
 
 //==============================================================================
@@ -274,6 +293,8 @@ void DrumKitView::setEditMode(bool enabled)
 
 void DrumKitView::loadPieceImages()
 {
+    singleKitImage = imageFromMemory(GlorpAssets::drumstructor_kit_png, GlorpAssets::drumstructor_kit_pngSize);
+
     pieces[static_cast<size_t>(KitPiece::kick)].image =
         imageFromMemory(GlorpAssets::kick_png, GlorpAssets::kick_pngSize);
     pieces[static_cast<size_t>(KitPiece::snare)].image =
@@ -379,13 +400,22 @@ void DrumKitView::applyKitVisuals(const DrumKit &kit)
     loadLayoutFromFile();
     dynamicPieces.clear();
 
-    if (kit.logicalPieces.empty())
+    bool hasCustomGraphics = false;
+    for (const auto &piece : kit.logicalPieces)
+        if (!piece.customPngBytes.empty())
+            hasCustomGraphics = true;
+
+    if (kit.logicalPieces.empty() || !hasCustomGraphics)
     {
+        useSingleKitImage = singleKitImage.isValid();
+        dynamicPieces.clear();
         hasLayout = false;
         layout();
         repaint();
         return;
     }
+
+    useSingleKitImage = false;
 
     std::array<int, static_cast<size_t>(KitPiece::count)> zRank {{1, 4, 5, 6, 9, 3, 7, 2, 8}};
     bool anyCustomZ = false;
@@ -737,6 +767,36 @@ int DrumKitView::dynamicPieceAt(juce::Point<float> pos) const
 
 KitPiece DrumKitView::pieceAt(juce::Point<float> pos) const
 {
+    if (useSingleKitImage && singleKitScaled.isValid())
+    {
+        const KitPiece order[] = {KitPiece::snare,
+                                  KitPiece::kick,
+                                  KitPiece::floorTom,
+                                  KitPiece::tom2,
+                                  KitPiece::tom1,
+                                  KitPiece::ride,
+                                  KitPiece::crash2,
+                                  KitPiece::crash1,
+                                  KitPiece::hihat};
+
+        for (const auto piece : order)
+        {
+            const auto &region = singlePieceBounds[static_cast<size_t>(piece)];
+            if (!region.contains(pos))
+                continue;
+
+            const float u = juce::jlimit(0.0f, 1.0f, (pos.x - singleKitBounds.getX()) / singleKitBounds.getWidth());
+            const float v = juce::jlimit(0.0f, 1.0f, (pos.y - singleKitBounds.getY()) / singleKitBounds.getHeight());
+            const int px = juce::jlimit(0, singleKitImage.getWidth() - 1, static_cast<int>(u * singleKitImage.getWidth()));
+            const int py = juce::jlimit(0, singleKitImage.getHeight() - 1, static_cast<int>(v * singleKitImage.getHeight()));
+
+            if (singleKitImage.getPixelAt(px, py).getAlpha() > 18)
+                return piece;
+        }
+
+        return KitPiece::count;
+    }
+
     if (!dynamicPieces.empty())
     {
         const int dynIdx = dynamicPieceAt(pos);
@@ -1125,7 +1185,7 @@ void DrumKitView::resized()
 
 void DrumKitView::rebuildKitOutline()
 {
-    if (!theme.isDark)
+    if (useSingleKitImage || !theme.isDark)
     {
         unifiedKitOutlineImage = {};
         return;
@@ -1281,6 +1341,15 @@ void DrumKitView::rebuildStaticKitCache()
         juce::Graphics cg(cache);
         cg.fillAll(theme.background);
 
+        if (useSingleKitImage && singleKitScaled.isValid())
+        {
+            cg.drawImageAt(singleKitScaled,
+                           juce::roundToInt(singleKitBounds.getX()),
+                           juce::roundToInt(singleKitBounds.getY()));
+            staticKitImage = cache;
+            return;
+        }
+
         if (theme.isDark && unifiedKitOutlineImage.isValid())
             cg.drawImageAt(unifiedKitOutlineImage, 0, 0);
 
@@ -1329,6 +1398,43 @@ void DrumKitView::rebuildStaticKitCache()
     staticKitImage = cache;
 }
 
+void DrumKitView::layoutSingleKit(float W, float H)
+{
+    const auto imageW = static_cast<float>(singleKitImage.getWidth());
+    const auto imageH = static_cast<float>(singleKitImage.getHeight());
+
+    if (imageW <= 0.0f || imageH <= 0.0f)
+        return;
+
+    const float margin = 8.0f;
+    const float scale = std::min((W - margin * 2.0f) / imageW, (H - margin * 2.0f) / imageH);
+    const float drawW = imageW * scale;
+    const float drawH = imageH * scale;
+    singleKitBounds = juce::Rectangle<float>((W - drawW) * 0.5f, (H - drawH) * 0.5f, drawW, drawH);
+
+    const int targetW = std::max(1, juce::roundToInt(drawW));
+    const int targetH = std::max(1, juce::roundToInt(drawH));
+    if (singleKitScaled.getWidth() != targetW || singleKitScaled.getHeight() != targetH)
+        singleKitScaled = singleKitImage.rescaled(targetW, targetH, juce::Graphics::mediumResamplingQuality);
+
+    const auto &regions = singleImageRegions();
+    for (size_t i = 0; i < static_cast<size_t>(KitPiece::count); ++i)
+    {
+        const auto r = regions[i];
+        singlePieceBounds[i] = {singleKitBounds.getX() + r.getX() * drawW,
+                                singleKitBounds.getY() + r.getY() * drawH,
+                                r.getWidth() * drawW,
+                                r.getHeight() * drawH};
+        pieces[i].bounds = singlePieceBounds[i];
+        pieces[i].glowBounds = singlePieceBounds[i].expanded(8.0f);
+        pieces[i].scaledImage = {};
+        pieces[i].scaledGlowImage = {};
+    }
+
+    hasLayout = true;
+    rebuildStaticKitCache();
+}
+
 void DrumKitView::layout()
 {
     if (hasLayout)
@@ -1339,6 +1445,12 @@ void DrumKitView::layout()
 
     if (W <= 50.0f || H <= 50.0f)
         return;
+
+    if (useSingleKitImage && singleKitImage.isValid())
+    {
+        layoutSingleKit(W, H);
+        return;
+    }
 
     const float scale = std::min(W / 880.0f, H / 620.0f);
     const float cx = W * 0.50f;
@@ -1503,7 +1615,41 @@ void DrumKitView::paint(juce::Graphics &g)
 
         const auto clipBounds = g.getClipBounds();
 
-        if (!dynamicPieces.empty())
+        if (useSingleKitImage)
+        {
+            if (singleKitScaled.isValid())
+                g.drawImageAt(singleKitScaled,
+                              juce::roundToInt(singleKitBounds.getX()),
+                              juce::roundToInt(singleKitBounds.getY()));
+
+            for (size_t i = 0; i < static_cast<size_t>(KitPiece::count); ++i)
+            {
+                const auto &p = pieces[i];
+                const auto &region = singlePieceBounds[i];
+
+                if (p.flash > 0.001f)
+                {
+                    const auto glow = region.expanded(region.getWidth() * 0.04f);
+                    const auto alpha = juce::jlimit(0.0f, 1.0f, p.flash);
+
+                    g.setColour(hitGlowColour.withAlpha(alpha * 0.24f));
+                    g.fillEllipse(glow);
+
+                    g.setColour(hitGlowColour.withAlpha(alpha * 0.90f));
+                    g.drawEllipse(glow, 1.5f + alpha * 2.5f);
+
+                    g.setColour(theme.ink.withAlpha(alpha * 0.55f));
+                    g.drawEllipse(glow.expanded(2.0f), 1.0f);
+                }
+
+                if (i == static_cast<size_t>(hoveredPiece) && p.flash <= 0.001f)
+                {
+                    g.setColour(theme.ink.withAlpha(0.35f));
+                    g.drawEllipse(region.expanded(3.0f), 1.2f);
+                }
+            }
+        }
+        else if (!dynamicPieces.empty())
         {
             std::vector<size_t> renderOrder(dynamicPieces.size());
             for (size_t i = 0; i < dynamicPieces.size(); ++i)
