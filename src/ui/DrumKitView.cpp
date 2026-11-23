@@ -92,7 +92,7 @@ const std::array<juce::Point<float>, static_cast<size_t>(KitPiece::count)> &sing
         juce::Point<float>(0.75f, 0.475f), // floor tom head
         juce::Point<float>(0.14f, 0.235f), // hi-hat top
         juce::Point<float>(0.79f, 0.315f), // ride bow
-        juce::Point<float>(0.33f, 0.10f),  // crash 1 bow
+        juce::Point<float>(0.34f, 0.09f),  // crash 1 bow
         juce::Point<float>(0.71f, 0.10f),  // crash 2 bow
     }};
 
