@@ -251,6 +251,7 @@ class MixerView
         HandButton bleedBtn {"BLD"};
         HandButton soloBtn {"S", true};
         HandButton muteBtn {"M", true};
+        HandButton monoBtn {"MONO", true};
         HandButton busBtn {"M 1/2"};
 
         // Fader & Meter bounds

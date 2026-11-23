@@ -49,6 +49,49 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_MONO") != nullptr)
+    {
+        int triggerIndex = -1;
+        for (int i = 0; i < proc.getSampler().numMicStrips(); ++i)
+            if (proc.getSampler().micStripName (i).containsIgnoreCase ("trigger"))
+                triggerIndex = i;
+
+        int kickIndex = -1;
+        for (int i = 0; i < proc.getSampler().numInstruments(); ++i)
+        {
+            std::cout << "inst " << i << " " << proc.getSampler().instrumentName (i).toStdString() << std::endl;
+            if (proc.getSampler().instrumentName (i).containsIgnoreCase ("kick")
+                || proc.getSampler().instrumentName (i).containsIgnoreCase ("kdrum"))
+            {
+                kickIndex = i;
+                break;
+            }
+        }
+
+        std::cout << "trigger=" << triggerIndex << " kick=" << kickIndex << std::endl;
+
+        if (triggerIndex >= 0 && kickIndex >= 0)
+        {
+            proc.prepareToPlay (48000.0, 512);
+            juce::AudioBuffer<float> buffer (32, 512);
+            juce::MidiBuffer midi;
+            midi.addEvent (juce::MidiMessage::noteOn (1, 36, static_cast<juce::uint8> (110)), 0);
+            proc.processBlock (buffer, midi);
+            std::cout << "before mono L=" << proc.getSampler().getMicPeakL (triggerIndex)
+                      << " R=" << proc.getSampler().getMicPeakR (triggerIndex) << std::endl;
+
+            auto params = proc.getSampler().getMicStripParams (triggerIndex);
+            params.mono = true;
+            proc.getSampler().setMicStripParams (triggerIndex, params);
+
+            midi.addEvent (juce::MidiMessage::noteOn (1, 36, static_cast<juce::uint8> (110)), 0);
+            proc.processBlock (buffer, midi);
+            std::cout << "after mono L=" << proc.getSampler().getMicPeakL (triggerIndex)
+                      << " R=" << proc.getSampler().getMicPeakR (triggerIndex) << std::endl;
+        }
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_REMAP") != nullptr)
     {
         std::vector<juce::String> names;

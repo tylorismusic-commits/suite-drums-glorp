@@ -14,7 +14,7 @@
 - **One Suite theme**: dark charcoal, amber accent, Jost ExtraBold display type.
 - **Kit view** with zones, velocity layers, round-robin, drum-hit animation and MIDI activity ribbon.
 - **Per-piece controls** for level, pan, pitch and dynamic response.
-- **Mixer** with per-mic channels, solo/mute, stems and master bus.
+- **Mixer** with per-mic channels, solo/mute, mono/stereo switching, stems and master bus.
 - **Channel FX**: 3-band EQ, VCA compressor, tape saturation and transient shaper.
 - **MIDI mapping page**: up to three notes per hit, per-slot MIDI learn and an eight-point velocity curve editor.
 - **MIDI loop browser**: PACK / SONG / LOOP columns, double-click audition, play/pause/stop, loop repeat, host-tempo sync, 0.5x/1x/2x preview-and-export speed, source-map translation (General MIDI, Toontrack, GGD, Urgitone and saved presets), closest-alternative fallbacks when a kit lacks a piece, and drag-and-drop MIDI export into the DAW.

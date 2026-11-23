@@ -1647,8 +1647,21 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
 
             for (int i = 0; i < numSamples; ++i)
             {
-                const float valL = sL[i] * micGainL;
-                const float valR = sR[i] * micGainR;
+                float valL;
+                float valR;
+
+                if (p.mono)
+                {
+                    // Sum the stereo pair and place it dead centre. This also
+                    // fixes kits whose trigger channel only has audio on one side.
+                    valL = valR = (sL[i] + sR[i]) * 0.5f * p.level;
+                }
+                else
+                {
+                    valL = sL[i] * micGainL;
+                    valR = sR[i] * micGainR;
+                }
+
                 sL[i] = valL;
                 sR[i] = valR;
 

@@ -179,6 +179,22 @@ MixerView::ChannelStripComponent::ChannelStripComponent(MixerView &o, PluginProc
     };
     addAndMakeVisible(muteBtn);
 
+    monoBtn.setButtonText("MONO");
+    monoBtn.activeColour = juce::Colour(0xffa78bfa);
+    monoBtn.onClick = [this]()
+    {
+        auto params = processor.getSampler().getMicStripParams(channelIndex_);
+        params.mono = !params.mono;
+
+        if (params.mono)
+            params.pan = 0.0f;
+
+        processor.getSampler().setMicStripParams(channelIndex_, params);
+        updateFromState();
+        repaint();
+    };
+    addAndMakeVisible(monoBtn);
+
     busBtn.onClick = [this]()
     {
         juce::PopupMenu menu;
@@ -212,6 +228,7 @@ void MixerView::ChannelStripComponent::updateFromState()
     phaseBtn.setActive(params.phaseInvert);
     soloBtn.setActive(params.solo);
     muteBtn.setActive(params.mute);
+    monoBtn.setActive(params.mono);
     const bool fxActive = params.compEnabled || params.saturationDrive > 0.05f
                           || std::abs(params.transientAttack) > 0.05f || std::abs(params.eqLowGainDb) > 0.5f
                           || std::abs(params.eqMidGainDb) > 0.5f || std::abs(params.eqHighGainDb) > 0.5f;
@@ -261,8 +278,12 @@ void MixerView::ChannelStripComponent::resized()
     muteBtn.setBounds(
         r.getX() + 8.0f + (r.getWidth() - 16.0f) * 0.48f, soloMuteY, (r.getWidth() - 16.0f) * 0.48f, soloMuteH);
 
+    const float monoY = soloMuteY + soloMuteH + 4.0f;
+    const float monoH = isCompact ? 17.0f : 19.0f;
+    monoBtn.setBounds(r.getX() + 6.0f, monoY, r.getWidth() - 12.0f, monoH);
+
     // Fader & Meter area
-    const float faderTop = isCompact ? 94.0f : 112.0f;
+    const float faderTop = monoY + monoH + 5.0f;
     const float faderBottom = isCompact ? (r.getBottom() - 44.0f) : (r.getBottom() - 56.0f);
     const float faderH = std::max(30.0f, faderBottom - faderTop);
 
@@ -288,6 +309,7 @@ void MixerView::ChannelStripComponent::setTheme(const Theme &t)
     bleedBtn.setTheme(t);
     soloBtn.setTheme(t);
     muteBtn.setTheme(t);
+    monoBtn.setTheme(t);
     busBtn.setTheme(t);
     repaint();
     repaint();

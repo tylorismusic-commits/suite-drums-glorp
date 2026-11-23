@@ -654,6 +654,7 @@ juce::String MixerPreset::toXmlString() const
 
         chXml->setAttribute("level", static_cast<double>(s.level));
         chXml->setAttribute("pan", static_cast<double>(s.pan));
+        chXml->setAttribute("mono", s.mono);
         chXml->setAttribute("mute", s.mute);
         chXml->setAttribute("solo", s.solo);
         chXml->setAttribute("phaseInvert", s.phaseInvert);
@@ -708,6 +709,7 @@ bool MixerPreset::fromXmlString(const juce::String &xmlText, MixerPreset &outPre
         MicStripParams s;
         s.level = static_cast<float>(chXml->getDoubleAttribute("level", 1.0));
         s.pan = static_cast<float>(chXml->getDoubleAttribute("pan", 0.0));
+        s.mono = chXml->getBoolAttribute("mono", false);
         s.mute = chXml->getBoolAttribute("mute", false);
         s.solo = chXml->getBoolAttribute("solo", false);
         s.phaseInvert = chXml->getBoolAttribute("phaseInvert", false);

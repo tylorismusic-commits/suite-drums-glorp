@@ -31,6 +31,7 @@ struct MicStripParams
 {
     float level = 1.0f; ///< linear gain (0.0 = -inf, 1.0 = 0dB, 2.0 = +6dB)
     float pan = 0.0f;   ///< -1.0 (L) .. +1.0 (R)
+    bool mono = false;  ///< sum L/R and place the result dead centre
     bool mute = false;
     bool solo = false;
     bool phaseInvert = false;  ///< flip polarity (-1x)
