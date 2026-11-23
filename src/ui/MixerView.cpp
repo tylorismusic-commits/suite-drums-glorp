@@ -2458,16 +2458,20 @@ void MixerView::paint(juce::Graphics &g)
     // Background matching the plugin theme
     g.fillAll(theme.background);
 
-    // Preset label
-    g.setColour(theme.ink);
-    g.setFont(displayFont(12.0f));
-    g.drawText("ACTIVE PRESET: " + activePresetName.toUpperCase(),
-               getWidth() - 280,
-               14,
-               160,
-               20,
-               juce::Justification::right,
-               false);
+    // Active preset sits in the gap directly above the master strip, not in the
+    // top button row where it used to collide with BLEED MATRIX at narrow sizes.
+    const int labelRight = masterStrip != nullptr ? masterStrip->getRight() : getWidth() - 8;
+    const int labelWidth = 220;
+    g.setColour(theme.inkSoft);
+    g.setFont(uiFont(9.5f).boldened());
+    g.drawFittedText("PRESET: " + activePresetName.toUpperCase(),
+                     labelRight - labelWidth,
+                     36,
+                     labelWidth,
+                     9,
+                     juce::Justification::centredRight,
+                     1,
+                     0.78f);
 }
 
 void MixerView::mouseDown(const juce::MouseEvent &e)
