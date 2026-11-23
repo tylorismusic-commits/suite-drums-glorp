@@ -134,6 +134,45 @@ bool PluginProcessor::isBusesLayoutSupported(const BusesLayout &layouts) const
     return true;
 }
 
+double PluginProcessor::getCurrentHostBpm() const
+{
+    if (auto *playHead = getPlayHead())
+    {
+        if (const auto position = playHead->getPosition())
+        {
+            if (const auto bpm = position->getBpm(); bpm.hasValue() && *bpm > 1.0)
+                return *bpm;
+        }
+    }
+
+    return hostBpm.load(std::memory_order_relaxed);
+}
+
+double PluginProcessor::getCurrentHostPpqPosition() const
+{
+    if (auto *playHead = getPlayHead())
+    {
+        if (const auto position = playHead->getPosition())
+        {
+            if (const auto ppq = position->getPpqPosition(); ppq.hasValue())
+                return *ppq;
+        }
+    }
+
+    return hostPpqPosition.load(std::memory_order_relaxed);
+}
+
+bool PluginProcessor::getCurrentHostIsPlaying() const
+{
+    if (auto *playHead = getPlayHead())
+    {
+        if (const auto position = playHead->getPosition())
+            return position->getIsPlaying();
+    }
+
+    return hostIsPlaying.load(std::memory_order_relaxed);
+}
+
 //==============================================================================
 void PluginProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::MidiBuffer &midi)
 {

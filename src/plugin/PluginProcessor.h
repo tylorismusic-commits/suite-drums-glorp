@@ -113,6 +113,12 @@ class PluginProcessor : public juce::AudioProcessor
     double getHostPpqPosition() const noexcept { return hostPpqPosition.load(std::memory_order_relaxed); }
     bool isHostPlaying() const noexcept { return hostIsPlaying.load(std::memory_order_relaxed); }
 
+    /// Reads the host playhead directly, so the loop browser follows the
+    /// project tempo even before the host has processed another block.
+    double getCurrentHostBpm() const;
+    double getCurrentHostPpqPosition() const;
+    bool getCurrentHostIsPlaying() const;
+
     /// Notifies the editor that kit-dependent state changed.
     struct Listener
     {

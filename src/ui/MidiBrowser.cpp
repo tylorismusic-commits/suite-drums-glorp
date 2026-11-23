@@ -632,7 +632,7 @@ void MidiBrowser::auditionSelected()
     }
 
     const double sourceBpm = fileBpm(midi);
-    const double hostBpm = std::clamp(processor.getHostBpm(), 20.0, 300.0);
+    const double hostBpm = std::clamp(processor.getCurrentHostBpm(), 20.0, 300.0);
     const double tempoScale = sourceBpm / hostBpm;
 
     midi.convertTimestampTicksToSeconds();
@@ -693,9 +693,9 @@ void MidiBrowser::auditionSelected()
 
     double startDelayMs = 0.0;
 
-    if (processor.isHostPlaying())
+    if (processor.getCurrentHostIsPlaying())
     {
-        const double ppq = processor.getHostPpqPosition();
+        const double ppq = processor.getCurrentHostPpqPosition();
         const double phase = ppq - std::floor(ppq);
         double beatsToNext = 1.0 - phase;
 
@@ -825,7 +825,7 @@ juce::File MidiBrowser::exportSelected()
     juce::MidiFile output;
     output.setTicksPerQuarterNote(input.getTimeFormat() > 0 ? input.getTimeFormat() : 960);
 
-    const double hostBpm = std::clamp(processor.getHostBpm(), 20.0, 300.0);
+    const double hostBpm = std::clamp(processor.getCurrentHostBpm(), 20.0, 300.0);
     const int microsecondsPerQuarter = juce::roundToInt(60000000.0 / hostBpm);
     int exportedNotes = 0;
 
@@ -932,7 +932,7 @@ void MidiBrowser::paint(juce::Graphics &g)
 
     g.setColour(theme.accent);
     g.setFont(uiFont(9.5f).boldened());
-    g.drawText("SYNC: " + juce::String(std::clamp(processor.getHostBpm(), 20.0, 300.0), 1) + " BPM",
+    g.drawText("SYNC: " + juce::String(std::clamp(processor.getCurrentHostBpm(), 20.0, 300.0), 1) + " BPM",
                getWidth() - 320,
                41,
                160,
