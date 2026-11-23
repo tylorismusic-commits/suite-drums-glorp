@@ -89,6 +89,58 @@ int main (int argc, char** argv)
             return 0;
         }
 
+        if (juce::String (viewEnv).equalsIgnoreCase ("loops-export"))
+        {
+            if (const auto* library = std::getenv ("GLORP_MIDI_LIBRARY"))
+                proc.getSettings().midiLibraryPath = juce::String (library);
+
+            for (auto* child : pluginEditor->getChildren())
+            {
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                {
+                    ed->setViewMode (glorp::Editor::EditorView::loopsView);
+
+                    for (auto* edChild : ed->getChildren())
+                    {
+                        if (auto* browser = dynamic_cast<glorp::MidiBrowser*> (edChild))
+                        {
+                            const auto file = browser->exportSelectedLoop();
+                            std::cout << "Exported MIDI: " << file.getFullPathName().toStdString() << std::endl;
+                        }
+                    }
+                    break;
+                }
+            }
+            return 0;
+        }
+
+        if (juce::String (viewEnv).equalsIgnoreCase ("loops"))
+        {
+            if (const auto* library = std::getenv ("GLORP_MIDI_LIBRARY"))
+                proc.getSettings().midiLibraryPath = juce::String (library);
+
+            for (auto* child : pluginEditor->getChildren())
+            {
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                {
+                    ed->setViewMode (glorp::Editor::EditorView::loopsView);
+                    break;
+                }
+            }
+
+            auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+            juce::File outFile ("test/docs/midi_browser.png");
+            outFile.deleteFile();
+            juce::FileOutputStream fos (outFile);
+            if (fos.openedOk())
+            {
+                juce::PNGImageFormat png;
+                png.writeImageToStream (image, fos);
+                std::cout << "Saved MIDI browser snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
+            }
+            return 0;
+        }
+
         if (juce::String (viewEnv).equalsIgnoreCase ("mixer"))
         {
             for (auto* child : pluginEditor->getChildren())

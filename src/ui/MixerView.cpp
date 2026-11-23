@@ -370,42 +370,55 @@ void MixerView::ChannelStripComponent::paint(juce::Graphics &g)
     drawSketchRect(g, meterBounds, theme.panelEdge, 1.3f, 202);
 
     const float peakL = processor.getSampler().getMicPeakL(channelIndex_);
+    const float peakR = processor.getSampler().getMicPeakR(channelIndex_);
     const float rmsL = processor.getSampler().getMicRmsL(channelIndex_);
-    const float normPeak = dbToNormalized(linearToDb(peakL));
-    const float normRms = dbToNormalized(linearToDb(rmsL));
+    const float rmsR = processor.getSampler().getMicRmsR(channelIndex_);
+    const float normPeakL = dbToNormalized(linearToDb(peakL));
+    const float normPeakR = dbToNormalized(linearToDb(peakR));
+    const float normRmsL = dbToNormalized(linearToDb(rmsL));
+    const float normRmsR = dbToNormalized(linearToDb(rmsR));
 
     const float meterH = meterBounds.getHeight() - 4.0f;
     const float meterW = meterBounds.getWidth() - 4.0f;
     const float meterX = meterBounds.getX() + 2.0f;
     const float meterY = meterBounds.getY() + 2.0f;
+    const float gap = 2.0f;
+    const float sideW = std::max(2.0f, (meterW - gap) * 0.5f);
 
-    // Draw active RMS meter bar in discrete comic segments
-    if (normRms > 0.01f)
+    // Stereo channel meter: L and R get their own strips, so hard-panned or
+    // right-only mic channels still show level.
+    for (int side = 0; side < 2; ++side)
     {
-        constexpr int numSegs = 16;
-        const int activeSegs = std::clamp(static_cast<int>(normRms * numSegs), 1, numSegs);
-        const float segH = meterH / numSegs;
+        const float sideX = meterX + static_cast<float>(side) * (sideW + gap);
+        const float normRms = side == 0 ? normRmsL : normRmsR;
+        const float normPeak = side == 0 ? normPeakL : normPeakR;
 
-        for (int s = 0; s < activeSegs; ++s)
+        if (normRms > 0.01f)
         {
-            const float sy = meterY + meterH - (s + 1) * segH;
-            juce::Colour segCol = juce::Colour(0xff2ecc71); // Green
-            if (s >= 13)
-                segCol = juce::Colour(0xffe74c3c); // Red peak
-            else if (s >= 10)
-                segCol = juce::Colour(0xfff1c40f); // Amber / Yellow
+            constexpr int numSegs = 16;
+            const int activeSegs = std::clamp(static_cast<int>(normRms * numSegs), 1, numSegs);
+            const float segH = meterH / numSegs;
 
-            g.setColour(segCol);
-            g.fillRoundedRectangle(meterX, sy + 0.5f, meterW, segH - 1.0f, 1.0f);
+            for (int s = 0; s < activeSegs; ++s)
+            {
+                const float sy = meterY + meterH - (s + 1) * segH;
+                juce::Colour segCol = juce::Colour(0xff2ecc71); // Green
+                if (s >= 13)
+                    segCol = juce::Colour(0xffe74c3c); // Red peak
+                else if (s >= 10)
+                    segCol = juce::Colour(0xfff1c40f); // Amber / Yellow
+
+                g.setColour(segCol);
+                g.fillRoundedRectangle(sideX, sy + 0.5f, sideW, segH - 1.0f, 1.0f);
+            }
         }
-    }
 
-    // Peak hold line
-    if (normPeak > 0.02f)
-    {
-        const float peakY = meterY + meterH - normPeak * meterH;
-        g.setColour(normPeak >= 0.98f ? juce::Colour(0xffe74c3c) : theme.ink);
-        g.fillRect(meterX, peakY - 1.0f, meterW, 2.0f);
+        if (normPeak > 0.02f)
+        {
+            const float peakY = meterY + meterH - normPeak * meterH;
+            g.setColour(normPeak >= 0.98f ? juce::Colour(0xffe74c3c) : theme.ink);
+            g.fillRect(sideX, peakY - 1.0f, sideW, 2.0f);
+        }
     }
 
     // Fader Thumb: hand-drawn beveled paper cap with ink border & drop shadow

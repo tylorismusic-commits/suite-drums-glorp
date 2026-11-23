@@ -10,6 +10,7 @@
 #include "Knob.h"
 #include "MinimalInstrumentGrid.h"
 #include "MixerView.h"
+#include "MidiBrowser.h"
 #include "MidiPage.h"
 #include "PluginProcessor.h"
 #include "Scope.h"
@@ -26,6 +27,7 @@ class Editor
     : public juce::Component
     , public juce::Timer
     , public juce::FileDragAndDropTarget
+    , public juce::DragAndDropContainer
     , private PluginProcessor::Listener
 {
   public:
@@ -36,7 +38,8 @@ class Editor
     {
         kitView,
         mixerView,
-        midiView
+        midiView,
+        loopsView
     };
 
     void setViewMode(EditorView mode);
@@ -84,6 +87,11 @@ class Editor
     void setOpenGlEnabled(bool enabled);
     bool isOpenGlEnabled() const noexcept;
     void parentHierarchyChanged() override;
+
+    void startExternalMidiDrag(juce::Component *source, const juce::File &file);
+    bool shouldDropFilesWhenDraggedExternally(const juce::DragAndDropTarget::SourceDetails &sourceDetails,
+                                              juce::StringArray &files,
+                                              bool &canMoveFiles) override;
 
   private:
     void kitChanged() override;
@@ -290,6 +298,7 @@ class Editor
     MenuButton homeTabButton {"HOME"};
     MenuButton viewToggleButton {"MIXER VIEW"};
     MenuButton midiMapButton {"MIDI MAP"};
+    MenuButton loopsButton {"LOOPS"};
     MenuButton fileButton {"FILE"};
     MenuButton presetsButton {"PRESETS"};
     MenuButton midiButton {"MIDI"};
@@ -302,6 +311,7 @@ class Editor
 
     std::unique_ptr<MixerView> mixerView;
     std::unique_ptr<MidiPage> midiPage;
+    std::unique_ptr<MidiBrowser> midiBrowser;
     EditorView currentView = EditorView::kitView;
 
     juce::OpenGLContext openGlContext;
@@ -342,6 +352,7 @@ class Editor
 
     juce::String statusText;
     juce::String kitErrorText;
+    juce::File pendingMidiDragFile;
 
     Theme theme = Theme::suite();
     std::unique_ptr<GlorpLookAndFeel> lookAndFeel;

@@ -139,6 +139,20 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::MidiB
 {
     juce::ScopedNoDenormals noDenormals;
 
+    if (auto *playHead = getPlayHead())
+    {
+        if (const auto position = playHead->getPosition())
+        {
+            if (const auto bpm = position->getBpm(); bpm.hasValue() && *bpm > 1.0)
+                hostBpm.store(*bpm, std::memory_order_relaxed);
+
+            if (const auto ppq = position->getPpqPosition(); ppq.hasValue())
+                hostPpqPosition.store(*ppq, std::memory_order_relaxed);
+
+            hostIsPlaying.store(position->getIsPlaying(), std::memory_order_relaxed);
+        }
+    }
+
     const auto numSamples = buffer.getNumSamples();
 
     // Map host output buses to up to 16 stereo bus write pointers (32 channels)

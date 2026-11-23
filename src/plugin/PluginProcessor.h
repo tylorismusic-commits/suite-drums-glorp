@@ -108,6 +108,11 @@ class PluginProcessor : public juce::AudioProcessor
     float getHiHatCC4() const noexcept { return lastHiHatCC4.load(std::memory_order_relaxed); }
     float getSnarePositionCC16() const noexcept { return lastSnareCC16.load(std::memory_order_relaxed); }
 
+    /// Tempo/transport snapshot from the last processBlock, used by the loop browser.
+    double getHostBpm() const noexcept { return hostBpm.load(std::memory_order_relaxed); }
+    double getHostPpqPosition() const noexcept { return hostPpqPosition.load(std::memory_order_relaxed); }
+    bool isHostPlaying() const noexcept { return hostIsPlaying.load(std::memory_order_relaxed); }
+
     /// Notifies the editor that kit-dependent state changed.
     struct Listener
     {
@@ -148,6 +153,9 @@ class PluginProcessor : public juce::AudioProcessor
 
     std::atomic<float> lastHiHatCC4 {0.0f};
     std::atomic<float> lastSnareCC16 {0.5f};
+    std::atomic<double> hostBpm {120.0};
+    std::atomic<double> hostPpqPosition {0.0};
+    std::atomic<bool> hostIsPlaying {false};
 
     juce::ListenerList<Listener> listeners;
 

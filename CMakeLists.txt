@@ -196,6 +196,7 @@ target_sources(GlorpDrums PRIVATE
     src/ui/EDrumWizard.cpp
     src/ui/MixerView.cpp
     src/ui/MidiPage.cpp
+    src/ui/MidiBrowser.cpp
 )
 
 # Bundled logo and fonts, as a static library so both the VST3/LV2 binaries and

@@ -25,6 +25,40 @@ int main (int argc, char** argv)
     std::cout << "Instruments: " << proc.getSampler().numInstruments()
               << ", mics: " << proc.getCurrentKit().channels.size() << std::endl;
 
+    if (const auto* midiPath = std::getenv ("GLORP_PROBE_MIDI"))
+    {
+        juce::MidiFile mf;
+        const juce::File midiFile = juce::File (juce::String (midiPath));
+        juce::FileInputStream in (midiFile);
+
+        if (in.openedOk() && mf.readFrom (in))
+        {
+            for (int tr = 0; tr < mf.getNumTracks(); ++tr)
+            {
+                const auto* seq = mf.getTrack (tr);
+                for (int ev = 0; ev < seq->getNumEvents(); ++ev)
+                {
+                    const auto& m = seq->getEventPointer (ev)->message;
+                    if (m.isNoteOn() || m.isNoteOff())
+                        std::cout << "midi tr=" << tr << " t=" << seq->getEventPointer (ev)->message.getTimeStamp()
+                                  << " ch=" << m.getChannel() << " note=" << m.getNoteNumber()
+                                  << " vel=" << m.getVelocity() << " on=" << m.isNoteOn() << std::endl;
+                }
+            }
+        }
+        return 0;
+    }
+
+    if (std::getenv ("GLORP_PROBE_MAP") != nullptr)
+    {
+        for (int i = 0; i < proc.getSampler().numInstruments(); ++i)
+        {
+            const auto slots = proc.getMidiMap().noteSlotsForInstrument (i);
+            std::cout << i << " " << proc.getSampler().instrumentName (i).toStdString()
+                      << " -> " << slots[0] << "," << slots[1] << "," << slots[2] << std::endl;
+        }
+    }
+
     if (std::getenv ("GLORP_PROBE_SELFTEST") != nullptr)
     {
         auto &map = proc.getMidiMap();

@@ -47,6 +47,9 @@ class Settings
     juce::String lastKitPath;
     juce::String lastMapPreset;
 
+    // -- MIDI loop library -------------------------------------------------
+    juce::String midiLibraryPath; ///< empty means <config>/midi_library
+
     // -- editor ------------------------------------------------------------
     int editorWidth = 1180;
     int editorHeight = 860;
