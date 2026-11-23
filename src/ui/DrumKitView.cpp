@@ -66,15 +66,15 @@ const std::array<juce::Rectangle<float>, static_cast<size_t>(KitPiece::count)> &
     // the bundled Drumstructor artwork. These are used for both hit-testing and
     // the hit rings, so a ring never wraps the shell or a stand.
     static const std::array<juce::Rectangle<float>, static_cast<size_t>(KitPiece::count)> regions {{
-        juce::Rectangle<float>(0.41f, 0.49f, 0.22f, 0.20f), // kick head
-        juce::Rectangle<float>(0.245f, 0.38f, 0.22f, 0.12f), // snare head
-        juce::Rectangle<float>(0.36f, 0.20f, 0.14f, 0.12f), // tom1 head
-        juce::Rectangle<float>(0.55f, 0.20f, 0.15f, 0.12f), // tom2 head
-        juce::Rectangle<float>(0.64f, 0.39f, 0.22f, 0.15f), // floor tom head
-        juce::Rectangle<float>(0.02f, 0.17f, 0.25f, 0.10f), // hi-hat surface
-        juce::Rectangle<float>(0.74f, 0.22f, 0.23f, 0.12f), // ride surface
-        juce::Rectangle<float>(0.24f, 0.045f, 0.22f, 0.10f), // crash 1 surface
-        juce::Rectangle<float>(0.60f, 0.045f, 0.24f, 0.10f), // crash 2 surface
+        juce::Rectangle<float>(0.41f, 0.50f, 0.22f, 0.19f), // kick head
+        juce::Rectangle<float>(0.25f, 0.405f, 0.21f, 0.115f), // snare head
+        juce::Rectangle<float>(0.36f, 0.21f, 0.14f, 0.11f), // tom1 head
+        juce::Rectangle<float>(0.55f, 0.21f, 0.15f, 0.11f), // tom2 head
+        juce::Rectangle<float>(0.64f, 0.40f, 0.22f, 0.14f), // floor tom head
+        juce::Rectangle<float>(0.03f, 0.205f, 0.23f, 0.075f), // hi-hat surface
+        juce::Rectangle<float>(0.72f, 0.235f, 0.26f, 0.12f), // ride surface
+        juce::Rectangle<float>(0.245f, 0.06f, 0.21f, 0.10f), // crash 1 surface
+        juce::Rectangle<float>(0.60f, 0.06f, 0.24f, 0.10f), // crash 2 surface
     }};
 
     return regions;
