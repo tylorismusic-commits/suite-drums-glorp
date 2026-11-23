@@ -98,9 +98,13 @@ int main (int argc, char** argv)
         for (int i = 0; i < proc.getSampler().numInstruments(); ++i)
             names.push_back (proc.getSampler().instrumentName (i));
 
+        const auto requestedProfile = std::getenv ("GLORP_PROBE_REMAP_PROFILE") != nullptr
+                                          ? juce::String (std::getenv ("GLORP_PROBE_REMAP_PROFILE"))
+                                          : juce::String ("General MIDI (extended)");
+
         for (const auto& preset : glorp::MidiMap::availablePresets())
         {
-            if (! preset.name.equalsIgnoreCase ("General MIDI (extended)"))
+            if (! preset.name.equalsIgnoreCase (requestedProfile))
                 continue;
 
             glorp::MidiMap temp;
@@ -113,7 +117,7 @@ int main (int argc, char** argv)
                     std::cout << "UNMAPPED source note " << note << " " << sourceName.toStdString() << std::endl;
             }
 
-            for (const int note : {47, 50, 52, 55, 59, 39, 54, 56})
+            for (const int note : {41, 43, 48, 50, 47, 45, 52, 55, 59, 39, 69, 54, 56})
             {
                 const auto inst = temp.instrumentForNote (note);
                 std::cout << "remap note " << note << " -> inst " << inst;
