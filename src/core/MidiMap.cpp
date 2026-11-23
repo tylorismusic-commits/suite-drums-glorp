@@ -896,24 +896,29 @@ void MidiMap::applyPreset(const MapPreset &preset, const std::vector<juce::Strin
         }
         else if (targetStripped == "tom3" || targetStripped == "tom4" || targetStripped == "lowtom")
         {
-            for (size_t i = 0; i < strippedNames.size(); ++i)
+            const bool wantsTom4 = targetStripped == "tom4";
+            const auto findTomNumber = [&](int number) -> int
             {
-                const auto &ns = strippedNames[i];
-                if ((ns.contains("tom3") || ns.contains("tom4")) && !ns.contains("rim"))
-                    return static_cast<int>(i);
-            }
-            for (size_t i = 0; i < strippedNames.size(); ++i)
-            {
-                const auto &ns = strippedNames[i];
-                if (ns.contains("tom2") && !ns.contains("rim"))
-                    return static_cast<int>(i);
-            }
-            for (size_t i = 0; i < strippedNames.size(); ++i)
-            {
-                const auto &ns = strippedNames[i];
-                if (ns.contains("tom1") && !ns.contains("rim"))
-                    return static_cast<int>(i);
-            }
+                const auto key = "tom" + std::to_string(number);
+
+                for (size_t i = 0; i < strippedNames.size(); ++i)
+                    if (strippedNames[i].contains(key) && !strippedNames[i].contains("rim"))
+                        return static_cast<int>(i);
+
+                return -1;
+            };
+
+            if (wantsTom4)
+                if (const auto i = findTomNumber(4); i >= 0)
+                    return i;
+
+            if (const auto i = findTomNumber(3); i >= 0)
+                return i;
+            if (const auto i = findTomNumber(2); i >= 0)
+                return i;
+            if (const auto i = findTomNumber(1); i >= 0)
+                return i;
+
             for (size_t i = 0; i < strippedNames.size(); ++i)
             {
                 const auto &ns = strippedNames[i];
@@ -927,9 +932,19 @@ void MidiMap::applyPreset(const MapPreset &preset, const std::vector<juce::Strin
             for (size_t i = 0; i < strippedNames.size(); ++i)
             {
                 const auto &ns = strippedNames[i];
-                if ((ns.contains("floor") || ns.contains("ftom") || ns.contains("lowtom") || ns.contains("tom3")
-                     || ns.contains("tom4"))
-                    && !ns.contains("rim"))
+                if ((ns.contains("floor") || ns.contains("ftom")) && !ns.contains("rim"))
+                    return static_cast<int>(i);
+            }
+            for (size_t i = 0; i < strippedNames.size(); ++i)
+            {
+                const auto &ns = strippedNames[i];
+                if (ns.contains("tom4") && !ns.contains("rim"))
+                    return static_cast<int>(i);
+            }
+            for (size_t i = 0; i < strippedNames.size(); ++i)
+            {
+                const auto &ns = strippedNames[i];
+                if ((ns.contains("lowtom") || ns.contains("tom3")) && !ns.contains("rim"))
                     return static_cast<int>(i);
             }
         }
@@ -1002,11 +1017,14 @@ void MidiMap::applyPreset(const MapPreset &preset, const std::vector<juce::Strin
         else if (targetStripped.startsWith("crash2"))
         {
             const bool wantsEdge = targetStripped.contains("edge");
+
+            // Prefer an actual right/second crash before falling through to
+            // China or splash. Otherwise a kit with a China can steal every
+            // crash-2 hit.
             for (size_t i = 0; i < strippedNames.size(); ++i)
             {
                 const auto &ns = strippedNames[i];
-                if (ns.contains("crash2") || ns.contains("crashr") || ns.contains("rightcrash") || ns.contains("china")
-                    || ns.contains("splash"))
+                if (ns.contains("crash2") || ns.contains("crashr") || ns.contains("rightcrash"))
                 {
                     if (wantsEdge && ns.contains("edge"))
                         return static_cast<int>(i);
@@ -1014,16 +1032,32 @@ void MidiMap::applyPreset(const MapPreset &preset, const std::vector<juce::Strin
                         return static_cast<int>(i);
                 }
             }
-            // Fallback to the second crash-like instrument if multiple unlabeled crashes exist
+
+            // Any remaining crash, preferring the second one.
             int crashSeen = 0;
             for (size_t i = 0; i < strippedNames.size(); ++i)
             {
-                if (strippedNames[i].contains("crash"))
+                if (strippedNames[i].contains("crash") && !strippedNames[i].contains("crashl")
+                    && !strippedNames[i].contains("crash1"))
                 {
                     ++crashSeen;
-                    if (crashSeen >= 2)
+                    if (crashSeen >= 1)
                         return static_cast<int>(i);
                 }
+            }
+
+            for (size_t i = 0; i < strippedNames.size(); ++i)
+            {
+                const auto &ns = strippedNames[i];
+                if (ns.contains("crash"))
+                    return static_cast<int>(i);
+            }
+
+            for (size_t i = 0; i < strippedNames.size(); ++i)
+            {
+                const auto &ns = strippedNames[i];
+                if (ns.contains("china") || ns.contains("splash"))
+                    return static_cast<int>(i);
             }
         }
 

@@ -117,7 +117,7 @@ int main (int argc, char** argv)
                     std::cout << "UNMAPPED source note " << note << " " << sourceName.toStdString() << std::endl;
             }
 
-            for (const int note : {41, 43, 48, 50, 47, 45, 52, 55, 59, 39, 69, 54, 56})
+            for (const int note : {36, 38, 42, 43, 44, 46, 47, 48, 49, 51, 52, 53, 55, 57})
             {
                 const auto inst = temp.instrumentForNote (note);
                 std::cout << "remap note " << note << " -> inst " << inst;
