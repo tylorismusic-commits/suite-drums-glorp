@@ -430,6 +430,26 @@ std::vector<MapPreset> MidiMap::availablePresets()
           {50, "HighTom"}, {51, "Ride"},      {53, "RideBell"},    {54, "Tambourine"},  {55, "Splash"},
           {56, "Cowbell"}, {57, "Crash2"},    {52, "China"}}},
 
+        {"Toontrack / EZdrummer",
+         {{36, "Kick"},          {35, "Kick"},          {38, "SnareHead"},     {40, "Rimshot"},    {37, "CrossStick"},
+          {42, "HihatClosed"},   {22, "HihatClosed"},   {44, "HihatPedal"},    {46, "HihatOpen"},  {26, "HihatSemiOpen"},
+          {48, "Tom1Head"},      {50, "Tom1Rim"},       {45, "Tom2Head"},      {47, "Tom2Rim"},    {43, "FTomHead"},
+          {41, "FTomHead"},      {58, "FTomRim"},       {49, "Crash1Bow"},     {55, "Crash1Edge"}, {57, "Crash2Bow"},
+          {52, "Crash2Edge"},    {51, "RideBow"},       {53, "RideBell"},      {59, "RideEdge"},   {54, "Tambourine"},
+          {56, "Cowbell"}}},
+
+        {"GetGood Drums",
+         {{36, "Kick"},          {35, "Kick"},          {38, "Snare"},         {40, "Rimshot"},    {37, "CrossStick"},
+          {42, "HihatClosed"},   {44, "HihatPedal"},    {46, "HihatOpen"},     {48, "Tom1"},       {50, "Tom1"},
+          {45, "Tom2"},          {47, "Tom2"},          {43, "FloorTom"},      {41, "FloorTom"},   {49, "Crash"},
+          {57, "Crash2"},        {51, "Ride"},          {53, "RideBell"},      {52, "China"},      {55, "Splash"}}},
+
+        {"Urgitone",
+         {{36, "Kick"},          {35, "Kick"},          {38, "Snare"},         {40, "Rimshot"},    {37, "CrossStick"},
+          {42, "HihatClosed"},   {44, "HihatPedal"},    {46, "HihatOpen"},     {48, "Tom1"},       {50, "Tom1Rim"},
+          {45, "Tom2"},          {47, "Tom2Rim"},       {43, "FloorTom"},      {41, "FloorTom"},   {49, "Crash"},
+          {57, "Crash2"},        {51, "Ride"},          {53, "RideBell"},      {52, "China"},      {55, "Splash"}}},
+
         {"Roland V-Drums",
          {{36, "Kick"},          {35, "Kick"},          {38, "SnareHead"},     {40, "Rimshot"},   {37, "CrossStick"},
           {42, "HihatClosed"},   {22, "HihatClosed"},   {26, "HihatSemiOpen"}, {46, "HihatOpen"}, {44, "HihatPedal"},

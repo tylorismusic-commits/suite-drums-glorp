@@ -101,6 +101,7 @@ void Settings::writeState(juce::MemoryBlock &destination) const
     root.setAttribute("lastKit", lastKitPath);
     root.setAttribute("lastMapPreset", lastMapPreset);
     root.setAttribute("midiLibraryPath", midiLibraryPath);
+    root.setAttribute("midiSourceProfile", midiSourceProfile);
     root.setAttribute("editorWidth", editorWidth);
     root.setAttribute("editorHeight", editorHeight);
     root.setAttribute("editorMaximised", editorMaximised);
@@ -134,6 +135,7 @@ void Settings::readState(const juce::MemoryBlock &source)
     lastKitPath = root->getStringAttribute("lastKit", lastKitPath);
     lastMapPreset = root->getStringAttribute("lastMapPreset", lastMapPreset);
     midiLibraryPath = root->getStringAttribute("midiLibraryPath", midiLibraryPath);
+    midiSourceProfile = root->getStringAttribute("midiSourceProfile", midiSourceProfile);
     editorWidth = root->getIntAttribute("editorWidth", editorWidth);
     editorHeight = root->getIntAttribute("editorHeight", editorHeight);
     editorMaximised = root->getBoolAttribute("editorMaximised", editorMaximised);

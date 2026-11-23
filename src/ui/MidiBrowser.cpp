@@ -126,6 +126,12 @@ class MidiBrowser::Column : public juce::Component, private juce::ListBoxModel
             onSelectionChanged(row);
     }
 
+    void listBoxItemDoubleClicked(int row, const juce::MouseEvent &) override
+    {
+        if (row >= 0 && onDoubleClick)
+            onDoubleClick(row);
+    }
+
     void paint(juce::Graphics &g) override
     {
         auto b = getLocalBounds().toFloat();
@@ -150,6 +156,7 @@ class MidiBrowser::Column : public juce::Component, private juce::ListBoxModel
     void resized() override { list.setBounds(6, 28, getWidth() - 12, getHeight() - 36); }
 
     std::function<void(int)> onSelectionChanged;
+    std::function<void(int)> onDoubleClick;
 
   private:
     MidiBrowser &owner;
@@ -175,12 +182,20 @@ MidiBrowser::MidiBrowser(PluginProcessor &processorIn) : processor(processorIn)
     packColumn->onSelectionChanged = [this](int row) { selectPack(row); };
     songColumn->onSelectionChanged = [this](int row) { selectSong(row); };
     loopColumn->onSelectionChanged = [this](int row) { selectLoop(row); };
+    loopColumn->onDoubleClick = [this](int row)
+    {
+        selectLoop(row);
+        auditionSelected();
+    };
 
     addAndMakeVisible(chooseButton);
     addAndMakeVisible(rescanButton);
     addAndMakeVisible(closeButton);
-    addAndMakeVisible(auditionButton);
+    addAndMakeVisible(sourceBox);
+    addAndMakeVisible(playButton);
+    addAndMakeVisible(pauseButton);
     addAndMakeVisible(stopButton);
+    addAndMakeVisible(loopButton);
     addAndMakeVisible(exportButton);
 
     chooseButton.onClick = [this] { chooseLibrary(); };
@@ -191,10 +206,28 @@ MidiBrowser::MidiBrowser(PluginProcessor &processorIn) : processor(processorIn)
         if (onCloseRequested)
             onCloseRequested();
     };
-    auditionButton.onClick = [this] { auditionSelected(); };
+    playButton.onClick = [this] { auditionSelected(); };
+    pauseButton.onClick = [this]
+    {
+        if (auditionPaused)
+            resumeAudition();
+        else
+            pauseAudition();
+    };
     stopButton.onClick = [this] { stopAudition(); };
+    loopButton.setClickingTogglesState(true);
+    loopButton.onClick = [this] { updateTransportButtons(); };
+    sourceBox.onChange = [this]
+    {
+        processor.getSettings().midiSourceProfile = sourceBox.getText();
+        processor.getSettings().markDirty();
+        processor.getSettings().saveIfChanged();
+        setStatus("Source map: " + sourceBox.getText());
+    };
     exportButton.onClick = [this] { setStatus("Drag the DRAG MIDI button into your DAW."); };
     exportButton.onDragStart = [this](juce::Component *source) { startExportDrag(source); };
+
+    updateTransportButtons();
 
     setTheme(theme);
     refreshLibrary();
@@ -215,14 +248,23 @@ void MidiBrowser::setTheme(const Theme &newTheme)
     for (auto *button : {&chooseButton,
                          &rescanButton,
                          &closeButton,
+                         &playButton,
+                         &pauseButton,
                          &stopButton,
-                         static_cast<juce::TextButton *>(&auditionButton),
+                         &loopButton,
                          static_cast<juce::TextButton *>(&exportButton)})
     {
         button->setColour(juce::TextButton::textColourOffId, theme.ink);
+        button->setColour(juce::TextButton::textColourOnId, theme.background);
         button->setColour(juce::TextButton::buttonColourId, theme.panel);
         button->setColour(juce::TextButton::buttonOnColourId, theme.accent);
     }
+
+    sourceBox.setColour(juce::ComboBox::backgroundColourId, theme.panel);
+    sourceBox.setColour(juce::ComboBox::textColourId, theme.ink);
+    sourceBox.setColour(juce::ComboBox::outlineColourId, theme.panelEdge);
+    sourceBox.setColour(juce::ComboBox::arrowColourId, theme.accent);
+    sourceBox.setColour(juce::ComboBox::focusedOutlineColourId, theme.accent);
 
     repaint();
 }
@@ -242,6 +284,38 @@ void MidiBrowser::refreshLibrary()
     stopAudition();
     root = libraryRoot();
     root.createDirectory();
+
+    sourceBox.clear(juce::dontSendNotification);
+
+    int sourceId = 0;
+    int selectedSourceId = 0;
+    const auto &sourceName = processor.getSettings().midiSourceProfile;
+
+    for (const auto &preset : MidiMap::availablePresets())
+    {
+        ++sourceId;
+        sourceBox.addItem(preset.name, sourceId);
+
+        if (preset.name.equalsIgnoreCase(sourceName))
+            selectedSourceId = sourceId;
+    }
+
+    if (selectedSourceId == 0)
+    {
+        for (int i = 1; i <= sourceBox.getNumItems(); ++i)
+        {
+            if (sourceBox.getItemText(i - 1).equalsIgnoreCase("General MIDI (extended)"))
+            {
+                selectedSourceId = i;
+                break;
+            }
+        }
+    }
+
+    if (selectedSourceId == 0 && sourceBox.getNumItems() > 0)
+        selectedSourceId = 1;
+
+    sourceBox.setSelectedId(selectedSourceId, juce::dontSendNotification);
 
     packs.clear();
     selectedPack = -1;
@@ -453,27 +527,35 @@ bool MidiBrowser::buildRemap(const juce::File &source, Remap &remap) const
     for (int i = 0; i < processor.getSampler().numInstruments(); ++i)
         kitNames.push_back(processor.getSampler().instrumentName(i));
 
-    const MapPreset *gmPreset = nullptr;
+    const auto requestedSource = sourceBox.getText().isNotEmpty()
+                                     ? sourceBox.getText()
+                                     : processor.getSettings().midiSourceProfile;
+    const MapPreset *sourcePreset = nullptr;
     std::vector<MapPreset> presets = MidiMap::availablePresets();
 
     for (const auto &preset : presets)
-        if (preset.name.equalsIgnoreCase("General MIDI (extended)"))
-            gmPreset = &preset;
+        if (preset.name.equalsIgnoreCase(requestedSource))
+            sourcePreset = &preset;
 
-    if (gmPreset == nullptr)
+    if (sourcePreset == nullptr)
+        for (const auto &preset : presets)
+            if (preset.name.equalsIgnoreCase("General MIDI (extended)"))
+                sourcePreset = &preset;
+
+    if (sourcePreset == nullptr)
         for (const auto &preset : presets)
             if (preset.name.equalsIgnoreCase("General MIDI"))
-                gmPreset = &preset;
+                sourcePreset = &preset;
 
-    if (gmPreset == nullptr)
+    if (sourcePreset == nullptr)
         return false;
 
-    MidiMap gmMap;
-    gmMap.applyPreset(*gmPreset, kitNames);
+    MidiMap sourceMap;
+    sourceMap.applyPreset(*sourcePreset, kitNames);
 
     for (int note = 0; note < 128; ++note)
     {
-        const int instrument = gmMap.instrumentForNote(note);
+        const int instrument = sourceMap.instrumentForNote(note);
 
         if (instrument < 0 || instrument >= processor.getSampler().numInstruments())
             continue;
@@ -519,6 +601,12 @@ bool MidiBrowser::buildRemap(const juce::File &source, Remap &remap) const
 
 void MidiBrowser::auditionSelected()
 {
+    if (auditionPaused)
+    {
+        resumeAudition();
+        return;
+    }
+
     if (!selectedLoopFile.existsAsFile())
     {
         setStatus("Select a loop first.", true);
@@ -593,12 +681,15 @@ void MidiBrowser::auditionSelected()
 
     if (auditionEvents.empty())
     {
-        setStatus("No GM notes matched the current kit mapping.", true);
+        setStatus("No source-map notes matched the current kit mapping.", true);
         return;
     }
 
-    auditionLengthSeconds += 2.0;
+    auditionLoopSeconds = std::max(0.25, auditionLengthSeconds);
+    auditionLengthSeconds = auditionLoopSeconds + 2.0;
     nextAuditionEvent = 0;
+    auditionPaused = false;
+    pausedAtSeconds = 0.0;
 
     double startDelayMs = 0.0;
 
@@ -617,24 +708,69 @@ void MidiBrowser::auditionSelected()
     auditionStartMs = juce::Time::getMillisecondCounterHiRes() + startDelayMs;
     auditioning = true;
     startTimerHz(120);
-    setStatus("Auditioning " + selectedLoopFile.getFileName() + " at " + juce::String(hostBpm, 1)
-              + " BPM (file " + juce::String(sourceBpm, 1) + ")");
+    updateTransportButtons();
+    setStatus("Playing " + selectedLoopFile.getFileName() + " at " + juce::String(hostBpm, 1)
+              + " BPM (source " + sourceBox.getText() + ")");
+}
+
+void MidiBrowser::pauseAudition()
+{
+    if (!auditioning || auditionPaused)
+        return;
+
+    pausedAtSeconds = (juce::Time::getMillisecondCounterHiRes() - auditionStartMs) / 1000.0;
+    auditionPaused = true;
+    stopTimer();
+    processor.getSampler().allNotesOff();
+    updateTransportButtons();
+    setStatus("Paused.");
+}
+
+void MidiBrowser::resumeAudition()
+{
+    if (!auditioning || !auditionPaused)
+        return;
+
+    auditionStartMs = juce::Time::getMillisecondCounterHiRes() - pausedAtSeconds * 1000.0;
+    auditionPaused = false;
+    startTimerHz(120);
+    updateTransportButtons();
+    setStatus("Playing.");
 }
 
 void MidiBrowser::stopAudition()
 {
     stopTimer();
     auditioning = false;
+    auditionPaused = false;
     nextAuditionEvent = 0;
+    pausedAtSeconds = 0.0;
     processor.getSampler().allNotesOff();
+    updateTransportButtons();
+    setStatus("Stopped.");
+}
+
+void MidiBrowser::updateTransportButtons()
+{
+    pauseButton.setButtonText(auditionPaused ? "RESUME" : "PAUSE");
+    pauseButton.setEnabled(auditioning);
+    stopButton.setEnabled(auditioning || auditionPaused);
+    repaint();
 }
 
 void MidiBrowser::timerCallback()
 {
-    if (!auditioning)
+    if (!auditioning || auditionPaused)
         return;
 
-    const double elapsed = (juce::Time::getMillisecondCounterHiRes() - auditionStartMs) / 1000.0;
+    double elapsed = (juce::Time::getMillisecondCounterHiRes() - auditionStartMs) / 1000.0;
+
+    if (loopButton.getToggleState() && elapsed >= auditionLoopSeconds)
+    {
+        auditionStartMs += auditionLoopSeconds * 1000.0;
+        elapsed -= auditionLoopSeconds;
+        nextAuditionEvent = 0;
+    }
 
     while (nextAuditionEvent < static_cast<int>(auditionEvents.size())
            && auditionEvents[static_cast<size_t>(nextAuditionEvent)].timeSeconds <= elapsed)
@@ -647,10 +783,11 @@ void MidiBrowser::timerCallback()
         ++nextAuditionEvent;
     }
 
-    if (elapsed > auditionLengthSeconds)
+    if (!loopButton.getToggleState() && elapsed > auditionLengthSeconds)
     {
         auditioning = false;
         stopTimer();
+        updateTransportButtons();
         setStatus("Audition finished.");
     }
 }
@@ -672,7 +809,7 @@ juce::File MidiBrowser::exportSelected()
 
     if (remap.mappedNotes == 0)
     {
-        setStatus("No GM notes matched the current kit mapping.", true);
+        setStatus("No source-map notes matched the current kit mapping.", true);
         return {};
     }
 
@@ -803,10 +940,15 @@ void MidiBrowser::paint(juce::Graphics &g)
                juce::Justification::centredRight,
                false);
 
+    g.setColour(theme.inkSoft);
+    g.setFont(uiFont(8.5f).boldened());
+    g.drawText("SOURCE MAP", juce::Rectangle<int>(16, getHeight() - 71, 100, 12),
+               juce::Justification::centredLeft, false);
+
     g.setColour(statusIsWarning ? theme.warning : theme.inkSoft);
     g.setFont(uiFont(10.0f));
     g.drawFittedText(statusText,
-                     juce::Rectangle<int>(20, getHeight() - 31, getWidth() - 420, 16),
+                     juce::Rectangle<int>(20, getHeight() - 21, getWidth() - 40, 16),
                      juce::Justification::centredLeft,
                      1,
                      0.8f);
@@ -824,7 +966,7 @@ void MidiBrowser::resized()
     chooseButton.setBounds(getWidth() - 146 - 8 - 146, 12, 146, 28);
     rescanButton.setBounds(chooseButton.getX() - 8 - 86, 12, 86, 28);
 
-    auto columns = b.withTrimmedTop(68).withTrimmedBottom(74).reduced(16, 0);
+    auto columns = b.withTrimmedTop(68).withTrimmedBottom(100).reduced(16, 0);
     const int gap = 10;
     const int columnWidth = std::max(120, (columns.getWidth() - gap * 2) / 3);
 
@@ -834,10 +976,13 @@ void MidiBrowser::resized()
     columns.removeFromLeft(gap);
     loopColumn->setBounds(columns.removeFromLeft(columnWidth));
 
-    const int buttonY = getHeight() - 38;
-    auditionButton.setBounds(16, buttonY, 90, 26);
-    stopButton.setBounds(112, buttonY, 64, 26);
-    exportButton.setBounds(184, buttonY, 104, 26);
+    const int buttonY = getHeight() - 52;
+    sourceBox.setBounds(16, buttonY, 190, 28);
+    playButton.setBounds(214, buttonY, 60, 28);
+    pauseButton.setBounds(280, buttonY, 72, 28);
+    stopButton.setBounds(358, buttonY, 58, 28);
+    loopButton.setBounds(422, buttonY, 58, 28);
+    exportButton.setBounds(486, buttonY, 104, 28);
 }
 
 } // namespace glorp

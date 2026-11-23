@@ -49,6 +49,7 @@ class Settings
 
     // -- MIDI loop library -------------------------------------------------
     juce::String midiLibraryPath; ///< empty means <config>/midi_library
+    juce::String midiSourceProfile {"General MIDI (extended)"}; ///< source-library note map
 
     // -- editor ------------------------------------------------------------
     int editorWidth = 1180;

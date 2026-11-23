@@ -95,7 +95,10 @@ class MidiBrowser : public juce::Component, private juce::Timer
     void selectSong(int index);
     void selectLoop(int index);
     void auditionSelected();
+    void pauseAudition();
+    void resumeAudition();
     void stopAudition();
+    void updateTransportButtons();
     struct Remap
     {
         std::array<int, 128> instrument {{-1}};
@@ -123,8 +126,11 @@ class MidiBrowser : public juce::Component, private juce::Timer
     juce::TextButton chooseButton {"CHOOSE LIBRARY..."};
     juce::TextButton rescanButton {"RESCAN"};
     juce::TextButton closeButton {"BACK TO KIT"};
-    DragButton auditionButton {"AUDITION"};
+    juce::ComboBox sourceBox;
+    juce::TextButton playButton {"PLAY"};
+    juce::TextButton pauseButton {"PAUSE"};
     juce::TextButton stopButton {"STOP"};
+    juce::TextButton loopButton {"LOOP"};
     DragButton exportButton {"DRAG MIDI"};
 
     int selectedPack = -1;
@@ -144,7 +150,10 @@ class MidiBrowser : public juce::Component, private juce::Timer
     int nextAuditionEvent = 0;
     double auditionStartMs = 0.0;
     bool auditioning = false;
+    bool auditionPaused = false;
     double auditionLengthSeconds = 0.0;
+    double auditionLoopSeconds = 0.0;
+    double pausedAtSeconds = 0.0;
 
     juce::String statusText;
     bool statusIsWarning = false;
