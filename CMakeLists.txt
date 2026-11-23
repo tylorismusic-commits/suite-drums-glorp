@@ -151,6 +151,18 @@ string(REPLACE ";" "," GLORP_PLUGIN_FORMATS_STR "${GLORP_PLUGIN_FORMATS}")
 
 juce_generate_juce_header(GlorpDrums)
 
+if(GLORP_BUILD_LV2 AND NOT GLORP_IS_WINDOWS)
+    # JUCE only writes lv2:InstrumentPlugin when IS_SYNTH is true. We cannot set
+    # IS_SYNTH globally without changing VST3's auxiliary-output bus types, so
+    # patch the generated LV2 metadata after the manifest helper runs.
+    add_custom_command(TARGET GlorpDrums_LV2 POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DPLUGIN_TTL_DIR=$<TARGET_FILE_DIR:GlorpDrums_LV2>
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/mark_lv2_instrument.cmake"
+        COMMENT "Marking Suite Drums Glorp as an LV2 instrument"
+        VERBATIM)
+endif()
+
 #==================================================================================
 # Shared sources
 #==================================================================================
