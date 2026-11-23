@@ -62,22 +62,32 @@ juce::Image makeGlowImage(const juce::Image &src, juce::Colour glowColour = juce
 }
 const std::array<juce::Rectangle<float>, static_cast<size_t>(KitPiece::count)> &singleImageRegions()
 {
-    // Normalised hit regions on the bundled Drumstructor kit artwork. These are
-    // deliberately generous: the image itself is alpha-tested before a hit is
-    // accepted, so transparent pixels between pieces still fall through.
+    // Normalised ellipse bounds for the visible head/surface of each piece on
+    // the bundled Drumstructor artwork. These are used for both hit-testing and
+    // the hit rings, so a ring never wraps the shell or a stand.
     static const std::array<juce::Rectangle<float>, static_cast<size_t>(KitPiece::count)> regions {{
-        juce::Rectangle<float>(0.37f, 0.45f, 0.26f, 0.33f), // kick
-        juce::Rectangle<float>(0.22f, 0.38f, 0.24f, 0.22f), // snare
-        juce::Rectangle<float>(0.34f, 0.20f, 0.18f, 0.21f), // tom1
-        juce::Rectangle<float>(0.52f, 0.20f, 0.19f, 0.21f), // tom2
-        juce::Rectangle<float>(0.62f, 0.39f, 0.27f, 0.39f), // floor tom
-        juce::Rectangle<float>(0.02f, 0.16f, 0.26f, 0.14f), // hi-hat
-        juce::Rectangle<float>(0.72f, 0.21f, 0.26f, 0.15f), // ride
-        juce::Rectangle<float>(0.22f, 0.03f, 0.24f, 0.13f), // crash 1
-        juce::Rectangle<float>(0.58f, 0.03f, 0.29f, 0.13f), // crash 2
+        juce::Rectangle<float>(0.41f, 0.49f, 0.22f, 0.20f), // kick head
+        juce::Rectangle<float>(0.245f, 0.38f, 0.22f, 0.12f), // snare head
+        juce::Rectangle<float>(0.36f, 0.20f, 0.14f, 0.12f), // tom1 head
+        juce::Rectangle<float>(0.55f, 0.20f, 0.15f, 0.12f), // tom2 head
+        juce::Rectangle<float>(0.64f, 0.39f, 0.22f, 0.15f), // floor tom head
+        juce::Rectangle<float>(0.02f, 0.17f, 0.25f, 0.10f), // hi-hat surface
+        juce::Rectangle<float>(0.74f, 0.22f, 0.23f, 0.12f), // ride surface
+        juce::Rectangle<float>(0.24f, 0.045f, 0.22f, 0.10f), // crash 1 surface
+        juce::Rectangle<float>(0.60f, 0.045f, 0.24f, 0.10f), // crash 2 surface
     }};
 
     return regions;
+}
+
+bool ellipseContains(const juce::Rectangle<float> &bounds, juce::Point<float> point)
+{
+    if (bounds.getWidth() <= 0.0f || bounds.getHeight() <= 0.0f)
+        return false;
+
+    const auto dx = (point.x - bounds.getCentreX()) / (bounds.getWidth() * 0.5f);
+    const auto dy = (point.y - bounds.getCentreY()) / (bounds.getHeight() * 0.5f);
+    return dx * dx + dy * dy <= 1.0f;
 }
 } // namespace
 
@@ -782,7 +792,7 @@ KitPiece DrumKitView::pieceAt(juce::Point<float> pos) const
         for (const auto piece : order)
         {
             const auto &region = singlePieceBounds[static_cast<size_t>(piece)];
-            if (!region.contains(pos))
+            if (!ellipseContains(region, pos))
                 continue;
 
             const float u = juce::jlimit(0.0f, 1.0f, (pos.x - singleKitBounds.getX()) / singleKitBounds.getWidth());
@@ -1632,14 +1642,14 @@ void DrumKitView::paint(juce::Graphics &g)
                     const auto glow = region.expanded(region.getWidth() * 0.04f);
                     const auto alpha = juce::jlimit(0.0f, 1.0f, p.flash);
 
-                    g.setColour(hitGlowColour.withAlpha(alpha * 0.24f));
+                    g.setColour(hitGlowColour.withAlpha(alpha * 0.18f));
                     g.fillEllipse(glow);
 
-                    g.setColour(hitGlowColour.withAlpha(alpha * 0.90f));
-                    g.drawEllipse(glow, 1.5f + alpha * 2.5f);
+                    g.setColour(hitGlowColour.withAlpha(alpha * 0.95f));
+                    g.drawEllipse(glow, 1.2f + alpha * 1.8f);
 
-                    g.setColour(theme.ink.withAlpha(alpha * 0.55f));
-                    g.drawEllipse(glow.expanded(2.0f), 1.0f);
+                    g.setColour(theme.ink.withAlpha(alpha * 0.45f));
+                    g.drawEllipse(glow.expanded(1.5f), 0.8f);
                 }
 
                 if (i == static_cast<size_t>(hoveredPiece) && p.flash <= 0.001f)

@@ -1025,6 +1025,8 @@ void Editor::buildHeaderMenu()
             setViewMode(currentView == EditorView::mixerView ? EditorView::kitView : EditorView::mixerView);
     };
 
+    midiMapButton.onClick = [this] { setViewMode(EditorView::midiView); };
+
     auto showMenu = [this](juce::PopupMenu &m, juce::Component *target)
     {
         juce::PopupMenu::Options opts;

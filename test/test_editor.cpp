@@ -54,6 +54,72 @@ int main (int argc, char** argv)
 
     if (const auto* viewEnv = std::getenv ("GLORP_UI_VIEW"))
     {
+        if (juce::String (viewEnv).equalsIgnoreCase ("clickmidi"))
+        {
+            for (auto* child : pluginEditor->getChildren())
+            {
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                {
+                    for (auto* edChild : ed->getChildren())
+                    {
+                        if (auto* btn = dynamic_cast<juce::Button*> (edChild))
+                        {
+                            if (btn->getButtonText() == "MIDI MAP" || btn->getName() == "MIDI MAP")
+                            {
+                                if (btn->onClick)
+                                    btn->onClick();
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+
+            auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+            juce::File outFile ("test/docs/midi_click.png");
+            outFile.deleteFile();
+            juce::FileOutputStream fos (outFile);
+            if (fos.openedOk())
+            {
+                juce::PNGImageFormat png;
+                png.writeImageToStream (image, fos);
+                std::cout << "Saved MIDI click snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
+            }
+            return 0;
+        }
+
+        if (juce::String (viewEnv).equalsIgnoreCase ("hits"))
+        {
+            for (auto* child : pluginEditor->getChildren())
+            {
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                {
+                    for (auto* edChild : ed->getChildren())
+                    {
+                        if (auto* kv = dynamic_cast<glorp::DrumKitView*> (edChild))
+                        {
+                            for (int i = 0; i < static_cast<int> (glorp::KitPiece::count); ++i)
+                                kv->triggerHitForPiece (static_cast<glorp::KitPiece> (i), 1.0f);
+                        }
+                    }
+                    break;
+                }
+            }
+
+            auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+            juce::File outFile ("test/docs/hit_rings.png");
+            outFile.deleteFile();
+            juce::FileOutputStream fos (outFile);
+            if (fos.openedOk())
+            {
+                juce::PNGImageFormat png;
+                png.writeImageToStream (image, fos);
+                std::cout << "Saved hit rings snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
+            }
+            return 0;
+        }
+
         if (juce::String (viewEnv).equalsIgnoreCase ("midi"))
         {
             for (auto* child : pluginEditor->getChildren())
