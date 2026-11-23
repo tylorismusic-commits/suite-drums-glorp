@@ -127,6 +127,7 @@ class MidiBrowser : public juce::Component, private juce::Timer
     juce::TextButton rescanButton {"RESCAN"};
     juce::TextButton closeButton {"BACK TO KIT"};
     juce::ComboBox sourceBox;
+    juce::ComboBox speedBox;
     juce::TextButton playButton {"PLAY"};
     juce::TextButton pauseButton {"PAUSE"};
     juce::TextButton stopButton {"STOP"};
@@ -154,6 +155,7 @@ class MidiBrowser : public juce::Component, private juce::Timer
     double auditionLengthSeconds = 0.0;
     double auditionLoopSeconds = 0.0;
     double pausedAtSeconds = 0.0;
+    double playbackSpeed = 1.0;
 
     juce::String statusText;
     bool statusIsWarning = false;

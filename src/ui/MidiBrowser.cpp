@@ -192,6 +192,7 @@ MidiBrowser::MidiBrowser(PluginProcessor &processorIn) : processor(processorIn)
     addAndMakeVisible(rescanButton);
     addAndMakeVisible(closeButton);
     addAndMakeVisible(sourceBox);
+    addAndMakeVisible(speedBox);
     addAndMakeVisible(playButton);
     addAndMakeVisible(pauseButton);
     addAndMakeVisible(stopButton);
@@ -223,6 +224,20 @@ MidiBrowser::MidiBrowser(PluginProcessor &processorIn) : processor(processorIn)
         processor.getSettings().markDirty();
         processor.getSettings().saveIfChanged();
         setStatus("Source map: " + sourceBox.getText());
+    };
+
+    speedBox.addItem("0.5x", 1);
+    speedBox.addItem("1.0x", 2);
+    speedBox.addItem("2.0x", 3);
+    speedBox.setSelectedId(2, juce::dontSendNotification);
+    speedBox.onChange = [this]
+    {
+        const auto text = speedBox.getText();
+        playbackSpeed = text.startsWith("0.5") ? 0.5 : (text.startsWith("2") ? 2.0 : 1.0);
+        processor.getSettings().midiPreviewSpeed = playbackSpeed;
+        processor.getSettings().markDirty();
+        processor.getSettings().saveIfChanged();
+        setStatus("Speed: " + text);
     };
     exportButton.onClick = [this] { setStatus("Drag the DRAG MIDI button into your DAW."); };
     exportButton.onDragStart = [this](juce::Component *source) { startExportDrag(source); };
@@ -265,6 +280,12 @@ void MidiBrowser::setTheme(const Theme &newTheme)
     sourceBox.setColour(juce::ComboBox::outlineColourId, theme.panelEdge);
     sourceBox.setColour(juce::ComboBox::arrowColourId, theme.accent);
     sourceBox.setColour(juce::ComboBox::focusedOutlineColourId, theme.accent);
+
+    speedBox.setColour(juce::ComboBox::backgroundColourId, theme.panel);
+    speedBox.setColour(juce::ComboBox::textColourId, theme.ink);
+    speedBox.setColour(juce::ComboBox::outlineColourId, theme.panelEdge);
+    speedBox.setColour(juce::ComboBox::arrowColourId, theme.accent);
+    speedBox.setColour(juce::ComboBox::focusedOutlineColourId, theme.accent);
 
     repaint();
 }
@@ -316,6 +337,9 @@ void MidiBrowser::refreshLibrary()
         selectedSourceId = 1;
 
     sourceBox.setSelectedId(selectedSourceId, juce::dontSendNotification);
+
+    playbackSpeed = juce::jlimit(0.5, 2.0, processor.getSettings().midiPreviewSpeed);
+    speedBox.setSelectedId(playbackSpeed < 0.75 ? 1 : (playbackSpeed > 1.5 ? 3 : 2), juce::dontSendNotification);
 
     packs.clear();
     selectedPack = -1;
@@ -633,7 +657,8 @@ void MidiBrowser::auditionSelected()
 
     const double sourceBpm = fileBpm(midi);
     const double hostBpm = std::clamp(processor.getCurrentHostBpm(), 20.0, 300.0);
-    const double tempoScale = sourceBpm / hostBpm;
+    const double speed = std::clamp(playbackSpeed, 0.5, 2.0);
+    const double tempoScale = (sourceBpm / hostBpm) / speed;
 
     midi.convertTimestampTicksToSeconds();
 
@@ -710,7 +735,7 @@ void MidiBrowser::auditionSelected()
     startTimerHz(120);
     updateTransportButtons();
     setStatus("Playing " + selectedLoopFile.getFileName() + " at " + juce::String(hostBpm, 1)
-              + " BPM (source " + sourceBox.getText() + ")");
+              + " BPM, " + juce::String(speed, 1) + "x (source " + sourceBox.getText() + ")");
 }
 
 void MidiBrowser::pauseAudition()
@@ -826,7 +851,9 @@ juce::File MidiBrowser::exportSelected()
     output.setTicksPerQuarterNote(input.getTimeFormat() > 0 ? input.getTimeFormat() : 960);
 
     const double hostBpm = std::clamp(processor.getCurrentHostBpm(), 20.0, 300.0);
+    const double speed = std::clamp(playbackSpeed, 0.5, 2.0);
     const int microsecondsPerQuarter = juce::roundToInt(60000000.0 / hostBpm);
+    std::cout << "export speed=" << speed << " sourceBpm=" << fileBpm(input) << " hostBpm=" << hostBpm << std::endl;
     int exportedNotes = 0;
 
     for (int track = 0; track < input.getNumTracks(); ++track)
@@ -860,7 +887,10 @@ juce::File MidiBrowser::exportSelected()
                     ++exportedNotes;
                 }
 
-                outTrack.addEvent(message, eventPointer->message.getTimeStamp());
+                // MidiMessageSequence::addEvent adds the supplied offset to the
+                // message's existing timestamp, so clear it first.
+                message.setTimeStamp(0.0);
+                outTrack.addEvent(message, eventPointer->message.getTimeStamp() / speed);
             }
 
             outTrack.updateMatchedPairs();
@@ -932,7 +962,8 @@ void MidiBrowser::paint(juce::Graphics &g)
 
     g.setColour(theme.accent);
     g.setFont(uiFont(9.5f).boldened());
-    g.drawText("SYNC: " + juce::String(std::clamp(processor.getCurrentHostBpm(), 20.0, 300.0), 1) + " BPM",
+    g.drawText("SYNC: " + juce::String(std::clamp(processor.getCurrentHostBpm(), 20.0, 300.0), 1) + " BPM  |  "
+                   + juce::String(std::clamp(playbackSpeed, 0.5, 2.0), 1) + "x",
                getWidth() - 320,
                41,
                160,
@@ -943,6 +974,8 @@ void MidiBrowser::paint(juce::Graphics &g)
     g.setColour(theme.inkSoft);
     g.setFont(uiFont(8.5f).boldened());
     g.drawText("SOURCE MAP", juce::Rectangle<int>(16, getHeight() - 71, 100, 12),
+               juce::Justification::centredLeft, false);
+    g.drawText("SPEED", juce::Rectangle<int>(204, getHeight() - 71, 64, 12),
                juce::Justification::centredLeft, false);
 
     g.setColour(statusIsWarning ? theme.warning : theme.inkSoft);
@@ -977,12 +1010,13 @@ void MidiBrowser::resized()
     loopColumn->setBounds(columns.removeFromLeft(columnWidth));
 
     const int buttonY = getHeight() - 52;
-    sourceBox.setBounds(16, buttonY, 190, 28);
-    playButton.setBounds(214, buttonY, 60, 28);
-    pauseButton.setBounds(280, buttonY, 72, 28);
-    stopButton.setBounds(358, buttonY, 58, 28);
-    loopButton.setBounds(422, buttonY, 58, 28);
-    exportButton.setBounds(486, buttonY, 104, 28);
+    sourceBox.setBounds(16, buttonY, 180, 28);
+    speedBox.setBounds(204, buttonY, 64, 28);
+    playButton.setBounds(276, buttonY, 58, 28);
+    pauseButton.setBounds(342, buttonY, 68, 28);
+    stopButton.setBounds(418, buttonY, 56, 28);
+    loopButton.setBounds(482, buttonY, 56, 28);
+    exportButton.setBounds(546, buttonY, 104, 28);
 }
 
 } // namespace glorp
