@@ -428,27 +428,28 @@ std::vector<MapPreset> MidiMap::availablePresets()
           {40, "Rimshot"}, {41, "FloorTom"},  {42, "HihatClosed"}, {43, "LowFloorTom"}, {44, "HihatPedal"},
           {45, "Tom2"},    {46, "HihatOpen"}, {47, "Tom3"},        {48, "Tom1"},        {49, "Crash"},
           {50, "HighTom"}, {51, "Ride"},      {53, "RideBell"},    {54, "Tambourine"},  {55, "Splash"},
-          {56, "Cowbell"}, {57, "Crash2"},    {52, "China"}}},
+          {56, "Cowbell"}, {57, "Crash2"},    {52, "China"},       {59, "RideEdge"}}},
 
         {"Toontrack / EZdrummer",
-         {{36, "Kick"},          {35, "Kick"},          {38, "SnareHead"},     {40, "Rimshot"},    {37, "CrossStick"},
-          {42, "HihatClosed"},   {22, "HihatClosed"},   {44, "HihatPedal"},    {46, "HihatOpen"},  {26, "HihatSemiOpen"},
-          {48, "Tom1Head"},      {50, "Tom1Rim"},       {45, "Tom2Head"},      {47, "Tom2Rim"},    {43, "FTomHead"},
-          {41, "FTomHead"},      {58, "FTomRim"},       {49, "Crash1Bow"},     {55, "Crash1Edge"}, {57, "Crash2Bow"},
-          {52, "Crash2Edge"},    {51, "RideBow"},       {53, "RideBell"},      {59, "RideEdge"},   {54, "Tambourine"},
-          {56, "Cowbell"}}},
+         {{35, "Kick"},      {36, "Kick"},      {37, "SideStick"},   {38, "Snare"},       {39, "Clap"},
+          {40, "Rimshot"},   {41, "FloorTom"},  {42, "HihatClosed"}, {43, "LowFloorTom"}, {44, "HihatPedal"},
+          {45, "Tom2"},      {46, "HihatOpen"}, {47, "Tom3"},        {48, "Tom1"},        {49, "Crash"},
+          {50, "HighTom"},   {51, "Ride"},      {52, "China"},       {53, "RideBell"},    {54, "Tambourine"},
+          {55, "Splash"},    {56, "Cowbell"},   {57, "Crash2"},      {59, "RideEdge"}}},
 
         {"GetGood Drums",
-         {{36, "Kick"},          {35, "Kick"},          {38, "Snare"},         {40, "Rimshot"},    {37, "CrossStick"},
-          {42, "HihatClosed"},   {44, "HihatPedal"},    {46, "HihatOpen"},     {48, "Tom1"},       {50, "Tom1"},
-          {45, "Tom2"},          {47, "Tom2"},          {43, "FloorTom"},      {41, "FloorTom"},   {49, "Crash"},
-          {57, "Crash2"},        {51, "Ride"},          {53, "RideBell"},      {52, "China"},      {55, "Splash"}}},
+         {{35, "Kick"},      {36, "Kick"},      {37, "SideStick"},   {38, "Snare"},       {39, "Clap"},
+          {40, "Rimshot"},   {41, "FloorTom"},  {42, "HihatClosed"}, {43, "LowFloorTom"}, {44, "HihatPedal"},
+          {45, "Tom2"},      {46, "HihatOpen"}, {47, "Tom3"},        {48, "Tom1"},        {49, "Crash"},
+          {50, "HighTom"},   {51, "Ride"},      {52, "China"},       {53, "RideBell"},    {54, "Tambourine"},
+          {55, "Splash"},    {56, "Cowbell"},   {57, "Crash2"},      {59, "RideEdge"}}},
 
         {"Urgitone",
-         {{36, "Kick"},          {35, "Kick"},          {38, "Snare"},         {40, "Rimshot"},    {37, "CrossStick"},
-          {42, "HihatClosed"},   {44, "HihatPedal"},    {46, "HihatOpen"},     {48, "Tom1"},       {50, "Tom1Rim"},
-          {45, "Tom2"},          {47, "Tom2Rim"},       {43, "FloorTom"},      {41, "FloorTom"},   {49, "Crash"},
-          {57, "Crash2"},        {51, "Ride"},          {53, "RideBell"},      {52, "China"},      {55, "Splash"}}},
+         {{35, "Kick"},      {36, "Kick"},      {37, "SideStick"},   {38, "Snare"},       {39, "Clap"},
+          {40, "Rimshot"},   {41, "FloorTom"},  {42, "HihatClosed"}, {43, "LowFloorTom"}, {44, "HihatPedal"},
+          {45, "Tom2"},      {46, "HihatOpen"}, {47, "Tom3"},        {48, "Tom1"},        {49, "Crash"},
+          {50, "HighTom"},   {51, "Ride"},      {52, "China"},       {53, "RideBell"},    {54, "Tambourine"},
+          {55, "Splash"},    {56, "Cowbell"},   {57, "Crash2"},      {59, "RideEdge"}}},
 
         {"Roland V-Drums",
          {{36, "Kick"},          {35, "Kick"},          {38, "SnareHead"},     {40, "Rimshot"},   {37, "CrossStick"},
@@ -881,8 +882,35 @@ void MidiMap::applyPreset(const MapPreset &preset, const std::vector<juce::Strin
                     return static_cast<int>(i);
             }
         }
+        else if (targetStripped == "tom3" || targetStripped == "tom4" || targetStripped == "lowtom")
+        {
+            for (size_t i = 0; i < strippedNames.size(); ++i)
+            {
+                const auto &ns = strippedNames[i];
+                if ((ns.contains("tom3") || ns.contains("tom4")) && !ns.contains("rim"))
+                    return static_cast<int>(i);
+            }
+            for (size_t i = 0; i < strippedNames.size(); ++i)
+            {
+                const auto &ns = strippedNames[i];
+                if (ns.contains("tom2") && !ns.contains("rim"))
+                    return static_cast<int>(i);
+            }
+            for (size_t i = 0; i < strippedNames.size(); ++i)
+            {
+                const auto &ns = strippedNames[i];
+                if (ns.contains("tom1") && !ns.contains("rim"))
+                    return static_cast<int>(i);
+            }
+            for (size_t i = 0; i < strippedNames.size(); ++i)
+            {
+                const auto &ns = strippedNames[i];
+                if ((ns.contains("floor") || ns.contains("ftom")) && !ns.contains("rim"))
+                    return static_cast<int>(i);
+            }
+        }
         else if (targetStripped.contains("ftomhead") || targetStripped.contains("floortom")
-                 || targetStripped == "lowfloortom" || targetStripped == "ftom" || targetStripped == "tom3")
+                 || targetStripped == "lowfloortom" || targetStripped == "ftom")
         {
             for (size_t i = 0; i < strippedNames.size(); ++i)
             {
@@ -995,6 +1023,165 @@ void MidiMap::applyPreset(const MapPreset &preset, const std::vector<juce::Strin
         for (size_t i = 0; i < kitInstrumentNames.size(); ++i)
             if (kitInstrumentNames[i].toLowerCase().contains(lower))
                 return static_cast<int>(i);
+
+        // Closest-alternative fallbacks. These keep a source map playable when
+        // the kit lacks an exact articulation (e.g. no china, splash, tom 3).
+        auto findAny = [&](std::initializer_list<const char *> parts) -> int
+        {
+            for (const auto *part : parts)
+                for (size_t i = 0; i < strippedNames.size(); ++i)
+                    if (strippedNames[i].contains(part))
+                        return static_cast<int>(i);
+
+            return -1;
+        };
+
+        const bool wantsChina = targetStripped.contains("china");
+        const bool wantsSplash = targetStripped.contains("splash");
+        const bool wantsCrash = targetStripped.contains("crash");
+        const bool wantsRide = targetStripped.contains("ride");
+        const bool wantsHat = targetStripped.contains("hat") || targetStripped.contains("hh");
+        const bool wantsSnare = targetStripped.contains("snare");
+        const bool wantsKick = targetStripped.contains("kick") || targetStripped.contains("kdrum")
+                               || targetStripped.contains("bdrum") || targetStripped == "bd";
+        const bool wantsTom = targetStripped.contains("tom") || targetStripped.contains("racktom")
+                              || targetStripped.contains("floor");
+        const bool wantsPerc = targetStripped.contains("clap") || targetStripped.contains("tambourine")
+                               || targetStripped.contains("cowbell") || targetStripped.contains("shaker");
+        const bool wantsRim = targetStripped.contains("rim") || targetStripped.contains("click")
+                              || targetStripped.contains("sidestick") || targetStripped.contains("cross");
+
+        if (wantsChina)
+        {
+            if (const auto i = findAny({"crash2", "crashr", "rightcrash"}); i >= 0)
+                return i;
+            if (const auto i = findAny({"crash"}); i >= 0)
+                return i;
+            if (const auto i = findAny({"ride"}); i >= 0)
+                return i;
+        }
+
+        if (wantsSplash)
+        {
+            if (const auto i = findAny({"china"}); i >= 0)
+                return i;
+            if (const auto i = findAny({"crash"}); i >= 0)
+                return i;
+            if (const auto i = findAny({"ride"}); i >= 0)
+                return i;
+        }
+
+        if (wantsCrash)
+        {
+            if (const auto i = findAny({"china", "splash"}); i >= 0)
+                return i;
+            if (const auto i = findAny({"ride"}); i >= 0)
+                return i;
+        }
+
+        if (wantsRide)
+        {
+            if (const auto i = findAny({"crash", "china", "splash"}); i >= 0)
+                return i;
+        }
+
+        if (wantsHat)
+        {
+            if (targetStripped.contains("pedal") || targetStripped.contains("foot"))
+                if (const auto i = findAny({"closed", "hat"}); i >= 0)
+                    return i;
+            if (targetStripped.contains("open") || targetStripped.contains("semi"))
+                if (const auto i = findAny({"open", "semiopen", "hat"}); i >= 0)
+                    return i;
+            if (const auto i = findAny({"hihat", "hh"}); i >= 0)
+                return i;
+        }
+
+        if (wantsTom)
+        {
+            const bool floorTarget = targetStripped.contains("floor") || targetStripped.contains("ftom");
+            int tomNumber = 0;
+
+            for (const auto c : targetStripped)
+                if (c >= '1' && c <= '9')
+                {
+                    tomNumber = c - '0';
+                    break;
+                }
+
+            const auto findTom = [&](int number) -> int
+            {
+                const auto key = "tom" + std::to_string(number);
+
+                for (size_t i = 0; i < strippedNames.size(); ++i)
+                    if (strippedNames[i].contains(key) || strippedNames[i].contains("rack" + std::to_string(number)))
+                        return static_cast<int>(i);
+
+                return -1;
+            };
+
+            if (floorTarget)
+            {
+                for (const int n : {3, 2, 1, 4})
+                    if (const auto i = findTom(n); i >= 0)
+                        return i;
+                if (const auto i = findAny({"floor", "ftom"}); i >= 0)
+                    return i;
+            }
+            else
+            {
+                const int first = tomNumber > 0 ? tomNumber : 1;
+
+                for (int n = first; n >= 1; --n)
+                    if (const auto i = findTom(n); i >= 0)
+                        return i;
+
+                for (int n = first + 1; n <= 4; ++n)
+                    if (const auto i = findTom(n); i >= 0)
+                        return i;
+
+                if (const auto i = findAny({"floor", "ftom"}); i >= 0)
+                    return i;
+            }
+
+            if (const auto i = findAny({"tom"}); i >= 0)
+                return i;
+        }
+
+        if (wantsRim)
+        {
+            if (const auto i = findAny({"snare"}); i >= 0)
+                return i;
+        }
+
+        if (wantsSnare)
+        {
+            if (const auto i = findAny({"snare"}); i >= 0)
+                return i;
+            if (const auto i = findAny({"tom"}); i >= 0)
+                return i;
+        }
+
+        if (wantsKick)
+        {
+            if (const auto i = findAny({"kick", "kdrum", "bdrum"}); i >= 0)
+                return i;
+            if (const auto i = findAny({"floor", "ftom", "tom"}); i >= 0)
+                return i;
+        }
+
+        if (wantsPerc)
+        {
+            if (targetStripped.contains("clap") || targetStripped.contains("shaker"))
+                if (const auto i = findAny({"snare", "rim"}); i >= 0)
+                    return i;
+            if (targetStripped.contains("tambourine"))
+                if (const auto i = findAny({"hihat", "ride"}); i >= 0)
+                    return i;
+            if (targetStripped.contains("cowbell"))
+                if (const auto i = findAny({"bell", "ride", "hat"}); i >= 0)
+                    return i;
+        }
 
         return -1;
     };
