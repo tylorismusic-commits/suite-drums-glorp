@@ -80,6 +80,25 @@ const std::array<juce::Rectangle<float>, static_cast<size_t>(KitPiece::count)> &
     return regions;
 }
 
+const std::array<juce::Point<float>, static_cast<size_t>(KitPiece::count)> &singleImageHitPoints()
+{
+    // Where a stick/beater would actually contact each piece. These are
+    // independent of the clickable region, which stays generous.
+    static const std::array<juce::Point<float>, static_cast<size_t>(KitPiece::count)> points {{
+        juce::Point<float>(0.52f, 0.60f),  // kick head
+        juce::Point<float>(0.35f, 0.455f), // snare head
+        juce::Point<float>(0.43f, 0.27f),  // tom1 head
+        juce::Point<float>(0.625f, 0.27f), // tom2 head
+        juce::Point<float>(0.75f, 0.475f), // floor tom head
+        juce::Point<float>(0.14f, 0.235f), // hi-hat top
+        juce::Point<float>(0.79f, 0.315f), // ride bow
+        juce::Point<float>(0.33f, 0.10f),  // crash 1 bow
+        juce::Point<float>(0.71f, 0.10f),  // crash 2 bow
+    }};
+
+    return points;
+}
+
 bool ellipseContains(const juce::Rectangle<float> &bounds, juce::Point<float> point)
 {
     if (bounds.getWidth() <= 0.0f || bounds.getHeight() <= 0.0f)
@@ -1640,7 +1659,9 @@ void DrumKitView::paint(juce::Graphics &g)
                 if (p.flash > 0.001f)
                 {
                     const auto alpha = juce::jlimit(0.0f, 1.0f, p.flash);
-                    const auto centre = region.getCentre();
+                    const auto &hitPoint = singleImageHitPoints()[i];
+                    const auto centre = juce::Point<float>(singleKitBounds.getX() + hitPoint.x * singleKitBounds.getWidth(),
+                                                           singleKitBounds.getY() + hitPoint.y * singleKitBounds.getHeight());
                     const float radius = 3.2f + alpha * 2.0f;
 
                     g.setColour(juce::Colours::black.withAlpha(alpha * 0.92f));
