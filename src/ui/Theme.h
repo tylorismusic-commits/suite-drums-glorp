@@ -157,40 +157,27 @@ inline juce::Font displayFont(float height)
     return juce::Font(juce::FontOptions(size).withStyle("Bold"));
 }
 
-/** Draws the Suite Drums Glorp wordmark: an amber S badge plus the suite
-    name and instrument line. Kept here so every window brands itself the same way.
+/** Draws the Suite wordmark. A single Jost line keeps the header calm and
+    avoids the badge/subtitle stack competing with the kit selector.
 */
 inline void drawSuiteWordmark(juce::Graphics &g,
                               juce::Rectangle<float> area,
                               const Theme &t,
                               bool compact = false)
 {
-    const float badge = juce::jmin(area.getHeight(), compact ? 38.0f : 48.0f);
-    const auto badgeRect = area.removeFromLeft(badge).withSizeKeepingCentre(badge, badge);
-
-    g.setColour(t.accent);
-    g.fillRoundedRectangle(badgeRect, badge * 0.24f);
+    const float size = compact ? 23.0f : 28.0f;
 
     if (auto face = cleanDisplayTypeface())
-    {
-        g.setFont(juce::Font(juce::FontOptions(face).withHeight(badge * 0.64f)));
-        g.setColour(t.background);
-        g.drawText("S", badgeRect.translated(0.0f, -badge * 0.03f), juce::Justification::centred, false);
-    }
-
-    area.removeFromLeft(compact ? 8.0f : 11.0f);
-    auto textArea = area.withTrimmedTop(compact ? 4.0f : 6.0f);
-    const float nameH = compact ? 19.0f : 24.0f;
-
-    if (auto face = cleanDisplayTypeface())
-        g.setFont(juce::Font(juce::FontOptions(face).withHeight(nameH)));
+        g.setFont(juce::Font(juce::FontOptions(face).withHeight(size)));
+    else
+        g.setFont(displayFont(size));
 
     g.setColour(t.ink);
-    g.drawText("SUITE", textArea.removeFromTop(nameH + 1.0f), juce::Justification::centredLeft, false);
-
-    g.setFont(uiFont(compact ? 8.5f : 9.5f).boldened());
-    g.setColour(t.accent.withAlpha(0.95f));
-    g.drawText("DRUMS GLORP", textArea.removeFromTop(compact ? 13.0f : 15.0f), juce::Justification::centredLeft, false);
+    g.drawFittedText("SUITE DRUMS",
+                     area.toNearestInt(),
+                     juce::Justification::centredLeft,
+                     1,
+                     0.82f);
 }
 
 inline juce::Image imageFromMemory(const char *data, int size)
