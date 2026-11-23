@@ -448,7 +448,14 @@ std::vector<MapPreset> MidiMap::availablePresets()
           {59, "RideEdge"},      {52, "China"},         {74, "China"},         {55, "Splash"},
           {64, "Splash"}}},
 
-        {"Urgitone",
+        {"Ugritone",
+         {{35, "Kick"},      {36, "Kick"},      {37, "SideStick"},   {38, "Snare"},       {39, "Clap"},
+          {40, "Rimshot"},   {41, "FloorTom"},  {42, "HihatClosed"}, {43, "LowFloorTom"}, {44, "HihatPedal"},
+          {45, "Tom2"},      {46, "HihatOpen"}, {47, "Tom3"},        {48, "Tom1"},        {49, "Crash"},
+          {50, "HighTom"},   {51, "Ride"},      {52, "China"},       {53, "RideBell"},    {54, "Tambourine"},
+          {55, "Splash"},    {56, "Cowbell"},   {57, "Crash2"},      {59, "RideEdge"}}},
+
+        {"Ugritone KVLT (native)",
          {{36, "Kick"},       {38, "Snare"},       {41, "FloorTom"},    {43, "Tom4"},
           {45, "Tom3"},      {47, "Tom2"},        {48, "Tom1"},        {32, "HihatOpen"},
           {42, "HihatClosed"}, {44, "HihatPedal"}, {46, "HihatOpen"},   {49, "Crash1"},
