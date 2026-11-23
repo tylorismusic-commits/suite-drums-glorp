@@ -1639,23 +1639,15 @@ void DrumKitView::paint(juce::Graphics &g)
 
                 if (p.flash > 0.001f)
                 {
-                    const auto glow = region.expanded(region.getWidth() * 0.04f);
                     const auto alpha = juce::jlimit(0.0f, 1.0f, p.flash);
+                    const auto centre = region.getCentre();
+                    const float radius = 3.2f + alpha * 2.0f;
 
-                    g.setColour(hitGlowColour.withAlpha(alpha * 0.18f));
-                    g.fillEllipse(glow);
+                    g.setColour(juce::Colours::black.withAlpha(alpha * 0.92f));
+                    g.fillEllipse(centre.x - radius, centre.y - radius, radius * 2.0f, radius * 2.0f);
 
-                    g.setColour(hitGlowColour.withAlpha(alpha * 0.95f));
-                    g.drawEllipse(glow, 1.2f + alpha * 1.8f);
-
-                    g.setColour(theme.ink.withAlpha(alpha * 0.45f));
-                    g.drawEllipse(glow.expanded(1.5f), 0.8f);
-                }
-
-                if (i == static_cast<size_t>(hoveredPiece) && p.flash <= 0.001f)
-                {
-                    g.setColour(theme.ink.withAlpha(0.35f));
-                    g.drawEllipse(region.expanded(3.0f), 1.2f);
+                    g.setColour(juce::Colours::white.withAlpha(alpha * 0.45f));
+                    g.drawEllipse(centre.x - radius, centre.y - radius, radius * 2.0f, radius * 2.0f, 0.8f);
                 }
             }
         }
