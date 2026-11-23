@@ -41,7 +41,8 @@ chmod +x "${STAGE}/bin/SuiteKitStudio"
 cp "${ROOT}/README.md" "${ROOT}/LICENSE" "${ROOT}/NOTICE.md" "${STAGE}/"
 cp "${ROOT}/docs/screenshot.png" "${ROOT}/docs/mixer_view.png" \
    "${ROOT}/docs/mixer_fx.png" "${ROOT}/docs/edrum_wizard.png" \
-   "${ROOT}/docs/kit_editor.png" "${ROOT}/docs/index.html" "${STAGE}/docs/"
+   "${ROOT}/docs/kit_editor.png" "${ROOT}/docs/midi_page.png" \
+   "${ROOT}/docs/index.html" "${STAGE}/docs/"
 cp "${ROOT}/assets/suite_drums_icon.png" "${ROOT}/assets/suite_kit_studio_icon.png" "${STAGE}/icons/"
 
 # Starter kit: real DrumGizmo folder kit, not the LFS pointer archive.
