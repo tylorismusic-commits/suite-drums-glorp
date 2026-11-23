@@ -92,6 +92,18 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_NAMES") != nullptr)
+    {
+        for (const int note : {36, 38, 42, 46, 48, 49, 51, 52, 53, 55, 57})
+        {
+            if (const auto name = proc.getNameForMidiNoteNumber (note, 1))
+                std::cout << "name " << note << " = " << name->toStdString() << std::endl;
+            else
+                std::cout << "name " << note << " = <none>" << std::endl;
+        }
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_REMAP") != nullptr)
     {
         std::vector<juce::String> names;

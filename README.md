@@ -17,6 +17,7 @@
 - **Mixer** with per-mic channels, solo/mute, mono/stereo switching, stems and master bus.
 - **Channel FX**: 3-band EQ, VCA compressor, tape saturation and transient shaper.
 - **MIDI mapping page**: up to three notes per hit, per-slot MIDI learn and an eight-point velocity curve editor.
+- **Piano-roll note names**: VST3 hosts show the current kit's drum names on mapped note keys.
 - **MIDI loop browser**: PACK / SONG / LOOP columns, double-click audition, play/pause/stop, loop repeat, host-tempo sync, 0.5x/1x/2x preview-and-export speed, source-map translation (General MIDI, Toontrack, GGD Groove Player, Ugritone GM, Ugritone KVLT and saved presets), closest-alternative fallbacks when a kit lacks a piece, and drag-and-drop MIDI export into the DAW.
 - **E-drum support**: CC#4 continuous hi-hat, cymbal chokes, note mapping and calibration wizard.
 - **Multi-mic bleed matrix** for acoustic leakage between close mics, overheads, room and PZM channels.

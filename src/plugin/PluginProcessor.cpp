@@ -12,6 +12,27 @@ namespace glorp
 {
 
 //==============================================================================
+std::optional<juce::String> PluginProcessor::getNameForMidiNoteNumber(int note, int midiChannel)
+{
+    juce::ignoreUnused(midiChannel);
+
+    if (note < 0 || note > 127)
+        return std::nullopt;
+
+    const int instrument = getMidiMap().instrumentForNote(note);
+
+    if (instrument < 0 || instrument >= audioEngine.getSampler().numInstruments())
+        return std::nullopt;
+
+    auto name = audioEngine.getSampler().instrumentName(instrument);
+
+    if (name.isEmpty())
+        return std::nullopt;
+
+    return name;
+}
+
+//==============================================================================
 juce::AudioProcessor::BusesProperties PluginProcessor::createBusesProperties()
 {
     BusesProperties bp;

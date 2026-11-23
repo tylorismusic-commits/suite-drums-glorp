@@ -56,6 +56,9 @@ class PluginProcessor : public juce::AudioProcessor
 
     void processBlock(juce::AudioBuffer<float> &, juce::MidiBuffer &) override;
 
+    /// VST3 hosts use these names for the piano-roll keys.
+    std::optional<juce::String> getNameForMidiNoteNumber(int note, int midiChannel) override;
+
     juce::AudioProcessorEditor *createEditor() override;
     bool hasEditor() const override { return true; }
 
