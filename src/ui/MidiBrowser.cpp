@@ -96,6 +96,21 @@ class MidiBrowser::Column : public juce::Component, private juce::ListBoxModel
         list.deselectAllRows();
     }
 
+    int getSelectedRow() const { return list.getSelectedRow(); }
+
+    void selectRow(int row)
+    {
+        if (row < 0 || row >= items.size())
+            return;
+
+        suppressCallback = true;
+        list.selectRow(row);
+        suppressCallback = false;
+
+        if (onSelectionChanged)
+            onSelectionChanged(row);
+    }
+
     int getNumRows() override { return items.size(); }
 
     void paintListBoxItem(int row, juce::Graphics &g, int width, int height, bool rowIsSelected) override
@@ -200,7 +215,7 @@ MidiBrowser::MidiBrowser(PluginProcessor &processorIn) : processor(processorIn)
     addAndMakeVisible(exportButton);
 
     chooseButton.onClick = [this] { chooseLibrary(); };
-    rescanButton.onClick = [this] { refreshLibrary(); };
+    rescanButton.onClick = [this] { refreshLibrary(true, true); };
     closeButton.onClick = [this]
     {
         stopAudition();
@@ -300,9 +315,20 @@ juce::File MidiBrowser::libraryRoot() const
     return settings.getConfigDirectory().getChildFile("midi_library");
 }
 
-void MidiBrowser::refreshLibrary()
+void MidiBrowser::refreshLibrary(bool preserveSelection, bool stopPlayback)
 {
-    stopAudition();
+    if (stopPlayback)
+        stopAudition();
+
+    const juce::String previousPack =
+        selectedPack >= 0 && selectedPack < static_cast<int>(packs.size()) ? packs[static_cast<size_t>(selectedPack)].name : juce::String();
+    const juce::String previousSong =
+        selectedPack >= 0 && selectedPack < static_cast<int>(packs.size())
+                && selectedSong >= 0 && selectedSong < static_cast<int>(packs[static_cast<size_t>(selectedPack)].songs.size())
+            ? packs[static_cast<size_t>(selectedPack)].songs[static_cast<size_t>(selectedSong)].name
+            : juce::String();
+    const juce::String previousLoop = selectedLoopFile.getFileNameWithoutExtension();
+
     root = libraryRoot();
     root.createDirectory();
 
@@ -442,12 +468,67 @@ void MidiBrowser::refreshLibrary()
     else
     {
         packColumn->setItems(packNames);
+
+        if (preserveSelection && previousPack.isNotEmpty())
+        {
+            for (int i = 0; i < static_cast<int>(packs.size()); ++i)
+            {
+                if (packs[static_cast<size_t>(i)].name == previousPack)
+                {
+                    packColumn->selectRow(i);
+                    break;
+                }
+            }
+
+            if (previousSong.isNotEmpty() && selectedPack >= 0
+                && selectedPack < static_cast<int>(packs.size()))
+            {
+                const auto &songs = packs[static_cast<size_t>(selectedPack)].songs;
+
+                for (int i = 0; i < static_cast<int>(songs.size()); ++i)
+                {
+                    if (songs[static_cast<size_t>(i)].name == previousSong)
+                    {
+                        songColumn->selectRow(i);
+                        break;
+                    }
+                }
+
+                if (previousLoop.isNotEmpty() && selectedSong >= 0
+                    && selectedSong < static_cast<int>(songs.size()))
+                {
+                    const auto &loops = songs[static_cast<size_t>(selectedSong)].loops;
+
+                    for (int i = 0; i < static_cast<int>(loops.size()); ++i)
+                    {
+                        if (loops[static_cast<size_t>(i)].getFileNameWithoutExtension() == previousLoop)
+                        {
+                            loopColumn->selectRow(i);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if (packs.empty())
         setStatus("No MIDI packs found in " + root.getFullPathName() + ". Use CHOOSE LIBRARY.", true);
     else
         setStatus("Library: " + root.getFullPathName());
+}
+
+void MidiBrowser::refreshIfNeeded()
+{
+    const auto desiredRoot = libraryRoot();
+
+    if (packs.empty() || root != desiredRoot)
+    {
+        refreshLibrary(false, false);
+        return;
+    }
+
+    repaint();
 }
 
 void MidiBrowser::chooseLibrary()
@@ -468,7 +549,7 @@ void MidiBrowser::chooseLibrary()
                                  safeThis->processor.getSettings().midiLibraryPath = result.getFullPathName();
                                  safeThis->processor.getSettings().markDirty();
                                  safeThis->processor.getSettings().saveIfChanged();
-                                 safeThis->refreshLibrary();
+                                 safeThis->refreshLibrary(false, true);
                              }
                          });
 }

@@ -826,6 +826,7 @@ void Editor::applyTheme(const Theme &newTheme)
     viewToggleButton.setTheme(theme);
     midiMapButton.setTheme(theme);
     loopsButton.setTheme(theme);
+    stopLoopButton.setTheme(theme);
     fileButton.setTheme(theme);
     presetsButton.setTheme(theme);
     midiButton.setTheme(theme);
@@ -896,7 +897,7 @@ void Editor::applyTextScale(float newScale)
     if (midiPage != nullptr)
         midiPage->refresh();
     if (midiBrowser != nullptr)
-        midiBrowser->refreshLibrary();
+        midiBrowser->refreshIfNeeded();
     if (edrumWizard != nullptr)
         edrumWizard->repaint();
 
@@ -920,6 +921,7 @@ void Editor::refreshHeaderButtonLabels()
     homeTabButton.setVisible(theme.minimalStyle);
     midiMapButton.setActive(isMidi);
     loopsButton.setActive(isLoops);
+    stopLoopButton.setActive(midiBrowser != nullptr && midiBrowser->isAuditioning());
 
     if (theme.minimalStyle)
     {
@@ -992,7 +994,7 @@ void Editor::setViewMode(EditorView mode)
     {
         midiBrowser->setVisible(isLoops);
         if (isLoops)
-            midiBrowser->refreshLibrary();
+            midiBrowser->refreshIfNeeded();
     }
 
     resized();
@@ -1054,6 +1056,7 @@ void Editor::buildHeaderMenu()
     addAndMakeVisible(viewToggleButton);
     addAndMakeVisible(midiMapButton);
     addAndMakeVisible(loopsButton);
+    addAndMakeVisible(stopLoopButton);
     addAndMakeVisible(fileButton);
     addAndMakeVisible(presetsButton);
     addAndMakeVisible(midiButton);
@@ -1071,6 +1074,13 @@ void Editor::buildHeaderMenu()
 
     midiMapButton.onClick = [this] { setViewMode(EditorView::midiView); };
     loopsButton.onClick = [this] { setViewMode(EditorView::loopsView); };
+    stopLoopButton.onClick = [this]
+    {
+        if (midiBrowser != nullptr)
+            midiBrowser->stopAudition();
+
+        stopLoopButton.setActive(false);
+    };
 
     auto showMenu = [this](juce::PopupMenu &m, juce::Component *target)
     {
@@ -2172,6 +2182,13 @@ void Editor::parametersChanged()
 //==============================================================================
 void Editor::timerCallback()
 {
+    if (midiBrowser != nullptr)
+    {
+        const bool playing = midiBrowser->isAuditioning();
+        if (stopLoopButton.getActive() != playing)
+            stopLoopButton.setActive(playing);
+    }
+
     if (!windowIconApplied)
     {
         if (auto *top = getTopLevelComponent())
@@ -2434,6 +2451,7 @@ void Editor::resized()
     const int viewW = juce::roundToInt(104.0f * hdrScale);
     const int midiMapW = juce::roundToInt(88.0f * hdrScale);
     const int loopsW = juce::roundToInt(66.0f * hdrScale);
+    const int stopW = juce::roundToInt(52.0f * hdrScale);
     const int fileW = juce::roundToInt(50.0f * hdrScale);
     const int presetsW = juce::roundToInt(80.0f * hdrScale);
     const int midiW = juce::roundToInt(50.0f * hdrScale);
@@ -2441,14 +2459,16 @@ void Editor::resized()
     const int gap = 8;
 
     const int totalMenuW =
-        viewW + gap + midiMapW + gap + loopsW + gap + fileW + gap + presetsW + gap + midiW + gap + settingsW;
-    int curX = std::max(256, w - 24 - totalMenuW);
+        viewW + gap + midiMapW + gap + loopsW + gap + stopW + gap + fileW + gap + presetsW + gap + midiW + gap + settingsW;
+    int curX = std::max(252, w - 24 - totalMenuW);
     viewToggleButton.setBounds(curX, menuY, viewW, menuH);
     curX += viewW + gap;
     midiMapButton.setBounds(curX, menuY, midiMapW, menuH);
     curX += midiMapW + gap;
     loopsButton.setBounds(curX, menuY, loopsW, menuH);
     curX += loopsW + gap;
+    stopLoopButton.setBounds(curX, menuY, stopW, menuH);
+    curX += stopW + gap;
     fileButton.setBounds(curX, menuY, fileW, menuH);
     curX += fileW + gap;
     presetsButton.setBounds(curX, menuY, presetsW, menuH);

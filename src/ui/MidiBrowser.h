@@ -27,7 +27,10 @@ class MidiBrowser : public juce::Component, private juce::Timer
     ~MidiBrowser() override;
 
     void setTheme(const Theme &theme);
-    void refreshLibrary();
+    void refreshLibrary(bool preserveSelection = true, bool stopPlayback = true);
+    void refreshIfNeeded();
+    void stopAudition();
+    bool isAuditioning() const noexcept { return auditioning; }
     void paint(juce::Graphics &g) override;
     void resized() override;
 
@@ -97,7 +100,6 @@ class MidiBrowser : public juce::Component, private juce::Timer
     void auditionSelected();
     void pauseAudition();
     void resumeAudition();
-    void stopAudition();
     void updateTransportButtons();
     struct Remap
     {

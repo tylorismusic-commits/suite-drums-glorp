@@ -299,6 +299,7 @@ class Editor
     MenuButton viewToggleButton {"MIXER VIEW"};
     MenuButton midiMapButton {"MIDI MAP"};
     MenuButton loopsButton {"LOOPS"};
+    MenuButton stopLoopButton {"STOP"};
     MenuButton fileButton {"FILE"};
     MenuButton presetsButton {"PRESETS"};
     MenuButton midiButton {"MIDI"};
