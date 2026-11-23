@@ -2375,19 +2375,28 @@ void MixerView::resized()
 
     const float stripW = 86.0f;
     const float containerW = std::max(viewW, static_cast<float>(channelStrips.size()) * (stripW + 4.0f) + 12.0f);
-    channelContainer->setBounds(0, 0, static_cast<int>(containerW), static_cast<int>(contentH));
+
+    // The horizontal scrollbar lives inside the viewport, so strips drawn at
+    // the full viewport height lose their bottom edge underneath it. Reserve
+    // the bar's thickness whenever the channel row actually overflows.
+    const bool needsHorizontalScroll = containerW > viewW + 0.5f;
+    const float stripH = contentH - (needsHorizontalScroll
+                                          ? static_cast<float>(channelViewport.getScrollBarThickness())
+                                          : 0.0f);
+
+    channelContainer->setBounds(0, 0, static_cast<int>(containerW), static_cast<int>(stripH));
 
     float curX = 4.0f;
     for (auto &s : channelStrips)
     {
-        s->setBounds(static_cast<int>(curX), 0, static_cast<int>(stripW), static_cast<int>(contentH));
+        s->setBounds(static_cast<int>(curX), 0, static_cast<int>(stripW), static_cast<int>(stripH));
         curX += stripW + 4.0f;
     }
 
     masterStrip->setBounds(static_cast<int>(r.getWidth() - masterW - 8.0f),
                            static_cast<int>(contentY),
                            static_cast<int>(masterW),
-                           static_cast<int>(contentH));
+                           static_cast<int>(stripH));
 
     if (channelFXPopup != nullptr)
         channelFXPopup->setBounds(50, 40, std::min(480, getWidth() - 100), 270);

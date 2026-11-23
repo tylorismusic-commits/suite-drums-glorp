@@ -89,6 +89,30 @@ int main (int argc, char** argv)
             return 0;
         }
 
+        if (juce::String (viewEnv).equalsIgnoreCase ("mixer"))
+        {
+            for (auto* child : pluginEditor->getChildren())
+            {
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                {
+                    ed->setViewMode (glorp::Editor::EditorView::mixerView);
+                    break;
+                }
+            }
+
+            auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+            juce::File outFile ("test/docs/mixer_scroll.png");
+            outFile.deleteFile();
+            juce::FileOutputStream fos (outFile);
+            if (fos.openedOk())
+            {
+                juce::PNGImageFormat png;
+                png.writeImageToStream (image, fos);
+                std::cout << "Saved mixer snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
+            }
+            return 0;
+        }
+
         if (juce::String (viewEnv).equalsIgnoreCase ("hits"))
         {
             for (auto* child : pluginEditor->getChildren())
