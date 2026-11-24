@@ -92,6 +92,45 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_HITS") != nullptr)
+    {
+        proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+
+        for (int vel : { 30, 60, 90, 110, 127 })
+        {
+            juce::MidiBuffer midi;
+            midi.addEvent (juce::MidiMessage::noteOn (1, 38, static_cast<juce::uint8> (vel)), 0);
+
+            float peak = 0.0f;
+            double sum = 0.0;
+            int count = 0;
+
+            for (int block = 0; block < 180; ++block)
+            {
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+                midi.clear();
+
+                for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+                {
+                    const auto* d = buffer.getReadPointer (ch);
+                    for (int i = 0; i < buffer.getNumSamples(); ++i)
+                    {
+                        peak = std::max (peak, std::abs (d[i]));
+                        sum += static_cast<double> (d[i]) * d[i];
+                        ++count;
+                    }
+                }
+            }
+
+            const auto rms = std::sqrt (sum / std::max (1, count));
+            std::cout << "vel=" << vel << " peak=" << peak << " peakDb=" << juce::Decibels::gainToDecibels (peak)
+                      << " rmsDb=" << juce::Decibels::gainToDecibels (static_cast<float> (rms)) << std::endl;
+        }
+        return 0;
+    }
+
     if (const auto* presetName = std::getenv ("GLORP_PROBE_PRESET"))
     {
         std::vector<juce::String> names;

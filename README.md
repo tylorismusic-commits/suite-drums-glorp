@@ -14,6 +14,7 @@
 - **One Suite theme**: dark charcoal, amber accent, Jost ExtraBold display type.
 - **Kit view** with zones, velocity layers, round-robin, drum-hit animation and MIDI activity ribbon.
 - **Per-piece controls** for level, pan, pitch and dynamic response.
+- **Full-range velocity selection**: hits are chosen across each kit's recorded power range, so normal-velocity snare hits no longer fall back to ghost-note samples.
 - **Mixer** with per-mic channels, solo/mute, mono/stereo switching, per-mic stems, linked instrument/mixer bus routing, master bus and kit-adaptive presets. Every stock preset keeps kick and trigger mics mono, controls cymbals and pushes kick/snare forward so drums sit in a mix.
 - **Channel FX**: 3-band EQ, VCA compressor, tape saturation and transient shaper.
 - **MIDI mapping page**: up to three notes per hit, per-slot MIDI learn and an eight-point velocity curve editor.

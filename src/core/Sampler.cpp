@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace glorp
 {
@@ -711,6 +712,26 @@ void Sampler::resolveInstrumentChannels(const DrumKit &kit, const Instrument &in
         if (!hit.channels.empty() && hit.numFrames > 0)
             out.hits.push_back(std::move(hit));
     }
+
+    // DrumGizmo kit builders store raw recorded power, not a 0..1 value.
+    // Cache the instrument's range so velocity selection can use the whole kit.
+    if (!out.hits.empty())
+    {
+        out.minPower = out.hits.front().power;
+        out.maxPower = out.hits.front().power;
+
+        for (const auto &hit : out.hits)
+        {
+            out.minPower = std::min(out.minPower, hit.power);
+            out.maxPower = std::max(out.maxPower, hit.power);
+        }
+
+        if (!(out.maxPower > out.minPower))
+        {
+            out.minPower = 0.0f;
+            out.maxPower = 1.0f;
+        }
+    }
 }
 
 //==============================================================================
@@ -765,36 +786,21 @@ int Sampler::chooseHit(int instrumentIndex, float velocity)
 
     const float vel = std::clamp(velocity, 0.05f, 1.0f);
 
-    // If hit at full velocity (mouse click or velocity >= 0.96), choose from top-power bracket
-    if (vel >= 0.96f)
-    {
-        float maxPower = 0.0f;
-        for (const auto &h : hits)
-            maxPower = std::max(maxPower, h.power);
+    // Kits store raw recorded power (Muldjord snare: 0.3..46.6, Crocell:
+    // 0.01..3.3), not a 0..1 value. Map velocity onto the instrument's own
+    // power range and pick a hit near that target. Comparing raw power to
+    // the 0..1 velocity used to land almost every normal hit on a ghost-note
+    // sample, which is what makes a snare randomly sound like a dud.
+    const auto &runtime = instruments_[static_cast<size_t>(instrumentIndex)];
+    const float powerRange = std::max(1.0e-6f, runtime.maxPower - runtime.minPower);
+    const float targetPower = runtime.minPower + vel * powerRange;
 
-        std::vector<int> topCandidates;
-        for (int i = 0; i < numHits; ++i)
-        {
-            if (hits[static_cast<size_t>(i)].power >= maxPower * 0.88f)
-                topCandidates.push_back(i);
-        }
-
-        if (!topCandidates.empty())
-        {
-            auto &cursor = roundRobinCursor[static_cast<size_t>(instrumentIndex)];
-            const auto chosen = topCandidates[static_cast<size_t>(cursor % static_cast<int>(topCandidates.size()))];
-            cursor = (cursor + 1) % 10000;
-            return chosen;
-        }
-    }
-
-    // Velocity-aware matching: pick from samples whose recorded power is close to velocity
-    float minDiff = 1000.0f;
+    float minDiff = std::numeric_limits<float>::max();
     int closestIdx = 0;
 
     for (int i = 0; i < numHits; ++i)
     {
-        const float diff = std::abs(hits[static_cast<size_t>(i)].power - vel);
+        const float diff = std::abs(hits[static_cast<size_t>(i)].power - targetPower);
         if (diff < minDiff)
         {
             minDiff = diff;
@@ -802,17 +808,32 @@ int Sampler::chooseHit(int instrumentIndex, float velocity)
         }
     }
 
-    // Collect candidates within a proportional power window around closest
+    // Keep the round-robin pool close to the target so neighbouring hits vary
+    // in sample choice without jumping to ghost notes or dropping loudness.
     std::vector<int> candidates;
-    const float margin = std::max(0.12f, minDiff * 1.5f);
+    const float margin = powerRange * 0.08f;
     for (int i = 0; i < numHits; ++i)
     {
-        if (std::abs(hits[static_cast<size_t>(i)].power - vel) <= margin)
+        if (std::abs(hits[static_cast<size_t>(i)].power - targetPower) <= margin)
             candidates.push_back(i);
     }
 
     if (candidates.empty())
-        candidates.push_back(closestIdx);
+    {
+        // Kits without meaningful power values (all hits share the same
+        // power) still need to round-robin instead of sticking on hit 0.
+        const float closestPower = hits[static_cast<size_t>(closestIdx)].power;
+        const float epsilon = 1.0e-4f * std::max(1.0f, std::abs(closestPower));
+
+        for (int i = 0; i < numHits; ++i)
+        {
+            if (std::abs(hits[static_cast<size_t>(i)].power - closestPower) <= epsilon)
+                candidates.push_back(i);
+        }
+
+        if (candidates.empty())
+            candidates.push_back(closestIdx);
+    }
 
     auto &cursor = roundRobinCursor[static_cast<size_t>(instrumentIndex)];
     const auto chosen = candidates[static_cast<size_t>(cursor % static_cast<int>(candidates.size()))];

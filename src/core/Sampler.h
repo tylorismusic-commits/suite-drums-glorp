@@ -265,6 +265,11 @@ class Sampler
         juce::String name;
         BleedPiece piece = BleedPiece::snare;
         std::vector<ChokeTarget> chokeTargets;
+        /// DrumGizmo `power` values are absolute recordings, not 0..1, and
+        /// vary wildly between kits. Normalise against this range so MIDI
+        /// velocity maps to the full sample set instead of only the ghost notes.
+        float minPower = 0.0f;
+        float maxPower = 1.0f;
     };
 
     /// Audio-thread-visible copy of InstrumentParams.

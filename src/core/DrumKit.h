@@ -42,8 +42,9 @@ struct AudioFileRef
 };
 
 /** One round of an instrument's samples, e.g. "Snare-1" of "Snare-1..5".
-    The `power` attribute is DrumGizmo's relative hit strength, used to weight
-    round-robin "AUTO" selection.
+    The `power` attribute is DrumGizmo's raw recorded hit strength. It is not
+    normalised to 0..1 (Muldjord's snare spans 0.3..46.6), so sample selection
+    maps velocity onto the instrument's own min/max power range.
 */
 struct SampleHit
 {
