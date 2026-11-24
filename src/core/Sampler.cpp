@@ -871,6 +871,13 @@ void Sampler::noteOn(int instrument, int note, float velocity, int64_t timeInSam
 
         if (isVariableHiHatHit)
         {
+            struct CrossfadeScope
+            {
+                int64_t &slot;
+                CrossfadeScope(int64_t &s, int64_t value) : slot(s) { slot = value; }
+                ~CrossfadeScope() { slot = -1; }
+            } crossfadeScope(hiHatCrossfadeStart, timeInSamples);
+
             const float pedal = std::clamp(hiHatPedal.load(std::memory_order_relaxed), 0.0f, 1.0f);
             const bool wantsEdge = (instrument == hiHat.openEdge || instrument == hiHat.closedEdge);
 
@@ -1048,9 +1055,11 @@ void Sampler::triggerVoice(int instrument, int note, float velocity, int64_t tim
     }
     else if (isHiHatClosed)
     {
-        // Striking a closed hat stops any ringing open hat. Leave voices from
-        // the same sample clock alone so a CC4 open/closed crossfade survives.
-        chokeOpenHiHats(20, timeInSamples, timeInSamples);
+        // Striking a closed hat stops any ringing open hat. Only skip voices
+        // from the same clock while a CC4 open/closed crossfade is being built;
+        // a separate closed note at the same timestamp must still choke.
+        const int64_t skipStartedAt = (timeInSamples == hiHatCrossfadeStart) ? timeInSamples : -1;
+        chokeOpenHiHats(20, timeInSamples, skipStartedAt);
     }
 
     auto *voice = allocateVoice();

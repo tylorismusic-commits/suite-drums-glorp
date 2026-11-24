@@ -92,6 +92,66 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_HHCHOKE_MIDI") != nullptr)
+    {
+        proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+        const bool sameBlock = std::getenv ("GLORP_HHCHOKE_SAME") != nullptr;
+
+        std::cout << "note42=" << (proc.getNameForMidiNoteNumber (42, 1) ? proc.getNameForMidiNoteNumber (42, 1)->toStdString() : "<none>")
+                  << " note46=" << (proc.getNameForMidiNoteNumber (46, 1) ? proc.getNameForMidiNoteNumber (46, 1)->toStdString() : "<none>")
+                  << " sameBlock=" << (sameBlock ? 1 : 0) << std::endl;
+
+        auto renderTail = [&] (bool addClosed)
+        {
+            proc.getSampler().allNotesOff();
+
+            double tailSum = 0.0;
+            int tailCount = 0;
+
+            for (int block = 0; block < 60; ++block)
+            {
+                juce::MidiBuffer midi;
+                if (block == 0)
+                {
+                    midi.addEvent (juce::MidiMessage::noteOn (1, 46, static_cast<juce::uint8> (110)), 0);
+                    if (addClosed && sameBlock)
+                        midi.addEvent (juce::MidiMessage::noteOn (1, 42, static_cast<juce::uint8> (110)), 0);
+                }
+                else if (! sameBlock && addClosed && block == 10)
+                {
+                    midi.addEvent (juce::MidiMessage::noteOn (1, 42, static_cast<juce::uint8> (110)), 0);
+                }
+
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+
+                const auto startSample = block * 512;
+                if (startSample >= 14400 && startSample < 28800)
+                {
+                    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+                    {
+                        const auto* d = buffer.getReadPointer (ch);
+                        for (int i = 0; i < buffer.getNumSamples(); ++i)
+                        {
+                            tailSum += static_cast<double> (d[i]) * d[i];
+                            ++tailCount;
+                        }
+                    }
+                }
+            }
+
+            const auto rms = std::sqrt (tailSum / std::max (1, tailCount));
+            return juce::Decibels::gainToDecibels (static_cast<float> (rms));
+        };
+
+        const auto openTailDb = renderTail (false);
+        const auto chokedTailDb = renderTail (true);
+        std::cout << "midi open tail=" << openTailDb << " dB, with closed note=" << chokedTailDb
+                  << " dB, reduction=" << (openTailDb - chokedTailDb) << " dB" << std::endl;
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_HHCHOKE") != nullptr)
     {
         int openIdx = -1;

@@ -381,6 +381,10 @@ class Sampler
     std::atomic<HiHatMode> hiHatMode {HiHatMode::continuousCC4};
     int64_t lastPedalDownClock = 0;
     float lastPedalDownSpeed = 0.0f;
+    /// Sample clock of the CC4 open/closed crossfade currently being triggered.
+    /// Closed stages skip choking same-clock voices only during this batch, so a
+    /// real closed note at the same timestamp still cuts a ringing open hat.
+    int64_t hiHatCrossfadeStart = -1;
 
     struct HiHatIndices
     {
