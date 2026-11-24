@@ -36,7 +36,7 @@
   </header>
 
   <p>A focused acoustic drum instrument for Linux: VST3/LV2, interactive kit view, per-mic mixer,
-  channel FX, e-drum input, multi-mic bleed matrix and the <code>.glorpkit</code> editor.</p>
+  channel FX, e-drum input, multi-mic bleed matrix, user one-shot layers and the <code>.glorpkit</code> editor.</p>
 
   <h2>Kit view</h2>
   <img src="screenshot.png" alt="Suite Drums Glorp kit view">
@@ -46,6 +46,16 @@
     <div class="card"><h3>Mixer + FX</h3><p>Per-mic channels, stems, EQ, compressor, saturation and transient shaping.</p></div>
     <div class="card"><h3>E-drums</h3><p>Continuous CC#4 hi-hat, chokes, note mapping and a calibration wizard.</p></div>
     <div class="card"><h3>Bleed matrix</h3><p>Acoustic leakage between close mics, overheads, room and PZM channels.</p></div>
+    <div class="card"><h3>Kick + snare layers</h3><p>Load a WAV one-shot, blend it with the kit, shape ADSR and align phase to the close mic.</p></div>
+  </div>
+
+  <h2>Kick and snare one-shot layers</h2>
+  <p>Load a WAV one-shot into the kick or snare, crossfade it against the kit sample, shape it with
+  ADSR, invert polarity, fine-tune delay or auto-align it to the close mic. Each layer gets its own
+  mixer strip with the full channel FX rack.</p>
+  <div class="grid">
+    <img src="layer_drawer.png" alt="Kick layer drawer">
+    <img src="layer_mixer.png" alt="Layer mixer strip">
   </div>
 
   <h2>MIDI loop browser</h2>

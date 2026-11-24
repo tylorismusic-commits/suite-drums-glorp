@@ -383,6 +383,194 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_LAYER") != nullptr)
+    {
+        int kickIndex = -1;
+        for (int i = 0; i < proc.getSampler().numInstruments(); ++i)
+        {
+            const auto n = proc.getSampler().instrumentName (i);
+            if (n.containsIgnoreCase ("kick") || n.containsIgnoreCase ("kdrum"))
+            {
+                kickIndex = i;
+                break;
+            }
+        }
+
+        if (kickIndex < 0)
+        {
+            std::cout << "layer probe: no kick instrument" << std::endl;
+            return 0;
+        }
+
+        const auto wav = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                             .getChildFile ("glorp_layer_probe.wav");
+        wav.deleteFile();
+
+        {
+            juce::WavAudioFormat format;
+            auto stream = wav.createOutputStream();
+            if (stream != nullptr)
+            {
+                std::unique_ptr<juce::AudioFormatWriter> writer (
+                    format.createWriterFor (stream.get(), 48000.0, 1, 16, {}, 0));
+
+                if (writer != nullptr)
+                {
+                    stream.release();
+                    constexpr int frames = 19200;
+                    juce::AudioBuffer<float> tone (1, frames);
+                    for (int i = 0; i < frames; ++i)
+                    {
+                        const float click = i < 40 ? 0.8f * (1.0f - static_cast<float> (i) / 40.0f) : 0.0f;
+                        const float body = 0.6f
+                                           * std::sin (juce::MathConstants<float>::twoPi * 82.0f
+                                                       * static_cast<float> (i) / 48000.0f)
+                                           * std::exp (-static_cast<float> (i) / 4200.0f);
+                        tone.setSample (0, i, click + body);
+                    }
+                    writer->writeFromAudioSampleBuffer (tone, 0, frames);
+                    writer.reset();
+                }
+            }
+        }
+
+        proc.prepareToPlay (48000.0, 512);
+
+        auto renderKick = [&] (int blocks)
+        {
+            juce::AudioBuffer<float> buffer (2, 512);
+            float peak = 0.0f;
+            for (int block = 0; block < blocks; ++block)
+            {
+                buffer.clear();
+                juce::MidiBuffer midi;
+                if (block == 0)
+                    proc.getSampler().noteOn (kickIndex, 36, 1.0f, proc.getSampler().currentSamplePosition());
+                proc.processBlock (buffer, midi);
+                peak = std::max (peak, buffer.getMagnitude (0, buffer.getNumSamples()));
+            }
+            return peak;
+        };
+
+        proc.getSampler().allNotesOff();
+        const float dryPeak = renderKick (40);
+
+        glorp::UserLayerParams params;
+        params.blend = 1.0f;
+        params.attackMs = 0.0f;
+        params.decayMs = 400.0f;
+        params.sustain = 0.35f;
+        params.releaseMs = 120.0f;
+
+        juce::String error;
+        const bool loaded = proc.getSampler().loadUserLayer (0, wav.getFullPathName(), params, error);
+        const int layerMic = proc.getSampler().getUserLayerMicIndex (0);
+
+        proc.getSampler().allNotesOff();
+        const float wetPeak = renderKick (40);
+
+        proc.getSampler().autoAlignUserLayer (0);
+        const auto aligned = proc.getSampler().getUserLayerParams (0);
+
+        std::cout << "layer loaded=" << loaded << " error=" << error.toStdString()
+                  << " mic=" << layerMic
+                  << " name=" << (layerMic >= 0 ? proc.getSampler().micStripName (layerMic).toStdString() : "<none>")
+                  << "\nlayer dryPeak=" << dryPeak
+                  << " wetPeak=" << wetPeak
+                  << " layerMicPeak=" << (layerMic >= 0 ? proc.getSampler().getMicPeakL (layerMic) : -1.0f)
+                  << "\naligned delayMs=" << aligned.delayMs
+                  << " invert=" << (aligned.polarityInvert ? 1 : 0)
+                  << " micStrips=" << proc.getSampler().numMicStrips() << std::endl;
+
+        proc.getSampler().clearUserLayer (0);
+        std::cout << "after clear micStrips=" << proc.getSampler().numMicStrips()
+                  << " mic=" << proc.getSampler().getUserLayerMicIndex (0) << std::endl;
+        return 0;
+    }
+
+    if (std::getenv ("GLORP_PROBE_LAYERSTATE") != nullptr)
+    {
+        const auto wav = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                             .getChildFile ("glorp_layer_state_probe.wav");
+        wav.deleteFile();
+
+        {
+            juce::WavAudioFormat format;
+            auto stream = wav.createOutputStream();
+            if (stream != nullptr)
+            {
+                std::unique_ptr<juce::AudioFormatWriter> writer (
+                    format.createWriterFor (stream.get(), 48000.0, 1, 16, {}, 0));
+                if (writer != nullptr)
+                {
+                    stream.release();
+                    constexpr int frames = 9600;
+                    juce::AudioBuffer<float> tone (1, frames);
+                    for (int i = 0; i < frames; ++i)
+                        tone.setSample (0, i, 0.5f * std::sin (juce::MathConstants<float>::twoPi * 90.0f
+                                                               * static_cast<float> (i) / 48000.0f)
+                                                   * std::exp (-static_cast<float> (i) / 2400.0f));
+                    writer->writeFromAudioSampleBuffer (tone, 0, frames);
+                    writer.reset();
+                }
+            }
+        }
+
+        proc.prepareToPlay (48000.0, 512);
+
+        glorp::UserLayerParams params;
+        params.blend = 0.63f;
+        params.attackMs = 7.0f;
+        params.decayMs = 222.0f;
+        params.sustain = 0.44f;
+        params.releaseMs = 99.0f;
+        params.polarityInvert = true;
+        params.delayMs = 3.25f;
+        params.level = 0.77f;
+        params.pan = 0.33f;
+
+        juce::String error;
+        const bool loaded = proc.getSampler().loadUserLayer (0, wav.getFullPathName(), params, error);
+        const int layerMic = proc.getSampler().getUserLayerMicIndex (0);
+
+        if (layerMic >= 0)
+        {
+            auto mp = proc.getSampler().getMicStripParams (layerMic);
+            mp.hpfHz = 432.0f;
+            mp.lpfHz = 12345.0f;
+            mp.compEnabled = true;
+            mp.compRatio = 3.75f;
+            proc.getSampler().setMicStripParams (layerMic, mp);
+        }
+
+        juce::MemoryBlock state;
+        proc.getStateInformation (state);
+
+        glorp::PluginProcessor restored;
+        restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+
+        const int restoredMic = restored.getSampler().getUserLayerMicIndex (0);
+        const auto restoredParams = restored.getSampler().getUserLayerParams (0);
+        const auto restoredStrip = restoredMic >= 0 ? restored.getSampler().getMicStripParams (restoredMic)
+                                                    : glorp::MicStripParams {};
+
+        std::cout << "layerstate loaded=" << loaded << " error=" << error.toStdString()
+                  << " mic=" << layerMic << " restoredMic=" << restoredMic
+                  << "\nrestored blend=" << restoredParams.blend
+                  << " attack=" << restoredParams.attackMs
+                  << " decay=" << restoredParams.decayMs
+                  << " sustain=" << restoredParams.sustain
+                  << " release=" << restoredParams.releaseMs
+                  << " delay=" << restoredParams.delayMs
+                  << " invert=" << (restoredParams.polarityInvert ? 1 : 0)
+                  << "\nrestored level=" << restoredParams.level
+                  << " pan=" << restoredParams.pan
+                  << " hpf=" << restoredStrip.hpfHz
+                  << " lpf=" << restoredStrip.lpfHz
+                  << " compRatio=" << restoredStrip.compRatio << std::endl;
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_BUS") != nullptr)
     {
         auto params = proc.getSampler().getMasterStripParams();

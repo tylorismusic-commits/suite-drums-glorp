@@ -6,12 +6,12 @@
 #   tools/package_linux.sh [version]
 #
 # The build must already exist (see README). The version defaults to the
-# project version plus the alpha suffix, e.g. 0.1.0-alpha.39.
+# project version plus the alpha suffix, e.g. 0.1.0-alpha.40.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="${1:-0.1.0-alpha.39}"
+VERSION="${1:-0.1.0-alpha.40}"
 NAME="suite-drums-glorp-${VERSION}-linux-x86_64"
 BUILD="${ROOT}/build"
 ARTEFACTS="${BUILD}/GlorpDrums_artefacts/Release"
@@ -44,6 +44,7 @@ cp "${ROOT}/README.md" "${ROOT}/LICENSE" "${ROOT}/NOTICE.md" "${STAGE}/"
 cp "${ROOT}/docs/screenshot.png" "${ROOT}/docs/mixer_view.png" \
    "${ROOT}/docs/mixer_fx.png" "${ROOT}/docs/edrum_wizard.png" \
    "${ROOT}/docs/kit_editor.png" "${ROOT}/docs/midi_page.png" \
+   "${ROOT}/docs/layer_drawer.png" "${ROOT}/docs/layer_mixer.png" \
    "${ROOT}/docs/index.html" "${STAGE}/docs/"
 cp "${ROOT}/assets/suite_drums_icon.png" "${ROOT}/assets/suite_kit_studio_icon.png" "${STAGE}/icons/"
 

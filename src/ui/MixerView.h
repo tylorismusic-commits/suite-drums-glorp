@@ -31,6 +31,7 @@ class MixerView
 
     void refreshChannels();
     void refreshBusStates();
+    void focusChannel(int channelIndex);
     void openChannelFX(int channelIndex);
     void openMasterFX();
     void openBleedMatrix(int highlightMic = -1);

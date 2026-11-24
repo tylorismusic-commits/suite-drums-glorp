@@ -350,7 +350,29 @@ void MixerView::ChannelStripComponent::paint(juce::Graphics &g)
 
     g.setColour(juce::Colours::white);
     g.setFont(displayFont(11.0f));
-    g.drawFittedText(name.toUpperCase(), badgeR.reduced(2.0f).toNearestInt(), juce::Justification::centred, 1);
+
+    auto badgeText = badgeR.reduced(2.0f).toNearestInt();
+    auto displayName = name.toUpperCase();
+
+    if (name.containsIgnoreCase("layer"))
+    {
+        displayName = name.upToFirstOccurrenceOf(" layer", false, true).toUpperCase();
+
+        const juce::Rectangle<float> tag(badgeR.getRight() - 33.0f,
+                                         badgeR.getCentreY() - 7.0f,
+                                         29.0f,
+                                         14.0f);
+        g.setColour(theme.background.withAlpha(0.62f));
+        g.fillRoundedRectangle(tag, 3.0f);
+        g.setFont(uiFont(7.5f).boldened());
+        g.setColour(juce::Colours::white);
+        g.drawText("LAYER", tag.toNearestInt(), juce::Justification::centred, false);
+
+        badgeText = badgeText.withTrimmedRight(31);
+        g.setFont(displayFont(10.0f));
+    }
+
+    g.drawFittedText(displayName, badgeText, juce::Justification::centred, 1);
 
     // Pan Bar: trough slot with border
     g.setColour(theme.trough);
@@ -2630,6 +2652,17 @@ void MixerView::refreshBusStates()
 
     if (masterStrip != nullptr)
         masterStrip->updateFromState();
+}
+
+void MixerView::focusChannel(int channelIndex)
+{
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(channelStrips.size()))
+        return;
+
+    auto *strip = channelStrips[static_cast<size_t>(channelIndex)].get();
+    const int maxScroll = std::max(0, channelContainer->getWidth() - channelViewport.getWidth());
+    channelViewport.setViewPosition(juce::jlimit(0, maxScroll, strip->getX() - 40), 0);
+    openChannelFX(channelIndex);
 }
 
 void MixerView::openChannelFX(int channelIndex)

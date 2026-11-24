@@ -1,4 +1,5 @@
 #include "Editor.h"
+#include "Config.h"
 #include "DebugLog.h"
 
 namespace glorp
@@ -334,6 +335,45 @@ void Editor::CurveButton::paintButton(juce::Graphics &g, bool isHover, bool /*is
     g.drawFittedText(label, b.reduced(3.0f, 0.0f).toNearestInt(), juce::Justification::centred, 1, 0.72f);
 }
 
+void Editor::LayerButton::paintButton(juce::Graphics &g, bool isHover, bool /*isDown*/)
+{
+    auto b = getLocalBounds().toFloat().reduced(1.0f);
+    const auto accent = theme.accent;
+
+    g.setColour(open ? accent.withAlpha(0.18f) : (theme.minimalStyle ? theme.trough : theme.panel));
+    g.fillRoundedRectangle(b, theme.minimalStyle ? 4.0f : 3.0f);
+
+    drawSketchRect(g,
+                   b,
+                   (isHover || open) ? accent
+                                     : (theme.minimalStyle
+                                            ? theme.panelEdge
+                                            : (theme.isDark ? theme.panelEdge.withAlpha(0.6f)
+                                                            : juce::Colour(0xff7a7d7a))),
+                   (isHover || open) ? 1.5f : 1.0f,
+                   6);
+
+    auto textArea = b.reduced(3.0f, 0.0f);
+
+    if (loaded)
+    {
+        const float dotR = 3.0f;
+        const float dotX = b.getX() + 9.0f;
+        const float dotY = b.getCentreY();
+        g.setColour(accent);
+        g.fillEllipse(dotX - dotR, dotY - dotR, dotR * 2.0f, dotR * 2.0f);
+        textArea = textArea.withTrimmedLeft(10.0f);
+    }
+
+    g.setFont(theme.minimalStyle ? uiFont(10.5f).boldened() : displayFont(13.5f));
+    g.setColour((isHover || open || loaded) ? accent : theme.ink);
+    g.drawFittedText("LAYER",
+                     textArea.toNearestInt(),
+                     juce::Justification::centred,
+                     1,
+                     0.72f);
+}
+
 Editor::VelocityCurvePreview::VelocityCurvePreview()
 {
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
@@ -511,6 +551,481 @@ void Editor::VelocityCurvePreview::paint(juce::Graphics &g)
     drawDot(0.5f, midY, juce::Colour(0xfff1c40f)); // Comic Yellow midpoint
     drawDot(1.0f, 1.0f, juce::Colour(0xffe74c3c)); // Comic Red peak
 }
+
+//==============================================================================
+namespace
+{
+class LayerWaveform : public juce::Component
+{
+  public:
+    void setPeaks(const std::vector<float> &newPeaks, bool hasSample)
+    {
+        peaks = newPeaks;
+        loaded = hasSample;
+        repaint();
+    }
+
+    void setTheme(const Theme &newTheme)
+    {
+        theme = newTheme;
+        repaint();
+    }
+
+    void paint(juce::Graphics &g) override
+    {
+        auto b = getLocalBounds().toFloat().reduced(1.0f);
+        g.setColour(theme.trough);
+        g.fillRoundedRectangle(b, 5.0f);
+        drawSketchRect(g, b, theme.panelEdge, 1.0f, 9);
+
+        auto plot = b.reduced(8.0f, 7.0f);
+
+        g.setColour(theme.panelEdge.withAlpha(0.55f));
+        g.drawLine(plot.getX(), plot.getCentreY(), plot.getRight(), plot.getCentreY(), 1.0f);
+
+        if (!loaded || peaks.empty())
+        {
+            g.setFont(uiFont(10.5f).boldened());
+            g.setColour(theme.inkSoft);
+            g.drawFittedText("NO ONE-SHOT LOADED",
+                             plot.toNearestInt(),
+                             juce::Justification::centred,
+                             1,
+                             0.8f);
+            return;
+        }
+
+        const int n = static_cast<int>(peaks.size());
+        const float step = plot.getWidth() / static_cast<float>(juce::jmax(1, n));
+        const float barW = juce::jmax(1.4f, step * 0.58f);
+        g.setColour(theme.accent);
+
+        for (int i = 0; i < n; ++i)
+        {
+            const float peak = juce::jlimit(0.0f, 1.0f, peaks[static_cast<size_t>(i)]);
+            const float h = juce::jmax(1.0f, peak * plot.getHeight() * 0.48f);
+            const float x = plot.getX() + static_cast<float>(i) * step + (step - barW) * 0.5f;
+            g.fillRoundedRectangle(x, plot.getCentreY() - h, barW, h * 2.0f, barW * 0.5f);
+        }
+
+        g.setColour(theme.accentAlt.withAlpha(0.7f));
+        g.drawLine(plot.getX(), plot.getBottom(), plot.getX(), plot.getY(), 1.0f);
+    }
+
+  private:
+    std::vector<float> peaks;
+    bool loaded = false;
+    Theme theme = Theme::suite();
+};
+} // namespace
+
+//==============================================================================
+class Editor::LayerDrawer : public juce::Component
+{
+  public:
+    LayerDrawer(PluginProcessor &processorIn)
+        : processor(processorIn)
+        , loadButton("LOAD WAV")
+        , clearButton("CLEAR")
+        , invertButton("INVERT")
+        , alignButton("ALIGN")
+        , openMixerButton("OPEN IN MIXER")
+        , closeButton("CLOSE")
+    {
+        addAndMakeVisible(waveform);
+        addAndMakeVisible(loadButton);
+        addAndMakeVisible(clearButton);
+        addAndMakeVisible(invertButton);
+        addAndMakeVisible(alignButton);
+        addAndMakeVisible(openMixerButton);
+        addAndMakeVisible(closeButton);
+
+        blendKnob = std::make_unique<Knob>("BLEND", 0.0f, 1.0f, 0.5f);
+        attackKnob = std::make_unique<Knob>("ATTACK", 0.0f, 200.0f, 0.0f, "ms");
+        decayKnob = std::make_unique<Knob>("DECAY", 0.0f, 2000.0f, 120.0f, "ms");
+        sustainKnob = std::make_unique<Knob>("SUSTAIN", 0.0f, 1.0f, 1.0f);
+        releaseKnob = std::make_unique<Knob>("RELEASE", 0.0f, 2000.0f, 80.0f, "ms");
+        delayKnob = std::make_unique<Knob>("DELAY", 0.0f, 20.0f, 0.0f, "ms");
+
+        addAndMakeVisible(*blendKnob);
+        addAndMakeVisible(*attackKnob);
+        addAndMakeVisible(*decayKnob);
+        addAndMakeVisible(*sustainKnob);
+        addAndMakeVisible(*releaseKnob);
+        addAndMakeVisible(*delayKnob);
+
+        for (auto *knob : {blendKnob.get(), attackKnob.get(), decayKnob.get(),
+                           sustainKnob.get(), releaseKnob.get(), delayKnob.get()})
+            knob->onValueChanged = [this](float) { pushParams(); };
+
+        invertButton.setClickingTogglesState(true);
+        invertButton.onClick = [this]
+        {
+            pushParams();
+            repaint();
+        };
+
+        loadButton.onClick = [this] { loadSample(); };
+        clearButton.onClick = [this] { clearSample(); };
+        alignButton.onClick = [this] { autoAlign(); };
+        openMixerButton.onClick = [this]
+        {
+            if (onOpenInMixer != nullptr)
+                onOpenInMixer(processor.getSampler().getUserLayerMicIndex(slot));
+        };
+        closeButton.onClick = [this]
+        {
+            if (onClose != nullptr)
+                onClose();
+        };
+    }
+
+    ~LayerDrawer() override = default;
+
+    std::function<void()> onClose;
+    std::function<void(int)> onOpenInMixer;
+    std::function<void()> onChanged;
+
+    void setSlot(int newSlot)
+    {
+        slot = juce::jlimit(0, 1, newSlot);
+        statusMessage.clear();
+        refresh();
+    }
+
+    int getSlot() const noexcept { return slot; }
+
+    void setTheme(const Theme &newTheme)
+    {
+        theme = newTheme;
+        waveform.setTheme(theme);
+
+        for (auto *knob : {blendKnob.get(), attackKnob.get(), decayKnob.get(),
+                           sustainKnob.get(), releaseKnob.get(), delayKnob.get()})
+            if (knob != nullptr)
+                knob->setTheme(theme);
+
+        if (blendKnob != nullptr)
+            blendKnob->setAccentColour(theme.accentAlt);
+        if (attackKnob != nullptr)
+            attackKnob->setAccentColour(theme.accentWarm);
+        if (decayKnob != nullptr)
+            decayKnob->setAccentColour(theme.accentWarm);
+        if (sustainKnob != nullptr)
+            sustainKnob->setAccentColour(theme.accentWarm);
+        if (releaseKnob != nullptr)
+            releaseKnob->setAccentColour(theme.accentWarm);
+        if (delayKnob != nullptr)
+            delayKnob->setAccentColour(theme.accent);
+
+        repaint();
+    }
+
+    void refresh()
+    {
+        if (refreshing)
+            return;
+
+        refreshing = true;
+        const auto &sampler = processor.getSampler();
+        const auto params = sampler.getUserLayerParams(slot);
+
+        blendKnob->setValue(params.blend);
+        attackKnob->setValue(params.attackMs);
+        decayKnob->setValue(params.decayMs);
+        sustainKnob->setValue(params.sustain);
+        releaseKnob->setValue(params.releaseMs);
+        delayKnob->setValue(params.delayMs);
+        invertButton.setToggleState(params.polarityInvert, juce::dontSendNotification);
+
+        sampleLabel = sampler.getUserLayerName(slot);
+        const bool loaded = sampler.isUserLayerLoaded(slot);
+        clearButton.setEnabled(loaded);
+        alignButton.setEnabled(loaded);
+        openMixerButton.setEnabled(loaded);
+
+        std::vector<float> peaks;
+        sampler.getUserLayerPeaks(slot, 80, peaks);
+        waveform.setPeaks(peaks, loaded);
+
+        refreshing = false;
+        repaint();
+    }
+
+    void paint(juce::Graphics &g) override
+    {
+        auto b = getLocalBounds().toFloat();
+
+        g.setColour(juce::Colours::black.withAlpha(theme.isDark ? 0.42f : 0.18f));
+        g.fillRoundedRectangle(b.translated(3.0f, 4.0f), 9.0f);
+
+        drawMinimalCard(g, b, theme, 9.0f, theme.accent.withAlpha(0.65f), 1.4f);
+
+        g.setColour(theme.accent);
+        g.fillRoundedRectangle(b.getX(), b.getY() + 10.0f, 3.0f, b.getHeight() - 20.0f, 1.5f);
+
+        // Header
+        g.setFont(displayFont(15.0f));
+        g.setColour(theme.ink);
+        g.drawText(slot == 0 ? "KICK LAYER" : "SNARE LAYER",
+                   headerTextBounds,
+                   juce::Justification::centredLeft,
+                   false);
+
+        g.setFont(uiFont(9.5f).boldened());
+        g.setColour(theme.inkSoft);
+        g.drawText("ONE-SHOT BLEND, ADSR & PHASE",
+                   headerSubBounds,
+                   juce::Justification::centredLeft,
+                   false);
+
+        // Sample name well
+        auto well = sampleWellBounds;
+        g.setColour(theme.trough);
+        g.fillRoundedRectangle(well, 4.0f);
+        drawSketchRect(g, well, theme.panelEdge, 1.0f, 11);
+
+        const bool loaded = processor.getSampler().isUserLayerLoaded(slot);
+        g.setFont(uiFont(11.0f).boldened());
+        g.setColour(loaded ? theme.ink : theme.inkSoft);
+        g.drawFittedText(loaded ? sampleLabel : "No sample loaded",
+                         well.reduced(9.0f, 2.0f).toNearestInt(),
+                         juce::Justification::centredLeft,
+                         1,
+                         0.72f);
+
+        // Section captions
+        g.setFont(uiFont(8.5f).boldened());
+        g.setColour(theme.inkSoft);
+        g.drawText("SHAPE", shapeCaptionBounds, juce::Justification::centredLeft, false);
+        g.drawText("PHASE", phaseCaptionBounds, juce::Justification::centredLeft, false);
+
+        if (!phaseHintBounds.isEmpty())
+        {
+            g.setColour(theme.inkSoft.withAlpha(0.9f));
+            g.setFont(uiFont(8.5f));
+            g.drawFittedText("Align matches polarity and delay\nto the kit close mic.",
+                             phaseHintBounds.toNearestInt(),
+                             juce::Justification::centredLeft,
+                             2,
+                             0.78f);
+        }
+
+        if (!statusMessage.isEmpty())
+        {
+            g.setColour(theme.warning);
+            g.drawFittedText(statusMessage,
+                             statusBounds.toNearestInt(),
+                             juce::Justification::centredLeft,
+                             1,
+                             0.72f);
+        }
+    }
+
+    void resized() override
+    {
+        auto r = getLocalBounds().reduced(14, 12);
+        auto header = r.removeFromTop(22);
+        closeButton.setBounds(header.removeFromRight(54));
+        headerTextBounds = header.withWidth(header.getWidth() - 8).toFloat();
+        headerSubBounds = headerTextBounds.withTrimmedTop(14.0f).withHeight(10.0f);
+        headerTextBounds = headerTextBounds.withHeight(18.0f);
+
+        r.removeFromTop(4);
+
+        auto sampleRow = r.removeFromTop(25);
+        auto clearArea = sampleRow.removeFromRight(54);
+        sampleRow.removeFromRight(5);
+        auto loadArea = sampleRow.removeFromRight(68);
+        sampleRow.removeFromRight(7);
+        sampleWellBounds = sampleRow.toFloat();
+        loadButton.setBounds(loadArea);
+        clearButton.setBounds(clearArea);
+
+        r.removeFromTop(6);
+        waveform.setBounds(r.removeFromTop(52));
+
+        r.removeFromTop(5);
+        shapeCaptionBounds = r.removeFromTop(10).toFloat();
+        r.removeFromTop(1);
+
+        auto knobRow = r.removeFromTop(72);
+        const int n = 5;
+        const int gap = 4;
+        const int knobW = (knobRow.getWidth() - gap * (n - 1)) / n;
+        auto placeKnob = [&](Knob &knob, int index)
+        {
+            knob.setBounds(knobRow.getX() + index * (knobW + gap), knobRow.getY(), knobW, knobRow.getHeight());
+        };
+        placeKnob(*blendKnob, 0);
+        placeKnob(*attackKnob, 1);
+        placeKnob(*decayKnob, 2);
+        placeKnob(*sustainKnob, 3);
+        placeKnob(*releaseKnob, 4);
+
+        r.removeFromTop(4);
+        phaseCaptionBounds = r.removeFromTop(10).toFloat();
+        r.removeFromTop(1);
+
+        auto phaseRow = r.removeFromTop(56);
+        auto invertArea = phaseRow.removeFromLeft(76).withSizeKeepingCentre(76, 26);
+        phaseRow.removeFromLeft(6);
+        auto delayArea = phaseRow.removeFromLeft(64);
+        phaseRow.removeFromLeft(6);
+        auto alignArea = phaseRow.removeFromLeft(76).withSizeKeepingCentre(76, 26);
+        invertButton.setBounds(invertArea);
+        alignButton.setBounds(alignArea);
+        delayKnob->setBounds(delayArea);
+
+        phaseHintBounds = phaseRow.reduced(8.0f, 0.0f).toFloat();
+
+        r.removeFromTop(4);
+        auto bottom = r.removeFromTop(26);
+        openMixerButton.setBounds(bottom.removeFromRight(148));
+        bottom.removeFromRight(8);
+        statusBounds = bottom.toFloat();
+    }
+
+  private:
+    static juce::File userLayerDirectory()
+    {
+        auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                       .getChildFile(config::CONFIG_DIR_NAME)
+                       .getChildFile("user_layers");
+        dir.createDirectory();
+        return dir;
+    }
+
+    void loadSample()
+    {
+        auto chooser = std::make_shared<juce::FileChooser>("Select a one-shot WAV",
+                                                          juce::File::getSpecialLocation(
+                                                              juce::File::userMusicDirectory),
+                                                          "*.wav");
+
+        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                             [this, chooser](const juce::FileChooser &fc)
+                             {
+                                 const auto chosen = fc.getResult();
+                                 if (!chosen.existsAsFile())
+                                     return;
+
+                                 if (!chosen.hasFileExtension("wav"))
+                                 {
+                                     statusMessage = "WAV files only";
+                                     repaint();
+                                     return;
+                                 }
+
+                                 auto target = chosen;
+                                 const auto dir = userLayerDirectory();
+
+                                 if (chosen.getParentDirectory() != dir)
+                                 {
+                                     target = dir.getNonexistentChildFile(chosen.getFileNameWithoutExtension(),
+                                                                          chosen.getFileExtension(),
+                                                                          false);
+                                     if (!chosen.copyFileTo(target))
+                                     {
+                                         statusMessage = "Could not copy sample";
+                                         repaint();
+                                         return;
+                                     }
+                                 }
+
+                                 auto params = processor.getSampler().getUserLayerParams(slot);
+                                 juce::String error;
+
+                                 if (!processor.getSampler().loadUserLayer(
+                                         slot, target.getFullPathName(), params, error))
+                                 {
+                                     statusMessage = error.isNotEmpty() ? error : "Could not load sample";
+                                     repaint();
+                                     return;
+                                 }
+
+                                 statusMessage.clear();
+                                 refresh();
+
+                                 if (onChanged != nullptr)
+                                     onChanged();
+                             });
+    }
+
+    void clearSample()
+    {
+        processor.getSampler().clearUserLayer(slot);
+        statusMessage.clear();
+        refresh();
+
+        if (onChanged != nullptr)
+            onChanged();
+    }
+
+    void autoAlign()
+    {
+        if (!processor.getSampler().isUserLayerLoaded(slot))
+            return;
+
+        processor.getSampler().autoAlignUserLayer(slot);
+        statusMessage = "Aligned to close mic";
+        refresh();
+        repaint();
+
+        if (onChanged != nullptr)
+            onChanged();
+    }
+
+    void pushParams()
+    {
+        if (refreshing || slot < 0)
+            return;
+
+        auto params = processor.getSampler().getUserLayerParams(slot);
+        params.blend = blendKnob->getValue();
+        params.attackMs = attackKnob->getValue();
+        params.decayMs = decayKnob->getValue();
+        params.sustain = sustainKnob->getValue();
+        params.releaseMs = releaseKnob->getValue();
+        params.delayMs = delayKnob->getValue();
+        params.polarityInvert = invertButton.getToggleState();
+
+        processor.getSampler().setUserLayerParams(slot, params);
+
+        statusMessage.clear();
+        repaint();
+    }
+
+    PluginProcessor &processor;
+    int slot = 0;
+    bool refreshing = false;
+    Theme theme = Theme::suite();
+    juce::String sampleLabel;
+    juce::String statusMessage;
+
+    LayerWaveform waveform;
+    std::unique_ptr<Knob> blendKnob;
+    std::unique_ptr<Knob> attackKnob;
+    std::unique_ptr<Knob> decayKnob;
+    std::unique_ptr<Knob> sustainKnob;
+    std::unique_ptr<Knob> releaseKnob;
+    std::unique_ptr<Knob> delayKnob;
+
+    juce::TextButton loadButton;
+    juce::TextButton clearButton;
+    juce::TextButton invertButton;
+    juce::TextButton alignButton;
+    juce::TextButton openMixerButton;
+    juce::TextButton closeButton;
+
+    juce::Rectangle<float> headerTextBounds;
+    juce::Rectangle<float> headerSubBounds;
+    juce::Rectangle<float> sampleWellBounds;
+    juce::Rectangle<float> shapeCaptionBounds;
+    juce::Rectangle<float> phaseCaptionBounds;
+    juce::Rectangle<float> phaseHintBounds;
+    juce::Rectangle<float> statusBounds;
+};
 
 //==============================================================================
 Editor::Editor(PluginProcessor &p) : processor(p)
@@ -818,6 +1333,7 @@ void Editor::applyTheme(const Theme &newTheme)
     instLearnButton.setTheme(theme);
     instCurveButton.setTheme(theme);
     instCurvePreview.setTheme(theme);
+    instLayerButton.setTheme(theme);
     for (auto &zb : zoneButtons)
         if (zb != nullptr)
             zb->setTheme(theme);
@@ -874,6 +1390,9 @@ void Editor::applyTheme(const Theme &newTheme)
     if (minimalGrid != nullptr)
         minimalGrid->setTheme(theme);
     scope.setTheme(theme);
+
+    if (layerDrawer != nullptr)
+        layerDrawer->setTheme(theme);
 
     if (mixerView != nullptr)
         mixerView->setTheme(theme);
@@ -933,6 +1452,100 @@ void Editor::applyWindowScale(float factor)
                      juce::roundToInt(620.0f * settings.uiScale));
 
     resized();
+    repaint();
+}
+
+int Editor::layerSlotForSelection() const
+{
+    if (logicalInstruments.empty() || selectedLogicalIndex < 0
+        || selectedLogicalIndex >= static_cast<int>(logicalInstruments.size()))
+        return -1;
+
+    const auto name = logicalInstruments[static_cast<size_t>(selectedLogicalIndex)].name.toLowerCase();
+
+    if (name.contains("kick") || name.contains("kdrum") || name.contains("bdrum")
+        || name.contains("bassdrum") || name.contains("bass drum"))
+        return 0;
+
+    if (name.contains("snare"))
+        return 1;
+
+    return -1;
+}
+
+void Editor::openLayerDrawer(int slot)
+{
+    if (slot < 0 || slot > 1)
+        return;
+
+    if (layerDrawer == nullptr)
+    {
+        layerDrawer = std::make_unique<LayerDrawer>(processor);
+        layerDrawer->onClose = [this] { closeLayerDrawer(); };
+        layerDrawer->onOpenInMixer = [this](int micIndex)
+        {
+            closeLayerDrawer();
+            setViewMode(EditorView::mixerView);
+            if (mixerView != nullptr && micIndex >= 0)
+                mixerView->focusChannel(micIndex);
+        };
+        layerDrawer->onChanged = [this] { refreshMixerAfterLayerChange(); };
+        addChildComponent(*layerDrawer);
+    }
+
+    layerDrawerSlot = slot;
+    layerDrawer->setSlot(slot);
+    layerDrawer->setTheme(theme);
+    layerDrawer->setVisible(true);
+    resized();
+    layerDrawer->toFront(true);
+    updateLayerButton();
+}
+
+void Editor::closeLayerDrawer()
+{
+    if (layerDrawer != nullptr)
+        layerDrawer->setVisible(false);
+
+    layerDrawerSlot = -1;
+    updateLayerButton();
+}
+
+void Editor::updateLayerButton()
+{
+    const int slot = layerSlotForSelection();
+    const bool shouldShow = (currentView == EditorView::kitView) && slot >= 0;
+    const bool wasShown = instLayerButton.isVisible();
+
+    instLayerButton.setVisible(shouldShow);
+
+    if (!shouldShow)
+    {
+        if (layerDrawer != nullptr && layerDrawer->isVisible())
+            closeLayerDrawer();
+        if (wasShown)
+            resized();
+        return;
+    }
+
+    instLayerButton.setLoaded(processor.getSampler().isUserLayerLoaded(slot));
+    instLayerButton.setOpen(layerDrawer != nullptr && layerDrawer->isVisible() && layerDrawerSlot == slot);
+
+    if (layerDrawer != nullptr && layerDrawer->isVisible() && layerDrawerSlot != slot)
+        openLayerDrawer(slot);
+    else if (layerDrawer != nullptr && layerDrawer->isVisible() && layerDrawerSlot == slot)
+        layerDrawer->refresh();
+
+    if (wasShown != shouldShow)
+        resized();
+}
+
+void Editor::refreshMixerAfterLayerChange()
+{
+    if (mixerView != nullptr)
+        mixerView->refreshChannels();
+
+    updateLayerButton();
     repaint();
 }
 
@@ -1001,6 +1614,10 @@ void Editor::setViewMode(EditorView mode)
     instCurveButton.setVisible(isKit);
     instCurvePreview.setVisible(isKit);
     instLearnButton.setVisible(isKit);
+    instLayerButton.setVisible(isKit);
+    if (!isKit)
+        closeLayerDrawer();
+    updateLayerButton();
     scope.setVisible(!isMinimal && isKit);
     if (masterVolumeKnob != nullptr)
         masterVolumeKnob->setVisible(isKit);
@@ -1032,6 +1649,13 @@ void Editor::setViewMode(EditorView mode)
 
 bool Editor::keyPressed(const juce::KeyPress &key)
 {
+    if (key.getKeyCode() == juce::KeyPress::escapeKey
+        && layerDrawer != nullptr && layerDrawer->isVisible())
+    {
+        closeLayerDrawer();
+        return true;
+    }
+
     // Developer toggle shortcut: Ctrl + Shift + E or Cmd + Shift + E
     if (key.getModifiers().isCommandDown() && key.getModifiers().isShiftDown()
         && (key.getKeyCode() == 'E' || key.getKeyCode() == 'e'))
@@ -1052,6 +1676,10 @@ void Editor::mouseDown(const juce::MouseEvent &e)
         kitView.setEditMode(!kitView.isEditMode());
         return;
     }
+
+    if (layerDrawer != nullptr && layerDrawer->isVisible()
+        && !layerDrawer->getBounds().contains(e.getPosition()))
+        closeLayerDrawer();
 }
 
 bool Editor::isInterestedInFileDrag(const juce::StringArray &files)
@@ -1688,6 +2316,18 @@ void Editor::buildControls()
     // Left Panel: Velocity Curve Button & DrumGizmo-style Curve Preview
     addAndMakeVisible(instCurveButton);
     addAndMakeVisible(instCurvePreview);
+    addChildComponent(instLayerButton);
+    instLayerButton.onClick = [this]
+    {
+        const int slot = layerSlotForSelection();
+        if (slot < 0)
+            return;
+
+        if (layerDrawer != nullptr && layerDrawer->isVisible() && layerDrawerSlot == slot)
+            closeLayerDrawer();
+        else
+            openLayerDrawer(slot);
+    };
     instCurvePreview.onClick = [this] { instCurveButton.triggerClick(); };
     instCurveButton.onClick = [this]
     {
@@ -2180,6 +2820,7 @@ void Editor::updateInstrumentDisplay()
     const bool isLearningThis = (learningInstrument >= 0 && learningInstrument == samplerIdx);
     instLearnButton.setLearning(isLearningThis);
     syncMinimalGridItems();
+    updateLayerButton();
 }
 
 void Editor::armLearn(int samplerIndex)
@@ -2505,7 +3146,11 @@ void Editor::resized()
         instDynamicsKnob->setBounds(kCol2, kRow2, kW, kH);
 
         const int curveY = kRow2 + kH + 8;
-        instCurveButton.setBounds(panelX + innerPad + zoneInnerPad, curveY, innerW - zoneInnerPad * 2, 22);
+        const bool hasLayer = layerSlotForSelection() >= 0;
+        const int layerBtnW = 58;
+        const int curveW = hasLayer ? (innerW - zoneInnerPad * 2 - 6 - layerBtnW) : (innerW - zoneInnerPad * 2);
+        instCurveButton.setBounds(panelX + innerPad + zoneInnerPad, curveY, curveW, 22);
+        instLayerButton.setBounds(panelX + innerPad + zoneInnerPad + curveW + 6, curveY, layerBtnW, 22);
 
         const int previewY = curveY + 26;
         const int previewH = 54;
@@ -2558,6 +3203,14 @@ void Editor::resized()
 
         if (edrumWizard != nullptr)
             edrumWizard->setBounds(getLocalBounds());
+
+        if (layerDrawer != nullptr && layerDrawer->isVisible())
+        {
+            const int dx = panelX + panelW + 12;
+            const int dw = std::max(320, std::min(460, w - dx - 20));
+            const int dh = std::max(280, std::min(330, h - 74 - 20));
+            layerDrawer->setBounds(dx, 84, dw, dh);
+        }
         return;
     }
 
@@ -2690,7 +3343,11 @@ void Editor::resized()
     // Velocity Curve row: Preset button + DrumGizmo-style Curve Preview
     const int curveY = kRow2 + kSize + (compact ? 12 : 14);
     const int curveH = compact ? 20 : 24;
-    instCurveButton.setBounds(panelX + 14, curveY, panelW - 28, curveH);
+    const bool hasLayer = layerSlotForSelection() >= 0;
+    const int layerBtnW = 56;
+    const int curveW = hasLayer ? (panelW - 28 - 6 - layerBtnW) : (panelW - 28);
+    instCurveButton.setBounds(panelX + 14, curveY, curveW, curveH);
+    instLayerButton.setBounds(panelX + 14 + curveW + 6, curveY, layerBtnW, curveH);
 
     const int previewY = curveY + curveH + (compact ? 4 : 6);
     const int previewH = compact ? 46 : 68;
@@ -2721,6 +3378,14 @@ void Editor::resized()
 
     if (edrumWizard != nullptr)
         edrumWizard->setBounds(getLocalBounds());
+
+    if (layerDrawer != nullptr && layerDrawer->isVisible())
+    {
+        const int dx = panelX + panelW + 12;
+        const int dw = std::max(320, std::min(460, w - dx - 20));
+        const int dh = std::max(280, std::min(330, h - 74 - 20));
+        layerDrawer->setBounds(dx, 84, dw, dh);
+    }
 }
 
 //==============================================================================

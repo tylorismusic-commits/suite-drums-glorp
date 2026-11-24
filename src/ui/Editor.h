@@ -84,6 +84,11 @@ class Editor
     void applyTheme(const Theme &newTheme);
     void applyTextScale(float newScale);
     void applyWindowScale(float factor);
+    int layerSlotForSelection() const;
+    void openLayerDrawer(int slot);
+    void closeLayerDrawer();
+    void updateLayerButton();
+    void refreshMixerAfterLayerChange();
 
     void setOpenGlEnabled(bool enabled);
     bool isOpenGlEnabled() const noexcept;
@@ -271,6 +276,34 @@ class Editor
         Theme theme = Theme::suite();
     };
 
+    class LayerButton : public juce::Button
+    {
+      public:
+        LayerButton() : juce::Button("LAYER") {}
+        void setLoaded(bool isLoaded)
+        {
+            loaded = isLoaded;
+            repaint();
+        }
+        bool isLoaded() const noexcept { return loaded; }
+        void setOpen(bool isOpen)
+        {
+            open = isOpen;
+            repaint();
+        }
+        void setTheme(const Theme &t)
+        {
+            theme = t;
+            repaint();
+        }
+        void paintButton(juce::Graphics &g, bool isHover, bool isDown) override;
+
+      private:
+        bool loaded = false;
+        bool open = false;
+        Theme theme = Theme::suite();
+    };
+
     class VelocityCurvePreview : public juce::Component
     {
       public:
@@ -332,6 +365,11 @@ class Editor
     std::unique_ptr<Knob> instDynamicsKnob;
     std::unique_ptr<Knob> instAttackKnob;
     std::unique_ptr<Knob> instDampKnob;
+    LayerButton instLayerButton;
+
+    class LayerDrawer;
+    std::unique_ptr<LayerDrawer> layerDrawer;
+    int layerDrawerSlot = -1;
 
     CurveButton instCurveButton;
     VelocityCurvePreview instCurvePreview;

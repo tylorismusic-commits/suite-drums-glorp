@@ -1560,7 +1560,8 @@ juce::String MixerPreset::toXmlString() const
 bool MixerPreset::fromXmlString(const juce::String &xmlText, MixerPreset &outPreset)
 {
     const auto xml = juce::parseXML(xmlText);
-    if (xml == nullptr || !xml->hasTagName("GlorpMixPreset"))
+    if (xml == nullptr
+        || (!xml->hasTagName("GlorpMixPreset") && !xml->hasTagName("MixerState")))
         return false;
 
     outPreset.name = xml->getStringAttribute("name", "User Preset");

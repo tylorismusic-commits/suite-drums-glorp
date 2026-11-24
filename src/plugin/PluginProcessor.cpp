@@ -656,6 +656,29 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock &destination)
         state.addChildElement(map);
     }
 
+    if (auto *layers = state.createNewChildElement("UserLayers"))
+    {
+        for (int slot = 0; slot < 2; ++slot)
+        {
+            if (!audioEngine.getSampler().isUserLayerLoaded(slot))
+                continue;
+
+            const auto params = audioEngine.getSampler().getUserLayerParams(slot);
+            auto *layer = layers->createNewChildElement("Layer");
+            layer->setAttribute("slot", slot);
+            layer->setAttribute("path", audioEngine.getSampler().getUserLayerPath(slot));
+            layer->setAttribute("blend", static_cast<double>(params.blend));
+            layer->setAttribute("attackMs", static_cast<double>(params.attackMs));
+            layer->setAttribute("decayMs", static_cast<double>(params.decayMs));
+            layer->setAttribute("sustain", static_cast<double>(params.sustain));
+            layer->setAttribute("releaseMs", static_cast<double>(params.releaseMs));
+            layer->setAttribute("invert", params.polarityInvert ? 1 : 0);
+            layer->setAttribute("delayMs", static_cast<double>(params.delayMs));
+            layer->setAttribute("level", static_cast<double>(params.level));
+            layer->setAttribute("pan", static_cast<double>(params.pan));
+        }
+    }
+
     copyXmlToBinary(state, destination);
 }
 
@@ -678,12 +701,11 @@ void PluginProcessor::setStateInformation(const void *data, int sizeInBytes)
         audioEngine.getSampler().setHiHatMode(modeInt == 1 ? HiHatMode::discreteNotes : HiHatMode::continuousCC4);
     }
 
+    MixerPreset storedMixer;
+    bool hasStoredMixer = false;
+
     if (auto *mixerXml = xml->getChildByName("MixerState"))
-    {
-        MixerPreset p;
-        if (MixerPreset::fromXmlString(mixerXml->toString(), p))
-            audioEngine.getSampler().applyMixerPreset(p);
-    }
+        hasStoredMixer = MixerPreset::fromXmlString(mixerXml->toString(), storedMixer);
 
     audioEngine.getSampler().getBleedMatrix().readXml(*xml);
 
@@ -780,6 +802,55 @@ void PluginProcessor::setStateInformation(const void *data, int sizeInBytes)
             params.damping = static_cast<float>(tweak->getDoubleAttribute("damping", 0.0));
             audioEngine.getSampler().setInstrumentParams(index, params);
         }
+    }
+
+    bool layersRestored = false;
+
+    if (auto *layers = xml->getChildByName("UserLayers"))
+    {
+        const auto layerDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                                  .getChildFile(config::CONFIG_DIR_NAME)
+                                  .getChildFile("user_layers");
+
+        for (auto *layer : layers->getChildIterator())
+        {
+            const int slot = layer->getIntAttribute("slot", -1);
+            if (slot < 0 || slot > 1)
+                continue;
+
+            auto file = juce::File(layer->getStringAttribute("path"));
+            if (!file.existsAsFile())
+                file = layerDir.getChildFile(file.getFileName());
+
+            if (!file.existsAsFile())
+                continue;
+
+            UserLayerParams params;
+            params.blend = static_cast<float>(layer->getDoubleAttribute("blend", 0.5));
+            params.attackMs = static_cast<float>(layer->getDoubleAttribute("attackMs", 0.0));
+            params.decayMs = static_cast<float>(layer->getDoubleAttribute("decayMs", 120.0));
+            params.sustain = static_cast<float>(layer->getDoubleAttribute("sustain", 1.0));
+            params.releaseMs = static_cast<float>(layer->getDoubleAttribute("releaseMs", 80.0));
+            params.polarityInvert = layer->getIntAttribute("invert", 0) != 0;
+            params.delayMs = static_cast<float>(layer->getDoubleAttribute("delayMs", 0.0));
+            params.level = static_cast<float>(layer->getDoubleAttribute("level", 1.0));
+            params.pan = static_cast<float>(layer->getDoubleAttribute("pan", 0.0));
+
+            juce::String error;
+            if (audioEngine.getSampler().loadUserLayer(slot, file.getFullPathName(), params, error))
+                layersRestored = true;
+        }
+    }
+
+    // Layer strips are appended after the kit mics, so the mixer state has to
+    // be applied after the layers are restored to reach their channels.
+    if (hasStoredMixer)
+        audioEngine.getSampler().applyMixerPreset(storedMixer);
+
+    if (hasStoredMixer || layersRestored)
+    {
+        listeners.call(&Listener::kitChanged);
+        listeners.call(&Listener::parametersChanged);
     }
 }
 

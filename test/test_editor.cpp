@@ -354,6 +354,98 @@ int main (int argc, char** argv)
             return 0;
         }
 
+        if (juce::String (viewEnv).equalsIgnoreCase ("layer"))
+        {
+            const auto wav = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                                 .getChildFile ("glorp_ui_layer_probe.wav");
+            wav.deleteFile();
+
+            {
+                juce::WavAudioFormat format;
+                auto stream = wav.createOutputStream();
+                if (stream != nullptr)
+                {
+                    std::unique_ptr<juce::AudioFormatWriter> writer (
+                        format.createWriterFor (stream.get(), 48000.0, 1, 16, {}, 0));
+                    if (writer != nullptr)
+                    {
+                        stream.release();
+                        constexpr int frames = 24000;
+                        juce::AudioBuffer<float> tone (1, frames);
+                        for (int i = 0; i < frames; ++i)
+                        {
+                            const float body = 0.7f
+                                               * std::sin (juce::MathConstants<float>::twoPi * 70.0f
+                                                           * static_cast<float> (i) / 48000.0f)
+                                               * std::exp (-static_cast<float> (i) / 5200.0f);
+                            tone.setSample (0, i, body);
+                        }
+                        writer->writeFromAudioSampleBuffer (tone, 0, frames);
+                        writer.reset();
+                    }
+                }
+            }
+
+            for (auto* child : pluginEditor->getChildren())
+            {
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                {
+                    int kickLogical = -1;
+                    for (int i = 0; i < static_cast<int> (ed->getLogicalInstruments().size()); ++i)
+                    {
+                        const auto n = ed->getLogicalInstruments()[static_cast<size_t> (i)].name;
+                        if (n.containsIgnoreCase ("kick") || n.containsIgnoreCase ("kdrum"))
+                        {
+                            kickLogical = i;
+                            break;
+                        }
+                    }
+
+                    if (kickLogical >= 0)
+                        ed->selectLogicalInstrument (kickLogical);
+
+                    glorp::UserLayerParams params;
+                    params.blend = 0.55f;
+                    params.attackMs = 3.0f;
+                    params.decayMs = 260.0f;
+                    params.sustain = 0.55f;
+                    params.releaseMs = 140.0f;
+                    juce::String error;
+                    proc.getSampler().loadUserLayer (0, wav.getFullPathName(), params, error);
+                    ed->refreshMixerAfterLayerChange();
+                    ed->openLayerDrawer (0);
+
+                    auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+                    juce::File outFile ("test/docs/layer_drawer.png");
+                    outFile.deleteFile();
+                    juce::FileOutputStream fos (outFile);
+                    if (fos.openedOk())
+                    {
+                        juce::PNGImageFormat png;
+                        png.writeImageToStream (image, fos);
+                        std::cout << "Saved layer drawer snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
+                    }
+
+                    ed->setViewMode (glorp::Editor::EditorView::mixerView);
+                    if (auto* mv = ed->getMixerView())
+                        mv->focusChannel (proc.getSampler().getUserLayerMicIndex (0));
+
+                    auto mixerImage = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+                    juce::File mixerFile ("test/docs/layer_mixer.png");
+                    mixerFile.deleteFile();
+                    juce::FileOutputStream mfos (mixerFile);
+                    if (mfos.openedOk())
+                    {
+                        juce::PNGImageFormat png;
+                        png.writeImageToStream (mixerImage, mfos);
+                        std::cout << "Saved layer mixer snapshot to: " << mixerFile.getFullPathName().toStdString() << std::endl;
+                    }
+                    break;
+                }
+            }
+            return 0;
+        }
+
         if (juce::String (viewEnv).equalsIgnoreCase ("hits"))
         {
             for (auto* child : pluginEditor->getChildren())

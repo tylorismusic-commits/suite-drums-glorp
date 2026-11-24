@@ -14,6 +14,7 @@
 - **One Suite theme**: dark charcoal, amber accent, Jost ExtraBold display type.
 - **Kit view** with zones, velocity layers, round-robin, drum-hit animation and MIDI activity ribbon. Extra tom and floor-tom articulations fall back to the floor-tom marker.
 - **Per-piece controls** for level, pan, tune, dynamics, attack and damping.
+- **Kick and snare one-shot layers**: load a WAV one-shot, blend it against the kit sample, shape it with ADSR, correct polarity and fine delay, auto-align it to the close mic, and mix it on its own dedicated layer strip.
 - **Full-range velocity selection**: hits are chosen across each kit's recorded power range, so normal-velocity snare hits no longer fall back to ghost-note samples.
 - **Mixer** with per-mic channels, solo/mute, mono/stereo switching, per-mic stems, linked instrument/mixer bus routing, master bus and kit-adaptive presets. Every stock preset keeps kick and trigger mics mono, controls cymbals and pushes kick/snare forward so drums sit in a mix.
 - **Drum-bus glue** with bus EQ, compressor, saturation and a parallel dry/compressed mix.
@@ -35,6 +36,10 @@ No practice view, setlists, song database, backing tracks, tempo detection, metr
 | Mixer | Channel FX |
 | :---: | :---: |
 | ![Mixer](docs/mixer_view.png) | ![Channel FX](docs/mixer_fx.png) |
+
+| Kick/Snare Layer | Layer mixer strip |
+| :---: | :---: |
+| ![Kick/Snare Layer](docs/layer_drawer.png) | ![Layer mixer strip](docs/layer_mixer.png) |
 
 | E-drum wizard | MIDI mapping |
 | :---: | :---: |

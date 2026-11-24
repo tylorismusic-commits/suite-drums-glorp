@@ -54,6 +54,20 @@ enum class VelocityCurve : int
     sCurve = 3
 };
 
+/// User one-shot layer settings for Kick and Snare.
+struct UserLayerParams
+{
+    float blend = 0.5f;          ///< 0 = kit only, 1 = layer only
+    float attackMs = 0.0f;       ///< 0 .. 200
+    float decayMs = 120.0f;      ///< 0 .. 2000
+    float sustain = 1.0f;        ///< 0 .. 1
+    float releaseMs = 80.0f;     ///< 0 .. 2000, applied to the sample tail
+    bool polarityInvert = false;
+    float delayMs = 0.0f;        ///< 0 .. 20
+    float level = 1.0f;          ///< layer mixer trim
+    float pan = 0.0f;            ///< layer mixer pan
+};
+
 /// Per-instrument settings the UI exposes and the audio thread reads.
 struct InstrumentParams
 {
@@ -172,6 +186,18 @@ class Sampler
     void chokeAllCymbals(int64_t fadeMs, int64_t timeInSamples);
 
     void allNotesOff();
+
+    // -- User one-shot layers (0 = kick, 1 = snare) ------------------------
+    bool loadUserLayer(int slot, const juce::String &path, const UserLayerParams &params, juce::String &error);
+    void setUserLayerParams(int slot, const UserLayerParams &params);
+    void clearUserLayer(int slot);
+    bool isUserLayerLoaded(int slot) const noexcept;
+    juce::String getUserLayerPath(int slot) const;
+    juce::String getUserLayerName(int slot) const;
+    UserLayerParams getUserLayerParams(int slot) const;
+    int getUserLayerMicIndex(int slot) const noexcept;
+    void autoAlignUserLayer(int slot);
+    void getUserLayerPeaks(int slot, int numPeaks, std::vector<float> &peaks) const;
 
     // -- Per-Mic Mixer (Phase 2) -------------------------------------------
 
@@ -425,6 +451,36 @@ class Sampler
     std::atomic<int> hitRead {0};
 
     // -- Per-mic mixer state & DSP ------------------------------------------
+    struct UserLayerRuntime
+    {
+        bool loaded = false;
+        juce::String path;
+        juce::String name;
+        SampleCache::Handle sample;
+        double sampleRate = 44100.0;
+        UserLayerParams params;
+        int micChannelIndex = -1;
+    };
+
+    struct LayerVoice
+    {
+        bool active = false;
+        int slot = 0;
+        int64_t startedAt = 0;
+        double position = 0.0;
+        float velocity = 1.0f;
+    };
+
+    std::array<UserLayerRuntime, 2> userLayers;
+    std::array<LayerVoice, 8> layerVoices;
+
+    int layerSlotForInstrument(int instrument) const noexcept;
+    float kitBlendForInstrument(int instrument) const noexcept;
+    void triggerUserLayer(int slot, float velocity, int64_t timeInSamples);
+    void appendUserLayerChannel(int slot);
+    void removeUserLayerChannel(int slot);
+    void renderUserLayerVoices(int numSamples);
+
     struct MicChannelState
     {
         juce::String name;
