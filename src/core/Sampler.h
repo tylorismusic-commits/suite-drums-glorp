@@ -193,6 +193,9 @@ class Sampler
     float getMicRmsL(int index) const noexcept;
     float getMicRmsR(int index) const noexcept;
 
+    int activeVoiceCount() const noexcept;
+    uint64_t stolenVoiceCount() const noexcept { return stolenVoices.load(std::memory_order_relaxed); }
+
     float getMasterPeakL() const noexcept { return masterPeakL.load(std::memory_order_relaxed); }
     float getMasterPeakR() const noexcept { return masterPeakR.load(std::memory_order_relaxed); }
     float getMasterRmsL() const noexcept { return masterRmsL.load(std::memory_order_relaxed); }
@@ -213,8 +216,6 @@ class Sampler
 
     /** Latency the tuner introduces (0 for varispeed). */
     int latencySamples() const noexcept { return 0; }
-
-    int activeVoiceCount() const noexcept;
 
     /// Sample position at the end of the last rendered block, for the scope.
     int64_t currentSamplePosition() const noexcept { return sampleClock; }
@@ -385,6 +386,7 @@ class Sampler
     /// Closed stages skip choking same-clock voices only during this batch, so a
     /// real closed note at the same timestamp still cuts a ringing open hat.
     int64_t hiHatCrossfadeStart = -1;
+    std::atomic<uint64_t> stolenVoices {0};
 
     struct HiHatIndices
     {

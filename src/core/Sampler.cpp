@@ -763,6 +763,7 @@ Sampler::Voice *Sampler::allocateVoice()
     }
 
     // Everything is busy: steal the quietest, and oldest of those.
+    stolenVoices.fetch_add(1, std::memory_order_relaxed);
     Voice *best = nullptr;
 
     for (auto &voicePtr : pool.voices)
@@ -1451,6 +1452,160 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
                                    && (output[instBus * 2] != nullptr) && (output[instBus * 2 + 1] != nullptr);
             float *const auxDestL = hasAuxBus ? output[instBus * 2] : nullptr;
             float *const auxDestR = hasAuxBus ? output[instBus * 2 + 1] : nullptr;
+
+            // Fast path for rate-only conversion (e.g. 44.1 kHz samples in a
+            // 48 kHz host): read one contiguous source block per mic and use
+            // linear interpolation. Drums do not need cubic interpolation for
+            // a pure sample-rate change; this avoids four random reads per
+            // output sample on 16/21-mic kits.
+            const bool rateOnly = shifting && std::abs(v.pitchSemitones) < 0.01f;
+            const auto resamplePos = static_cast<int64_t>(std::floor(v.position));
+            const auto sourceFrames =
+                static_cast<int>(std::ceil(std::max(0, numSamples - 1) * v.pitchRatio)) + 3;
+            const bool canBlockResample = rateOnly && !fading && v.endsAt == 0 && first == 0 && !hasAuxBus
+                                          && sourceFrames > 0
+                                          && static_cast<size_t>(sourceFrames) <= v.mixL.size();
+
+            if (canBlockResample)
+            {
+                struct ChannelPlan
+                {
+                    const SampleCache::Handle *handle = nullptr;
+                    int channel = 0;
+                    int mic = 0;
+                    float gainL = 0.0f;
+                    float gainR = 0.0f;
+                };
+
+                ChannelPlan plans[64];
+                int planCount = 0;
+
+                for (const auto &channelRef : hit.channels)
+                {
+                    if (planCount >= static_cast<int>(sizeof(plans) / sizeof(plans[0])))
+                        break;
+
+                    const int micIdx = std::clamp(channelRef.kitChannelIndex, 0, numMics - 1);
+                    float bleedGain = 1.0f;
+                    if (channelRef.isBleed)
+                    {
+                        bleedGain = bleedMatrix.getEffectiveGain(channelRef.pieceIdx, micIdx)
+                                    * channelRef.channelBleedFactor;
+                        if (bleedGain <= 0.0f)
+                            continue;
+                    }
+
+                    auto &plan = plans[planCount++];
+                    plan.handle = &channelRef.handle;
+                    plan.channel = channelRef.channel;
+                    plan.mic = micIdx;
+                    plan.gainL = channelRef.gainL * instGainL * bleedGain;
+                    plan.gainR = channelRef.gainR * instGainR * bleedGain;
+                }
+
+                for (int pIndex = 0; pIndex < planCount; ++pIndex)
+                {
+                    const auto &plan = plans[pIndex];
+                    plan.handle->read(resamplePos, sourceFrames, plan.channel, v.mixL.data());
+
+                    auto *dstL = micScratchL[static_cast<size_t>(plan.mic)].data();
+                    auto *dstR = micScratchR[static_cast<size_t>(plan.mic)].data();
+                    const double startOffset = v.position - static_cast<double>(resamplePos);
+
+                    for (int i = 0; i < numSamples; ++i)
+                    {
+                        const double srcPos = startOffset + static_cast<double>(i) * v.pitchRatio;
+                        const auto idx = static_cast<int>(srcPos);
+                        const auto frac = static_cast<float>(srcPos - static_cast<double>(idx));
+                        const float s0 = v.mixL[static_cast<size_t>(idx)];
+                        const float s1 = v.mixL[static_cast<size_t>(idx + 1)];
+                        const float sample = s0 + frac * (s1 - s0);
+                        dstL[i] += sample * plan.gainL;
+                        dstR[i] += sample * plan.gainR;
+                    }
+                }
+
+                v.position += static_cast<double>(numSamples) * v.pitchRatio;
+                continue;
+            }
+
+            // Fast path for steady one-shots: no pitch shift, no attack ramp,
+            // no choke/decay end, and an integer sample position. Read one whole
+            // block per mic and mix with vector operations. This is the common
+            // case for every sustained tail and is much cheaper on 16/21-mic kits.
+            const bool steadyPosition = std::abs(v.position - std::floor(v.position)) < 1.0e-9;
+            const bool canBlockMix = !shifting && !fading && v.endsAt == 0 && first == 0 && !hasAuxBus
+                                     && steadyPosition
+                                     && static_cast<size_t>(numSamples) <= v.mixL.size();
+
+            if (canBlockMix)
+            {
+                struct ChannelPlan
+                {
+                    const SampleCache::Handle *handle = nullptr;
+                    int channel = 0;
+                    int mic = 0;
+                    float gainL = 0.0f;
+                    float gainR = 0.0f;
+                };
+
+                ChannelPlan plans[64];
+                int planCount = 0;
+                const auto blockPos = static_cast<int64_t>(v.position);
+
+                for (const auto &channelRef : hit.channels)
+                {
+                    if (planCount >= static_cast<int>(sizeof(plans) / sizeof(plans[0])))
+                        break;
+
+                    const int micIdx = std::clamp(channelRef.kitChannelIndex, 0, numMics - 1);
+                    float bleedGain = 1.0f;
+                    if (channelRef.isBleed)
+                    {
+                        bleedGain = bleedMatrix.getEffectiveGain(channelRef.pieceIdx, micIdx)
+                                    * channelRef.channelBleedFactor;
+                        if (bleedGain <= 0.0f)
+                            continue;
+                    }
+
+                    auto &plan = plans[planCount++];
+                    plan.handle = &channelRef.handle;
+                    plan.channel = channelRef.channel;
+                    plan.mic = micIdx;
+                    plan.gainL = channelRef.gainL * instGainL * bleedGain;
+                    plan.gainR = channelRef.gainR * instGainR * bleedGain;
+                }
+
+                const auto framesLeft = hit.numFrames - blockPos;
+                const int blockCount =
+                    static_cast<int>(std::clamp<int64_t>(framesLeft, 0, static_cast<int64_t>(numSamples)));
+
+                if (blockCount > 0)
+                {
+                    for (int pIndex = 0; pIndex < planCount; ++pIndex)
+                    {
+                        const auto &plan = plans[pIndex];
+                        plan.handle->read(blockPos, blockCount, plan.channel, v.mixL.data());
+
+                        auto *dstL = micScratchL[static_cast<size_t>(plan.mic)].data();
+                        auto *dstR = micScratchR[static_cast<size_t>(plan.mic)].data();
+
+                        if (plan.gainL == plan.gainR)
+                        {
+                            juce::FloatVectorOperations::addWithMultiply(dstL, v.mixL.data(), plan.gainL, blockCount);
+                            juce::FloatVectorOperations::addWithMultiply(dstR, v.mixL.data(), plan.gainR, blockCount);
+                        }
+                        else
+                        {
+                            juce::FloatVectorOperations::addWithMultiply(dstL, v.mixL.data(), plan.gainL, blockCount);
+                            juce::FloatVectorOperations::addWithMultiply(dstR, v.mixL.data(), plan.gainR, blockCount);
+                        }
+                    }
+
+                    v.position += blockCount;
+                    continue;
+                }
+            }
 
             for (int i = 0; i < numSamples; ++i)
             {

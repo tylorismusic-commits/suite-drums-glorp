@@ -7,6 +7,7 @@
 
 #include "PluginProcessor.h"
 
+#include <chrono>
 #include <iostream>
 
 int main (int argc, char** argv)
@@ -218,6 +219,78 @@ int main (int argc, char** argv)
 
         std::cout << "open tail=" << openTailDb << " dB, with closed hat=" << chokedTailDb
                   << " dB, reduction=" << (openTailDb - chokedTailDb) << " dB" << std::endl;
+        return 0;
+    }
+
+    if (std::getenv ("GLORP_PROBE_STRESS") != nullptr)
+    {
+        constexpr double sr = 48000.0;
+        constexpr int blockSize = 512;
+        const double seconds = 15.0;
+        const int blocks = static_cast<int>((seconds * sr) / blockSize);
+
+        proc.prepareToPlay(sr, blockSize);
+
+        if (std::getenv ("GLORP_STRESS_MIXREADY") != nullptr)
+        {
+            std::vector<juce::String> names;
+            for (int i = 0; i < proc.getSampler().numMicStrips(); ++i)
+                names.push_back (proc.getSampler().micStripTitle (i));
+            proc.getSampler().applyMixerPreset (
+                glorp::MixerPreset::createMixReady (static_cast<int>(names.size()), names));
+        }
+
+        juce::AudioBuffer<float> buffer (2, blockSize);
+        double nextHat = 0.0, nextSnare = 0.0, nextKick = 0.0, nextCrash = 0.0;
+        float peak = 0.0f;
+        const auto start = std::chrono::steady_clock::now();
+
+        for (int block = 0; block < blocks; ++block)
+        {
+            juce::MidiBuffer midi;
+            const double t = (block * blockSize) / sr;
+
+            while (nextHat <= t)
+            {
+                midi.addEvent (juce::MidiMessage::noteOn (10, 42, static_cast<juce::uint8> (100)),
+                               juce::jlimit (0, blockSize - 1, static_cast<int> ((nextHat - t) * sr)));
+                nextHat += 0.04;
+            }
+            while (nextSnare <= t)
+            {
+                midi.addEvent (juce::MidiMessage::noteOn (10, 38, static_cast<juce::uint8> (110)),
+                               juce::jlimit (0, blockSize - 1, static_cast<int> ((nextSnare - t) * sr)));
+                nextSnare += 0.25;
+            }
+            while (nextKick <= t)
+            {
+                midi.addEvent (juce::MidiMessage::noteOn (10, 36, static_cast<juce::uint8> (120)),
+                               juce::jlimit (0, blockSize - 1, static_cast<int> ((nextKick - t) * sr)));
+                nextKick += 0.5;
+            }
+            while (nextCrash <= t)
+            {
+                midi.addEvent (juce::MidiMessage::noteOn (10, 49, static_cast<juce::uint8> (115)),
+                               juce::jlimit (0, blockSize - 1, static_cast<int> ((nextCrash - t) * sr)));
+                nextCrash += 2.0;
+            }
+
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            {
+                const auto* d = buffer.getReadPointer (ch);
+                for (int i = 0; i < buffer.getNumSamples(); ++i)
+                    peak = std::max (peak, std::abs (d[i]));
+            }
+        }
+
+        const auto elapsed = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
+        std::cout << "stress audio=" << seconds << "s wall=" << elapsed << "s rtf=" << (elapsed / seconds)
+                  << " peak=" << peak << " peakDb=" << juce::Decibels::gainToDecibels (peak)
+                  << " activeVoices=" << proc.getSampler().activeVoiceCount()
+                  << " stolen=" << proc.getSampler().stolenVoiceCount() << std::endl;
         return 0;
     }
 
