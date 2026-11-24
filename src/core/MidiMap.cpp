@@ -998,17 +998,49 @@ void MidiMap::applyPreset(const MapPreset &preset, const std::vector<juce::Strin
         else if (targetStripped.startsWith("crash1") || targetStripped == "crash")
         {
             const bool wantsEdge = targetStripped.contains("edge");
+            const bool wantsBell = targetStripped.contains("bell");
+            const auto isCrash1 = [](const juce::String &ns)
+            {
+                return ns.contains("crash1") || ns.contains("crashl") || ns.contains("leftcrash")
+                       || (ns.contains("crash") && !ns.contains("2") && !ns.contains("crashr")
+                           && !ns.contains("right"));
+            };
+
+            if (wantsEdge || wantsBell)
+            {
+                for (size_t i = 0; i < strippedNames.size(); ++i)
+                {
+                    const auto &ns = strippedNames[i];
+                    if (isCrash1(ns) && ns.contains(wantsEdge ? "edge" : "bell"))
+                        return static_cast<int>(i);
+                }
+            }
+
+            // A generic "Crash" is a full crash hit, not the bell. Prefer bow,
+            // then edge, then any non-choke crash. This keeps a GM crash from
+            // landing on a bell/ride-like articulation on edge+bell kits.
+            const char *genericPrefs[] = {"bow", "edge", nullptr};
+            for (int pass = 0; pass < 2; ++pass)
+            {
+                const auto want = juce::String(genericPrefs[pass]);
+                for (size_t i = 0; i < strippedNames.size(); ++i)
+                {
+                    const auto &ns = strippedNames[i];
+                    if (isCrash1(ns) && ns.contains(want) && !ns.contains("choke"))
+                        return static_cast<int>(i);
+                }
+            }
             for (size_t i = 0; i < strippedNames.size(); ++i)
             {
                 const auto &ns = strippedNames[i];
-                if (ns.contains("crash1") || ns.contains("crashl") || ns.contains("leftcrash")
-                    || (ns.contains("crash") && !ns.contains("2") && !ns.contains("crashr") && !ns.contains("right")))
-                {
-                    if (wantsEdge && ns.contains("edge"))
-                        return static_cast<int>(i);
-                    if (!wantsEdge && (ns.contains("bow") || (!ns.contains("edge") && !ns.contains("choke"))))
-                        return static_cast<int>(i);
-                }
+                if (isCrash1(ns) && !ns.contains("bell") && !ns.contains("choke"))
+                    return static_cast<int>(i);
+            }
+            for (size_t i = 0; i < strippedNames.size(); ++i)
+            {
+                const auto &ns = strippedNames[i];
+                if (isCrash1(ns) && !ns.contains("choke"))
+                    return static_cast<int>(i);
             }
             for (size_t i = 0; i < strippedNames.size(); ++i)
                 if (strippedNames[i].contains("crash") && !strippedNames[i].contains("2"))
@@ -1017,20 +1049,47 @@ void MidiMap::applyPreset(const MapPreset &preset, const std::vector<juce::Strin
         else if (targetStripped.startsWith("crash2"))
         {
             const bool wantsEdge = targetStripped.contains("edge");
+            const bool wantsBell = targetStripped.contains("bell");
+            const auto isCrash2 = [](const juce::String &ns)
+            {
+                return ns.contains("crash2") || ns.contains("crashr") || ns.contains("rightcrash");
+            };
+
+            if (wantsEdge || wantsBell)
+            {
+                for (size_t i = 0; i < strippedNames.size(); ++i)
+                {
+                    const auto &ns = strippedNames[i];
+                    if (isCrash2(ns) && ns.contains(wantsEdge ? "edge" : "bell"))
+                        return static_cast<int>(i);
+                }
+            }
 
             // Prefer an actual right/second crash before falling through to
-            // China or splash. Otherwise a kit with a China can steal every
-            // crash-2 hit.
+            // China or splash. A generic crash-2 hit prefers bow, then edge,
+            // then any non-choke crash over the bell.
+            const char *genericPrefs[] = {"bow", "edge", nullptr};
+            for (int pass = 0; pass < 2; ++pass)
+            {
+                const auto want = juce::String(genericPrefs[pass]);
+                for (size_t i = 0; i < strippedNames.size(); ++i)
+                {
+                    const auto &ns = strippedNames[i];
+                    if (isCrash2(ns) && ns.contains(want) && !ns.contains("choke"))
+                        return static_cast<int>(i);
+                }
+            }
             for (size_t i = 0; i < strippedNames.size(); ++i)
             {
                 const auto &ns = strippedNames[i];
-                if (ns.contains("crash2") || ns.contains("crashr") || ns.contains("rightcrash"))
-                {
-                    if (wantsEdge && ns.contains("edge"))
-                        return static_cast<int>(i);
-                    if (!wantsEdge && (ns.contains("bow") || (!ns.contains("edge") && !ns.contains("choke"))))
-                        return static_cast<int>(i);
-                }
+                if (isCrash2(ns) && !ns.contains("bell") && !ns.contains("choke"))
+                    return static_cast<int>(i);
+            }
+            for (size_t i = 0; i < strippedNames.size(); ++i)
+            {
+                const auto &ns = strippedNames[i];
+                if (isCrash2(ns) && !ns.contains("choke"))
+                    return static_cast<int>(i);
             }
 
             // Any remaining crash, preferring the second one.
