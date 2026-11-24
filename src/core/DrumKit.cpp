@@ -453,7 +453,11 @@ DrumKit DrumKit::loadNativeGlorpKit(GlorpKitReader &reader, const std::string &a
                 ChannelMap cm;
                 cm.in = m.name;
                 cm.out = m.name;
-                cm.main = (m.name == "close" || m.name.find("oh") != std::string::npos);
+                // Native .glorpkit sample sets already contain the direct
+                // capture for each mic, including its natural acoustic bleed.
+                // Treat every mic as a main source; the bleed matrix is only a
+                // simulation layer for kits with separate bleed samples.
+                cm.main = true;
                 inst.channelMaps.push_back(std::move(cm));
             }
 

@@ -1098,6 +1098,9 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
                           || lowerStem.find("blonde_bop") != std::string::npos;
     const bool isAvlPercussion = lowerStem.find("buskman") != std::string::npos;
     const bool isAvl = isAvlKit || isAvlPercussion;
+    const bool isSmDrums = lowerStem.find("sm_drums") != std::string::npos
+                           || lowerStem.find("smdrums") != std::string::npos
+                           || lowerStem.find("sm drums") != std::string::npos;
 
     struct PartInfo
     {
@@ -1142,11 +1145,55 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         {62, "China", "hit", "china", "crash2", "china"},
     };
 
+    // SM Drums: one logical Snare and Hi-Hat with articulation zones,
+    // separate toms, and left/right crash groups so the kit view stays clear.
+    static const PartInfo smParts[] = {
+        {36, "Kick", "head", "kick", "kick", "none"},
+        {37, "Snare", "sidestick", "snare", "snare", "none"},
+        {38, "Snare", "hybrid 3", "snare", "snare", "none"},
+        {39, "Snare", "rim 1", "snare", "snare", "none"},
+        {40, "Snare", "hybrid 2", "snare", "snare", "none"},
+        {41, "Snare", "hybrid 1", "snare", "snare", "none"},
+        {52, "Snare", "65 no rim", "snare", "snare", "none"},
+        {53, "Snare", "67 no rim", "snare", "snare", "none"},
+        {64, "Snare", "65", "snare", "snare", "none"},
+        {65, "Snare", "rim 2", "snare", "snare", "none"},
+        {42, "Hihat", "closed", "hihat", "hihat", "hihat"},
+        {44, "Hihat", "loose", "hihat", "hihat", "hihat"},
+        {46, "Hihat", "open", "hihat", "hihat", "hihat"},
+        {49, "Hihat", "foot open", "hihat", "hihat", "hihat"},
+        {50, "Hihat", "foot", "hihat", "hihat", "hihat"},
+        {51, "Hihat", "closed-open", "hihat", "hihat", "hihat"},
+        {43, "Floor Tom", "head", "ftom", "ftom", "none"},
+        {45, "Tom 2", "head", "tom2", "tom2", "none"},
+        {47, "Tom 3", "head", "tom3", "tom1", "none"},
+        {48, "Tom 4", "head", "tom4", "tom2", "none"},
+        {54, "Crash Left", "13", "crash1", "crash1", "none"},
+        {56, "Crash Left", "16", "crash1", "crash1", "none"},
+        {55, "Crash Right", "15", "crash2", "crash2", "none"},
+        {57, "Crash Right", "17", "crash2", "crash2", "none"},
+        {58, "China", "hit", "china", "crash2", "none"},
+        {60, "Ride", "17 edge", "ride", "ride", "none"},
+        {61, "Ride", "17 bell", "ride", "ride", "none"},
+        {62, "Ride", "20 edge", "ride", "ride", "none"},
+        {63, "Ride", "20 bell", "ride", "ride", "none"},
+    };
+
     auto findAvlPart = [&](int note) -> const PartInfo *
     {
         if (!isAvlKit)
             return nullptr;
         for (const auto &part : avlParts)
+            if (part.note == note)
+                return &part;
+        return nullptr;
+    };
+
+    auto findSmPart = [&](int note) -> const PartInfo *
+    {
+        if (!isSmDrums)
+            return nullptr;
+        for (const auto &part : smParts)
             if (part.note == note)
                 return &part;
         return nullptr;
@@ -1484,6 +1531,11 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
             return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
         }
 
+        if (const auto *known = findSmPart(r.key))
+        {
+            return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
+        }
+
         auto name = cleanName(r.fileName);
         if (name.empty())
             name = "Note " + std::to_string(r.key);
@@ -1522,6 +1574,14 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
             title = "Blonde Bop";
         else if (isAvlPercussion)
             title = "Buskman's Holiday";
+    }
+
+    if (isSmDrums)
+    {
+        title = "SM Drums";
+        author = "Scott McLean, Tod Stillwell, Suleiman Ali";
+        license = "Public Domain";
+        description = "SM Drums by Scott McLean, Tod Stillwell and Suleiman Ali, converted from the Sforzando SFZ library.";
     }
 
     {
@@ -1696,6 +1756,31 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
 
     if (mics.empty())
         mics.push_back({"close", "Close Mic", 1.0f});
+
+    if (isSmDrums)
+    {
+        auto place = [&](const std::string &id, float x, float y, float w, int z)
+        {
+            for (auto &p : pieces)
+            {
+                if (p.id == id)
+                {
+                    p.normX = x;
+                    p.normY = y;
+                    p.normW = w;
+                    p.zOrder = z;
+                }
+            }
+        };
+
+        // SM Drums has four toms. Put the three rack toms across the top and
+        // keep the floor tom where the default kit art expects it.
+        place("tom3", -140.0f, -420.0f, 140.0f, 5);
+        place("tom2", 15.0f, -410.0f, 150.0f, 4);
+        place("tom4", 150.0f, -350.0f, 145.0f, 3);
+        place("ftom", 110.0f, -270.0f, 195.0f, 2);
+        place("china", -270.0f, -330.0f, 145.0f, 9);
+    }
 
     normalizeZOrders();
     return true;
