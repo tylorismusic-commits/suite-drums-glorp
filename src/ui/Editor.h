@@ -96,6 +96,7 @@ class Editor
   private:
     void kitChanged() override;
     void parametersChanged() override;
+    void busRoutingChanged() override;
 
     void updateOpenGlAttachment();
     void syncTopLevelWindowTheme();

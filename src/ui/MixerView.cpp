@@ -208,7 +208,7 @@ MixerView::ChannelStripComponent::ChannelStripComponent(MixerView &o, PluginProc
                          b == currentBus,
                          [this, b]()
                          {
-                             processor.getSampler().setMicOutputBus(channelIndex_, b);
+                             processor.setMicOutputBus(channelIndex_, b);
                              updateFromState();
                          });
         }
@@ -2181,6 +2181,15 @@ void MixerView::refreshChannels()
 
     resized();
     repaint();
+}
+
+void MixerView::refreshBusStates()
+{
+    for (auto &strip : channelStrips)
+        strip->updateFromState();
+
+    if (masterStrip != nullptr)
+        masterStrip->updateFromState();
 }
 
 void MixerView::openChannelFX(int channelIndex)

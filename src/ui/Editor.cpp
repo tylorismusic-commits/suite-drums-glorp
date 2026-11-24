@@ -1568,11 +1568,7 @@ void Editor::buildControls()
                         outBusButton.setBusIndex(b);
 
                         for (const auto &z : currentInst.zones)
-                        {
-                            processor.getSampler().setInstrumentBus(z.samplerIndex, b);
-                            if (auto *p = processor.findParameter("inst" + juce::String(z.samplerIndex) + ".bus"))
-                                p->setValueNotifyingHost(static_cast<float>(b) / 15.0f);
-                        }
+                            processor.setInstrumentOutputBus(z.samplerIndex, b);
                         statusText = currentInst.name + " routed to Out " + juce::String(b * 2 + 1) + "/"
                                      + juce::String(b * 2 + 2);
                         repaint();
@@ -1883,6 +1879,10 @@ void Editor::buildLogicalInstruments()
         }
     }
 
+    for (auto &inst : logicalInstruments)
+        if (!inst.zones.empty())
+            inst.outputBus = sampler.getInstrumentBus(inst.zones.front().samplerIndex);
+
     selectedLogicalIndex = juce::jlimit(0, static_cast<int>(logicalInstruments.size()) - 1, selectedLogicalIndex);
     rebuildZoneButtons();
     syncMinimalGridItems();
@@ -2176,6 +2176,35 @@ void Editor::parametersChanged()
 {
     updateInstrumentDisplay();
     bindInstrumentKnobs();
+    repaint();
+}
+
+void Editor::busRoutingChanged()
+{
+    const int selectedZone = getActiveSamplerIndex();
+    buildLogicalInstruments();
+
+    if (selectedZone >= 0)
+    {
+        for (int i = 0; i < static_cast<int>(logicalInstruments.size()); ++i)
+        {
+            for (const auto &z : logicalInstruments[static_cast<size_t>(i)].zones)
+            {
+                if (z.samplerIndex == selectedZone)
+                {
+                    selectedLogicalIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    updateInstrumentDisplay();
+    bindInstrumentKnobs();
+
+    if (mixerView != nullptr)
+        mixerView->refreshBusStates();
+
     repaint();
 }
 

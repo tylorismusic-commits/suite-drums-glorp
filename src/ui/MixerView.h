@@ -30,6 +30,7 @@ class MixerView
     void mouseDown(const juce::MouseEvent &e) override;
 
     void refreshChannels();
+    void refreshBusStates();
     void openChannelFX(int channelIndex);
     void openMasterFX();
     void openBleedMatrix(int highlightMic = -1);

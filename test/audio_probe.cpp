@@ -92,6 +92,28 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_BUSLINK") != nullptr)
+    {
+        int snareMic = -1;
+        for (int i = 0; i < proc.getSampler().numMicStrips(); ++i)
+            if (proc.getSampler().micStripName (i).containsIgnoreCase ("snare"))
+                snareMic = i;
+
+        std::cout << "snareMic=" << snareMic << std::endl;
+        if (snareMic >= 0)
+        {
+            proc.setMicOutputBus (snareMic, 2);
+            for (int i = 0; i < proc.getSampler().numInstruments(); ++i)
+                if (proc.getSampler().instrumentName (i).containsIgnoreCase ("snare"))
+                    std::cout << "inst " << i << " " << proc.getSampler().instrumentName (i).toStdString()
+                              << " bus=" << proc.getSampler().getInstrumentBus (i) << std::endl;
+
+            proc.setInstrumentOutputBus (11, 3);
+            std::cout << "after instrument->mic, snare mic bus=" << proc.getSampler().getMicOutputBus (snareMic) << std::endl;
+        }
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_NAMES") != nullptr)
     {
         for (const int note : {36, 38, 42, 46, 48, 49, 51, 52, 53, 55, 57})

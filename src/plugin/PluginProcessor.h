@@ -91,6 +91,10 @@ class PluginProcessor : public juce::AudioProcessor
 
     void loadKit(const juce::String &drumkitPath);
     void loadKitImpl(const juce::String &drumkitPath);
+
+    /// Routes a mixer mic strip and its matching drum instruments together.
+    void setMicOutputBus(int micStripIndex, int bus);
+    void setInstrumentOutputBus(int instrumentIndex, int bus);
     void refreshKitList();
 
     const std::vector<KitEntry> &getKitList() const noexcept { return kitList; }
@@ -128,6 +132,7 @@ class PluginProcessor : public juce::AudioProcessor
         virtual ~Listener() = default;
         virtual void kitChanged() = 0;
         virtual void parametersChanged() = 0;
+        virtual void busRoutingChanged() {}
     };
 
     using juce::AudioProcessor::addListener;

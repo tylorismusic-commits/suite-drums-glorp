@@ -32,6 +32,58 @@ std::optional<juce::String> PluginProcessor::getNameForMidiNoteNumber(int note, 
     return name;
 }
 
+namespace
+{
+juce::String normaliseRoutingName(const juce::String &name)
+{
+    return name.toLowerCase().removeCharacters(" .-_/\\");
+}
+
+bool micMatchesInstrument(const juce::String &micName, const juce::String &instrumentName)
+{
+    const auto mic = normaliseRoutingName(micName);
+    const auto inst = normaliseRoutingName(instrumentName);
+
+    if (mic.isEmpty() || inst.isEmpty())
+        return false;
+
+    if (inst.contains(mic) || mic.contains(inst))
+        return true;
+
+    if (mic.contains("kick") || mic.contains("kdrum") || mic.contains("bdrum"))
+        return inst.contains("kick") || inst.contains("kdrum") || inst.contains("bdrum");
+
+    if (mic.contains("snare"))
+        return inst.contains("snare") || inst.contains("rim") || inst.contains("click") || inst.contains("cross")
+               || inst.contains("stick");
+
+    if (mic.contains("hat") || mic == "hh")
+        return inst.contains("hat") || inst.contains("hh");
+
+    for (int n = 1; n <= 4; ++n)
+    {
+        const auto key = "tom" + juce::String(n);
+
+        if (mic.contains(key))
+            return inst.contains(key);
+    }
+
+    if (mic.contains("floor") || mic.contains("ftom"))
+        return inst.contains("floor") || inst.contains("ftom") || inst.contains("tom4");
+
+    if (mic.contains("ride"))
+        return inst.contains("ride");
+    if (mic.contains("crash"))
+        return inst.contains("crash");
+    if (mic.contains("china"))
+        return inst.contains("china");
+    if (mic.contains("splash"))
+        return inst.contains("splash");
+
+    return false;
+}
+} // namespace
+
 //==============================================================================
 juce::AudioProcessor::BusesProperties PluginProcessor::createBusesProperties()
 {
@@ -403,6 +455,58 @@ void PluginProcessor::loadKitImpl(const juce::String &drumkitPath)
     }
 
     listeners.call(&Listener::kitChanged);
+}
+
+void PluginProcessor::setMicOutputBus(int micStripIndex, int bus)
+{
+    bus = juce::jlimit(0, 15, bus);
+
+    if (micStripIndex < 0 || micStripIndex >= audioEngine.getSampler().numMicStrips())
+        return;
+
+    audioEngine.getSampler().setMicOutputBus(micStripIndex, bus);
+
+    const auto micName = audioEngine.getSampler().micStripName(micStripIndex);
+    bool changed = false;
+
+    for (int i = 0; i < audioEngine.getSampler().numInstruments(); ++i)
+    {
+        if (!micMatchesInstrument(micName, audioEngine.getSampler().instrumentName(i)))
+            continue;
+
+        audioEngine.getSampler().setInstrumentBus(i, bus);
+
+        if (i < static_cast<int>(parameterManager.instrumentBusParams.size()))
+            parameterManager.instrumentBusParams[static_cast<size_t>(i)]->setValueNotifyingHost(
+                static_cast<float>(bus) / 15.0f);
+
+        changed = true;
+    }
+
+    if (changed)
+        listeners.call(&Listener::busRoutingChanged);
+}
+
+void PluginProcessor::setInstrumentOutputBus(int instrumentIndex, int bus)
+{
+    bus = juce::jlimit(0, 15, bus);
+
+    if (instrumentIndex < 0 || instrumentIndex >= audioEngine.getSampler().numInstruments())
+        return;
+
+    audioEngine.getSampler().setInstrumentBus(instrumentIndex, bus);
+
+    if (instrumentIndex < static_cast<int>(parameterManager.instrumentBusParams.size()))
+        parameterManager.instrumentBusParams[static_cast<size_t>(instrumentIndex)]->setValueNotifyingHost(
+            static_cast<float>(bus) / 15.0f);
+
+    const auto instrumentName = audioEngine.getSampler().instrumentName(instrumentIndex);
+
+    for (int i = 0; i < audioEngine.getSampler().numMicStrips(); ++i)
+        if (micMatchesInstrument(audioEngine.getSampler().micStripName(i), instrumentName))
+            audioEngine.getSampler().setMicOutputBus(i, bus);
+
+    listeners.call(&Listener::busRoutingChanged);
 }
 
 void PluginProcessor::applyMapPreset(const juce::String &presetName)
