@@ -100,6 +100,7 @@ void Settings::writeState(juce::MemoryBlock &destination) const
 
     root.setAttribute("lastKit", lastKitPath);
     root.setAttribute("lastMapPreset", lastMapPreset);
+    root.setAttribute("lastLayerFolder", lastLayerFolder);
     root.setAttribute("midiLibraryPath", midiLibraryPath);
     root.setAttribute("midiSourceProfile", midiSourceProfile);
     root.setAttribute("midiPreviewSpeed", midiPreviewSpeed);
@@ -135,6 +136,7 @@ void Settings::readState(const juce::MemoryBlock &source)
 
     lastKitPath = root->getStringAttribute("lastKit", lastKitPath);
     lastMapPreset = root->getStringAttribute("lastMapPreset", lastMapPreset);
+    lastLayerFolder = root->getStringAttribute("lastLayerFolder", lastLayerFolder);
     midiLibraryPath = root->getStringAttribute("midiLibraryPath", midiLibraryPath);
     midiSourceProfile = root->getStringAttribute("midiSourceProfile", midiSourceProfile);
     midiPreviewSpeed = juce::jlimit(0.25, 4.0, root->getDoubleAttribute("midiPreviewSpeed", midiPreviewSpeed));

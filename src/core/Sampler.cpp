@@ -37,6 +37,53 @@ float evaluateVelocityPoints(const std::array<float, 8> &points, float x) noexce
     const auto b = points[static_cast<size_t>(std::clamp(index + 1, 0, 7))];
     return std::clamp(a + (b - a) * frac, 0.0f, 1.0f);
 }
+
+void clampLayerParams(UserLayerParams &params) noexcept
+{
+    params.blend = std::clamp(params.blend, 0.0f, 1.0f);
+    params.attackMs = std::clamp(params.attackMs, 0.0f, 200.0f);
+    params.decayMs = std::clamp(params.decayMs, 0.0f, 2000.0f);
+    params.sustain = std::clamp(params.sustain, 0.0f, 1.0f);
+    params.releaseMs = std::clamp(params.releaseMs, 0.0f, 2000.0f);
+    params.delayMs = std::clamp(params.delayMs, 0.0f, 20.0f);
+    params.trimMs = std::clamp(params.trimMs, 0.0f, 1000.0f);
+    params.level = std::clamp(params.level, 0.0f, 2.0f);
+    params.pan = std::clamp(params.pan, -1.0f, 1.0f);
+}
+
+int64_t findTransientOnset(const SampleCache::Handle &handle, int channel) noexcept
+{
+    if (!handle.valid || handle.numFrames <= 2)
+        return 0;
+
+    const int64_t scanFrames = std::min<int64_t>(
+        handle.numFrames, static_cast<int64_t>(std::max(1.0, handle.sampleRate) * 0.25));
+
+    float peak = 0.0f;
+    for (int64_t i = 0; i < scanFrames; ++i)
+        peak = std::max(peak, std::abs(handle.readSample(i, channel)));
+
+    if (peak <= 1.0e-6f)
+        return 0;
+
+    const float threshold = std::max(0.002f, peak * 0.08f);
+    int consecutive = 0;
+
+    for (int64_t i = 0; i < scanFrames; ++i)
+    {
+        if (std::abs(handle.readSample(i, channel)) > threshold)
+        {
+            if (++consecutive >= 2)
+                return std::max<int64_t>(0, i - 1);
+        }
+        else
+        {
+            consecutive = 0;
+        }
+    }
+
+    return 0;
+}
 } // namespace
 
 //==============================================================================
@@ -58,6 +105,9 @@ Sampler::Sampler()
 {
     for (int i = 0; i < maxVoices; ++i)
         pool.voices.push_back(std::make_unique<Voice>());
+
+    userLayerAudition[0].store(0);
+    userLayerAudition[1].store(0);
 
     setSampleRateAndBlock(44100.0, 512);
 }
@@ -284,7 +334,7 @@ bool Sampler::loadKit(DrumKit kit, juce::String &error)
     for (int slot = 0; slot < 2; ++slot)
     {
         userLayers[static_cast<size_t>(slot)].micChannelIndex = -1;
-        if (userLayers[static_cast<size_t>(slot)].loaded)
+        if (userLayers[static_cast<size_t>(slot)].loaded || userLayers[static_cast<size_t>(slot)].missing)
             appendUserLayerChannel(slot);
     }
 
@@ -818,7 +868,78 @@ float Sampler::kitBlendForInstrument(int instrument) const noexcept
     if (slot < 0 || !userLayers[static_cast<size_t>(slot)].loaded)
         return 1.0f;
 
+    const int audition = userLayerAudition[static_cast<size_t>(slot)].load(std::memory_order_relaxed);
+    if (audition == 1)
+        return 1.0f;
+    if (audition == 2)
+        return 0.0f;
+
     return 1.0f - std::clamp(userLayers[static_cast<size_t>(slot)].params.blend, 0.0f, 1.0f);
+}
+
+bool Sampler::isUserLayerMissing(int slot) const noexcept
+{
+    if (slot < 0 || slot > 1)
+        return false;
+    return userLayers[static_cast<size_t>(slot)].missing;
+}
+
+void Sampler::markUserLayerMissing(int slot, const juce::String &path, const UserLayerParams &params)
+{
+    if (slot < 0 || slot > 1)
+        return;
+
+    const juce::ScopedLock lock(kitLock);
+    auto &layer = userLayers[static_cast<size_t>(slot)];
+
+    for (auto &v : layerVoices)
+        if (v.slot == slot)
+            v.active = false;
+
+    layer.loaded = false;
+    layer.missing = true;
+    layer.path = path;
+    layer.name = juce::File(path).getFileName();
+    layer.sample = {};
+    layer.sampleRate = 44100.0;
+    layer.params = params;
+    clampLayerParams(layer.params);
+
+    // Keep the mixer strip alive so a missing sample does not disturb the
+    // channel layout and its FX settings can be reused after relinking.
+    if (layer.micChannelIndex < 0)
+        appendUserLayerChannel(slot);
+
+    if (layer.micChannelIndex >= 0 && layer.micChannelIndex < static_cast<int>(micChannels.size()))
+    {
+        auto &mp = micChannels[static_cast<size_t>(layer.micChannelIndex)]->params;
+        mp.level = layer.params.level;
+        mp.pan = layer.params.pan;
+    }
+}
+
+void Sampler::setUserLayerAudition(int slot, int mode)
+{
+    if (slot < 0 || slot > 1)
+        return;
+
+    mode = std::clamp(mode, 0, 2);
+    const juce::ScopedLock lock(kitLock);
+    const int previous = userLayerAudition[static_cast<size_t>(slot)].exchange(mode);
+
+    if (previous == mode)
+        return;
+
+    for (auto &v : layerVoices)
+        if (v.slot == slot)
+            v.active = false;
+}
+
+int Sampler::getUserLayerAudition(int slot) const noexcept
+{
+    if (slot < 0 || slot > 1)
+        return 0;
+    return userLayerAudition[static_cast<size_t>(slot)].load(std::memory_order_relaxed);
 }
 
 bool Sampler::isUserLayerLoaded(int slot) const noexcept
@@ -933,6 +1054,7 @@ bool Sampler::loadUserLayer(int slot, const juce::String &path, const UserLayerP
 
     auto &layer = userLayers[static_cast<size_t>(slot)];
     layer.loaded = true;
+    layer.missing = false;
     layer.path = path;
     layer.name = juce::File(path).getFileName();
     layer.sample = handle;
@@ -942,14 +1064,7 @@ bool Sampler::loadUserLayer(int slot, const juce::String &path, const UserLayerP
             v.active = false;
     layer.sampleRate = handle.sampleRate > 0.0 ? handle.sampleRate : currentSampleRate;
     layer.params = params;
-    layer.params.blend = std::clamp(layer.params.blend, 0.0f, 1.0f);
-    layer.params.attackMs = std::clamp(layer.params.attackMs, 0.0f, 200.0f);
-    layer.params.decayMs = std::clamp(layer.params.decayMs, 0.0f, 2000.0f);
-    layer.params.sustain = std::clamp(layer.params.sustain, 0.0f, 1.0f);
-    layer.params.releaseMs = std::clamp(layer.params.releaseMs, 0.0f, 2000.0f);
-    layer.params.delayMs = std::clamp(layer.params.delayMs, 0.0f, 20.0f);
-    layer.params.level = std::clamp(layer.params.level, 0.0f, 2.0f);
-    layer.params.pan = std::clamp(layer.params.pan, -1.0f, 1.0f);
+    clampLayerParams(layer.params);
 
     if (layer.micChannelIndex < 0)
         appendUserLayerChannel(slot);
@@ -972,14 +1087,7 @@ void Sampler::setUserLayerParams(int slot, const UserLayerParams &params)
     const juce::ScopedLock lock(kitLock);
     auto &layer = userLayers[static_cast<size_t>(slot)];
     layer.params = params;
-    layer.params.blend = std::clamp(layer.params.blend, 0.0f, 1.0f);
-    layer.params.attackMs = std::clamp(layer.params.attackMs, 0.0f, 200.0f);
-    layer.params.decayMs = std::clamp(layer.params.decayMs, 0.0f, 2000.0f);
-    layer.params.sustain = std::clamp(layer.params.sustain, 0.0f, 1.0f);
-    layer.params.releaseMs = std::clamp(layer.params.releaseMs, 0.0f, 2000.0f);
-    layer.params.delayMs = std::clamp(layer.params.delayMs, 0.0f, 20.0f);
-    layer.params.level = std::clamp(layer.params.level, 0.0f, 2.0f);
-    layer.params.pan = std::clamp(layer.params.pan, -1.0f, 1.0f);
+    clampLayerParams(layer.params);
 }
 
 void Sampler::clearUserLayer(int slot)
@@ -994,11 +1102,13 @@ void Sampler::clearUserLayer(int slot)
 
     auto &layer = userLayers[static_cast<size_t>(slot)];
     layer.loaded = false;
+    layer.missing = false;
     layer.path.clear();
     layer.name.clear();
     layer.sample = {};
     layer.sampleRate = 44100.0;
     layer.params = UserLayerParams {};
+    userLayerAudition[static_cast<size_t>(slot)].store(0);
     removeUserLayerChannel(slot);
 }
 
@@ -1008,7 +1118,13 @@ void Sampler::triggerUserLayer(int slot, float velocity, int64_t timeInSamples)
         return;
 
     auto &layer = userLayers[static_cast<size_t>(slot)];
-    if (!layer.loaded || layer.micChannelIndex < 0 || layer.params.blend <= 0.001f)
+    if (!layer.loaded || layer.micChannelIndex < 0)
+        return;
+
+    const int audition = userLayerAudition[static_cast<size_t>(slot)].load(std::memory_order_relaxed);
+    if (audition == 1)
+        return;
+    if (audition != 2 && layer.params.blend <= 0.001f)
         return;
 
     LayerVoice *voice = nullptr;
@@ -1059,26 +1175,33 @@ void Sampler::renderUserLayerVoices(int numSamples)
         auto *dstL = micScratchL[static_cast<size_t>(mic)].data();
         auto *dstR = micScratchR[static_cast<size_t>(mic)].data();
         const auto sampleFrames = layer.sample.numFrames;
+        const auto trimFrames = std::clamp<int64_t>(
+            static_cast<int64_t>(std::llround(static_cast<double>(layer.params.trimMs) * 0.001
+                                              * layer.sampleRate)),
+            0,
+            sampleFrames);
+        const auto playFrames = sampleFrames - trimFrames;
         const double rateRatio = layer.sampleRate > 0.0 ? layer.sampleRate / currentSampleRate : 1.0;
         const int attackSamples = static_cast<int>(layer.params.attackMs * 0.001 * currentSampleRate);
         const int decaySamples = static_cast<int>(layer.params.decayMs * 0.001 * currentSampleRate);
         const int releaseSamples = static_cast<int>(layer.params.releaseMs * 0.001 * currentSampleRate);
-        const auto outFrames = static_cast<int64_t>(static_cast<double>(sampleFrames) / rateRatio);
+        const auto outFrames = static_cast<int64_t>(static_cast<double>(playFrames) / rateRatio);
         const int voiceReleaseSamples = std::min(releaseSamples, static_cast<int>(std::min<int64_t>(outFrames, 2000000)));
         const int startOffset = static_cast<int>(
             std::clamp<int64_t>(v.startedAt - sampleClock, 0, static_cast<int64_t>(numSamples)));
 
-        if (startOffset >= numSamples)
+        if (startOffset >= numSamples || playFrames <= 0)
             continue;
 
+        const int audition = userLayerAudition[static_cast<size_t>(v.slot)].load(std::memory_order_relaxed);
         const int channelCount = std::max(1, layer.sample.numChannels);
         const float polarity = layer.params.polarityInvert ? -1.0f : 1.0f;
-        const float blend = std::clamp(layer.params.blend, 0.0f, 1.0f);
+        const float blend = audition == 2 ? 1.0f : (audition == 1 ? 0.0f : std::clamp(layer.params.blend, 0.0f, 1.0f));
         const float gain = v.velocity * blend * polarity;
 
         for (int i = startOffset; i < numSamples; ++i)
         {
-            if (v.position >= static_cast<double>(sampleFrames))
+            if (v.position >= static_cast<double>(playFrames))
             {
                 v.active = false;
                 break;
@@ -1105,8 +1228,8 @@ void Sampler::renderUserLayerVoices(int numSamples)
                                       1.0f);
             }
 
-            const auto pos = static_cast<int64_t>(v.position);
-            const auto frac = static_cast<float>(v.position - static_cast<double>(pos));
+            const auto pos = trimFrames + static_cast<int64_t>(v.position);
+            const auto frac = static_cast<float>(v.position - std::floor(v.position));
             const float s0L = layer.sample.readSample(pos, 0);
             const float s1L = layer.sample.readSample(pos + 1, 0);
             const float l = s0L + frac * (s1L - s0L);
@@ -1164,37 +1287,51 @@ void Sampler::autoAlignUserLayer(int slot)
     if (reference == nullptr)
         return;
 
-    const int frames = static_cast<int>(std::min<int64_t>(
-        std::min(reference->numFrames, layer.sample.numFrames), 4096));
-    if (frames <= 16)
-        return;
+    const double refRate = reference->sampleRate > 0.0 ? reference->sampleRate : currentSampleRate;
+    const double layerRate = layer.sampleRate > 0.0 ? layer.sampleRate : currentSampleRate;
+    const auto refOnset = findTransientOnset(*reference, referenceChannel);
+    const auto layerOnset = findTransientOnset(layer.sample, 0);
 
-    std::vector<float> ref(static_cast<size_t>(frames), 0.0f);
-    std::vector<float> oneShot(static_cast<size_t>(frames), 0.0f);
-    reference->read(0, frames, referenceChannel, ref.data());
-    layer.sample.read(0, frames, 0, oneShot.data());
+    const double refOnsetMs = static_cast<double>(refOnset) / refRate * 1000.0;
+    const double layerOnsetMs = static_cast<double>(layerOnset) / layerRate * 1000.0;
 
-    const int maxLag = std::min(frames / 3, static_cast<int>(0.02 * layer.sampleRate));
-    float bestDot = -1.0e30f;
-    int bestLag = 0;
-    bool bestInvert = false;
+    // Trim the one-shot to its first transient, then delay it so that onset
+    // lands on the kit close mic's onset. If the reference onset is longer
+    // than the fine-delay range, keep a little of the one-shot's silence so
+    // the two still line up at the 20 ms limit.
+    constexpr double maxDelayMs = 20.0;
+    double trimMs = layerOnsetMs;
+    double delayMs = refOnsetMs;
 
-    for (int lag = 0; lag <= maxLag; ++lag)
+    if (delayMs > maxDelayMs)
     {
-        float dot = 0.0f;
-        for (int i = maxLag; i < frames; ++i)
-            dot += ref[static_cast<size_t>(i)] * oneShot[static_cast<size_t>(i - lag)];
-
-        if (std::abs(dot) > bestDot)
-        {
-            bestDot = std::abs(dot);
-            bestLag = lag;
-            bestInvert = dot < 0.0f;
-        }
+        trimMs = std::max(0.0, trimMs - (delayMs - maxDelayMs));
+        delayMs = maxDelayMs;
     }
 
-    layer.params.delayMs = static_cast<float>(bestLag) / static_cast<float>(layer.sampleRate) * 1000.0f;
-    layer.params.polarityInvert = bestInvert;
+    layer.params.trimMs = static_cast<float>(std::clamp(trimMs, 0.0, 1000.0));
+    layer.params.delayMs = static_cast<float>(std::clamp(delayMs, 0.0, maxDelayMs));
+
+    const auto trimFrames = static_cast<int64_t>(std::llround(static_cast<double>(layer.params.trimMs)
+                                                              * 0.001 * layerRate));
+    const auto refStart = std::min<int64_t>(refOnset, reference->numFrames);
+    const auto layerStart = std::min<int64_t>(trimFrames, layer.sample.numFrames);
+    const int frames = static_cast<int>(std::min<int64_t>(
+        std::min(reference->numFrames - refStart, layer.sample.numFrames - layerStart), 4096));
+
+    if (frames > 16)
+    {
+        std::vector<float> ref(static_cast<size_t>(frames), 0.0f);
+        std::vector<float> oneShot(static_cast<size_t>(frames), 0.0f);
+        reference->read(refStart, frames, referenceChannel, ref.data());
+        layer.sample.read(layerStart, frames, 0, oneShot.data());
+
+        float dot = 0.0f;
+        for (int i = 0; i < frames; ++i)
+            dot += ref[static_cast<size_t>(i)] * oneShot[static_cast<size_t>(i)];
+
+        layer.params.polarityInvert = dot < 0.0f;
+    }
 }
 
 void Sampler::getUserLayerPeaks(int slot, int numPeaks, std::vector<float> &peaks) const
@@ -1208,11 +1345,20 @@ void Sampler::getUserLayerPeaks(int slot, int numPeaks, std::vector<float> &peak
     if (!layer.loaded || layer.sample.numFrames <= 0)
         return;
 
-    const auto frames = layer.sample.numFrames;
+    const auto trimFrames = std::clamp<int64_t>(
+        static_cast<int64_t>(std::llround(static_cast<double>(layer.params.trimMs) * 0.001
+                                          * layer.sampleRate)),
+        0,
+        layer.sample.numFrames);
+    const auto frames = layer.sample.numFrames - trimFrames;
+
+    if (frames <= 0)
+        return;
+
     for (int p = 0; p < numPeaks; ++p)
     {
-        const auto start = frames * p / numPeaks;
-        const auto end = std::max(start + 1, frames * (p + 1) / numPeaks);
+        const auto start = trimFrames + frames * p / numPeaks;
+        const auto end = std::max(start + 1, trimFrames + frames * (p + 1) / numPeaks);
         float peak = 0.0f;
         const auto step = std::max<int64_t>(1, (end - start) / 8);
         for (auto f = start; f < end; f += step)

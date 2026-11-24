@@ -660,7 +660,8 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock &destination)
     {
         for (int slot = 0; slot < 2; ++slot)
         {
-            if (!audioEngine.getSampler().isUserLayerLoaded(slot))
+            if (!audioEngine.getSampler().isUserLayerLoaded(slot)
+                && !audioEngine.getSampler().isUserLayerMissing(slot))
                 continue;
 
             const auto params = audioEngine.getSampler().getUserLayerParams(slot);
@@ -674,6 +675,7 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock &destination)
             layer->setAttribute("releaseMs", static_cast<double>(params.releaseMs));
             layer->setAttribute("invert", params.polarityInvert ? 1 : 0);
             layer->setAttribute("delayMs", static_cast<double>(params.delayMs));
+            layer->setAttribute("trimMs", static_cast<double>(params.trimMs));
             layer->setAttribute("level", static_cast<double>(params.level));
             layer->setAttribute("pan", static_cast<double>(params.pan));
         }
@@ -822,9 +824,6 @@ void PluginProcessor::setStateInformation(const void *data, int sizeInBytes)
             if (!file.existsAsFile())
                 file = layerDir.getChildFile(file.getFileName());
 
-            if (!file.existsAsFile())
-                continue;
-
             UserLayerParams params;
             params.blend = static_cast<float>(layer->getDoubleAttribute("blend", 0.5));
             params.attackMs = static_cast<float>(layer->getDoubleAttribute("attackMs", 0.0));
@@ -833,8 +832,16 @@ void PluginProcessor::setStateInformation(const void *data, int sizeInBytes)
             params.releaseMs = static_cast<float>(layer->getDoubleAttribute("releaseMs", 80.0));
             params.polarityInvert = layer->getIntAttribute("invert", 0) != 0;
             params.delayMs = static_cast<float>(layer->getDoubleAttribute("delayMs", 0.0));
+            params.trimMs = static_cast<float>(layer->getDoubleAttribute("trimMs", 0.0));
             params.level = static_cast<float>(layer->getDoubleAttribute("level", 1.0));
             params.pan = static_cast<float>(layer->getDoubleAttribute("pan", 0.0));
+
+            if (!file.existsAsFile())
+            {
+                audioEngine.getSampler().markUserLayerMissing(slot, file.getFullPathName(), params);
+                layersRestored = true;
+                continue;
+            }
 
             juce::String error;
             if (audioEngine.getSampler().loadUserLayer(slot, file.getFullPathName(), params, error))

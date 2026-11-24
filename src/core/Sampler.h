@@ -64,6 +64,7 @@ struct UserLayerParams
     float releaseMs = 80.0f;     ///< 0 .. 2000, applied to the sample tail
     bool polarityInvert = false;
     float delayMs = 0.0f;        ///< 0 .. 20
+    float trimMs = 0.0f;         ///< 0 .. 1000, leading sample frames skipped
     float level = 1.0f;          ///< layer mixer trim
     float pan = 0.0f;            ///< layer mixer pan
 };
@@ -192,12 +193,21 @@ class Sampler
     void setUserLayerParams(int slot, const UserLayerParams &params);
     void clearUserLayer(int slot);
     bool isUserLayerLoaded(int slot) const noexcept;
+    bool isUserLayerMissing(int slot) const noexcept;
+    void markUserLayerMissing(int slot, const juce::String &path, const UserLayerParams &params);
     juce::String getUserLayerPath(int slot) const;
     juce::String getUserLayerName(int slot) const;
     UserLayerParams getUserLayerParams(int slot) const;
     int getUserLayerMicIndex(int slot) const noexcept;
     void autoAlignUserLayer(int slot);
     void getUserLayerPeaks(int slot, int numPeaks, std::vector<float> &peaks) const;
+
+    /// 0 = normal, 1 = kit only, 2 = layer only. Temporary monitoring override.
+    void setUserLayerAudition(int slot, int mode);
+    int getUserLayerAudition(int slot) const noexcept;
+
+    /// 0 = kick, 1 = snare, -1 = not a layer-eligible instrument.
+    int layerSlotForInstrument(int instrument) const noexcept;
 
     // -- Per-Mic Mixer (Phase 2) -------------------------------------------
 
@@ -454,6 +464,7 @@ class Sampler
     struct UserLayerRuntime
     {
         bool loaded = false;
+        bool missing = false;
         juce::String path;
         juce::String name;
         SampleCache::Handle sample;
@@ -473,8 +484,8 @@ class Sampler
 
     std::array<UserLayerRuntime, 2> userLayers;
     std::array<LayerVoice, 8> layerVoices;
+    std::array<std::atomic<int>, 2> userLayerAudition;
 
-    int layerSlotForInstrument(int instrument) const noexcept;
     float kitBlendForInstrument(int instrument) const noexcept;
     void triggerUserLayer(int slot, float velocity, int64_t timeInSamples);
     void appendUserLayerChannel(int slot);

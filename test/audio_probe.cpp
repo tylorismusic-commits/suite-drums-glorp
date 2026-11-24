@@ -472,19 +472,120 @@ int main (int argc, char** argv)
         proc.getSampler().autoAlignUserLayer (0);
         const auto aligned = proc.getSampler().getUserLayerParams (0);
 
+        auto auditionPeak = [&] (int mode)
+        {
+            proc.getSampler().setUserLayerAudition (0, mode);
+            proc.getSampler().allNotesOff();
+
+            juce::AudioBuffer<float> buffer (2, 512);
+            float peak = 0.0f;
+            float micPeak = 0.0f;
+
+            for (int block = 0; block < 20; ++block)
+            {
+                buffer.clear();
+                juce::MidiBuffer midi;
+                if (block == 0)
+                    proc.getSampler().noteOn (kickIndex, 36, 1.0f, proc.getSampler().currentSamplePosition());
+                proc.processBlock (buffer, midi);
+                peak = std::max (peak, buffer.getMagnitude (0, buffer.getNumSamples()));
+                if (layerMic >= 0)
+                    micPeak = std::max (micPeak, proc.getSampler().getMicPeakL (layerMic));
+            }
+
+            return std::pair<float, float> {peak, micPeak};
+        };
+
+        const auto kitOnly = auditionPeak (1);
+        const auto layerOnly = auditionPeak (2);
+        const auto both = auditionPeak (0);
+        proc.getSampler().setUserLayerAudition (0, 0);
+
         std::cout << "layer loaded=" << loaded << " error=" << error.toStdString()
                   << " mic=" << layerMic
                   << " name=" << (layerMic >= 0 ? proc.getSampler().micStripName (layerMic).toStdString() : "<none>")
                   << "\nlayer dryPeak=" << dryPeak
                   << " wetPeak=" << wetPeak
                   << " layerMicPeak=" << (layerMic >= 0 ? proc.getSampler().getMicPeakL (layerMic) : -1.0f)
-                  << "\naligned delayMs=" << aligned.delayMs
+                  << "\naligned trimMs=" << aligned.trimMs
+                  << " delayMs=" << aligned.delayMs
                   << " invert=" << (aligned.polarityInvert ? 1 : 0)
-                  << " micStrips=" << proc.getSampler().numMicStrips() << std::endl;
+                  << " micStrips=" << proc.getSampler().numMicStrips()
+                  << "\naudition kit=" << kitOnly.first << "/" << kitOnly.second
+                  << " layer=" << layerOnly.first << "/" << layerOnly.second
+                  << " both=" << both.first << "/" << both.second << std::endl;
 
         proc.getSampler().clearUserLayer (0);
         std::cout << "after clear micStrips=" << proc.getSampler().numMicStrips()
                   << " mic=" << proc.getSampler().getUserLayerMicIndex (0) << std::endl;
+
+        const auto delayedWav = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                                     .getChildFile ("glorp_layer_probe_delayed.wav");
+        delayedWav.deleteFile();
+
+        {
+            juce::WavAudioFormat format;
+            auto stream = delayedWav.createOutputStream();
+            if (stream != nullptr)
+            {
+                std::unique_ptr<juce::AudioFormatWriter> writer (
+                    format.createWriterFor (stream.get(), 48000.0, 1, 16, {}, 0));
+                if (writer != nullptr)
+                {
+                    stream.release();
+                    constexpr int lead = 4800;
+                    constexpr int frames = 19200;
+                    juce::AudioBuffer<float> tone (1, lead + frames);
+                    tone.clear();
+                    for (int i = 0; i < frames; ++i)
+                        tone.setSample (0, lead + i, 0.6f * std::sin (juce::MathConstants<float>::twoPi * 82.0f
+                                                                      * static_cast<float> (i) / 48000.0f)
+                                                       * std::exp (-static_cast<float> (i) / 4200.0f));
+                    writer->writeFromAudioSampleBuffer (tone, 0, tone.getNumSamples());
+                    writer.reset();
+                }
+            }
+        }
+
+        glorp::UserLayerParams delayedParams;
+        delayedParams.blend = 1.0f;
+        juce::String delayedError;
+        const bool delayedLoaded = proc.getSampler().loadUserLayer (
+            0, delayedWav.getFullPathName(), delayedParams, delayedError);
+
+        auto renderAudition = [&] (int blocks)
+        {
+            juce::AudioBuffer<float> buffer (2, 512);
+            float peak = 0.0f;
+            for (int block = 0; block < blocks; ++block)
+            {
+                buffer.clear();
+                juce::MidiBuffer midi;
+                if (block == 0)
+                    proc.getSampler().noteOn (kickIndex, 36, 1.0f, proc.getSampler().currentSamplePosition());
+                proc.processBlock (buffer, midi);
+                peak = std::max (peak, buffer.getMagnitude (0, buffer.getNumSamples()));
+            }
+            return peak;
+        };
+
+        proc.getSampler().setUserLayerAudition (0, 2);
+        proc.getSampler().allNotesOff();
+        const float untrimmedHead = renderAudition (6);
+
+        proc.getSampler().autoAlignUserLayer (0);
+        const auto delayedAligned = proc.getSampler().getUserLayerParams (0);
+
+        proc.getSampler().allNotesOff();
+        const float trimmedHead = renderAudition (6);
+        proc.getSampler().setUserLayerAudition (0, 0);
+
+        std::cout << "delayed loaded=" << delayedLoaded
+                  << " error=" << delayedError.toStdString()
+                  << " trim=" << delayedAligned.trimMs
+                  << " delay=" << delayedAligned.delayMs
+                  << " headBeforeTrim=" << untrimmedHead
+                  << " headAfterTrim=" << trimmedHead << std::endl;
         return 0;
     }
 
@@ -526,6 +627,7 @@ int main (int argc, char** argv)
         params.releaseMs = 99.0f;
         params.polarityInvert = true;
         params.delayMs = 3.25f;
+        params.trimMs = 12.5f;
         params.level = 0.77f;
         params.pan = 0.33f;
 
@@ -562,12 +664,43 @@ int main (int argc, char** argv)
                   << " sustain=" << restoredParams.sustain
                   << " release=" << restoredParams.releaseMs
                   << " delay=" << restoredParams.delayMs
+                  << " trim=" << restoredParams.trimMs
                   << " invert=" << (restoredParams.polarityInvert ? 1 : 0)
                   << "\nrestored level=" << restoredParams.level
                   << " pan=" << restoredParams.pan
                   << " hpf=" << restoredStrip.hpfHz
                   << " lpf=" << restoredStrip.lpfHz
                   << " compRatio=" << restoredStrip.compRatio << std::endl;
+
+        const auto moved = wav.getSiblingFile ("glorp_layer_state_probe_moved.wav");
+        moved.deleteFile();
+        wav.moveFileTo (moved);
+
+        glorp::PluginProcessor missingProc;
+        missingProc.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+        const bool missing = missingProc.getSampler().isUserLayerMissing (0);
+        const auto missingParams = missingProc.getSampler().getUserLayerParams (0);
+        const int missingMic = missingProc.getSampler().getUserLayerMicIndex (0);
+        const auto missingStrip = missingMic >= 0 ? missingProc.getSampler().getMicStripParams (missingMic)
+                                                  : glorp::MicStripParams {};
+
+        juce::String relinkError;
+        const bool relinked = missingProc.getSampler().loadUserLayer (
+            0, moved.getFullPathName(), missingParams, relinkError);
+        const int relinkMic = missingProc.getSampler().getUserLayerMicIndex (0);
+        const auto relinkStrip = relinkMic >= 0 ? missingProc.getSampler().getMicStripParams (relinkMic)
+                                                : glorp::MicStripParams {};
+
+        std::cout << "missing=" << missing
+                  << " missingTrim=" << missingParams.trimMs
+                  << " missingMic=" << missingMic
+                  << " missingHpf=" << missingStrip.hpfHz
+                  << " missingName=" << missingProc.getSampler().getUserLayerName (0).toStdString()
+                  << "\nrelinked=" << relinked
+                  << " stillMissing=" << missingProc.getSampler().isUserLayerMissing (0)
+                  << " relinkError=" << relinkError.toStdString()
+                  << " relinkMic=" << relinkMic
+                  << " relinkHpf=" << relinkStrip.hpfHz << std::endl;
         return 0;
     }
 

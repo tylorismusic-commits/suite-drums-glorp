@@ -46,6 +46,7 @@ class Settings
     // -- last session ------------------------------------------------------
     juce::String lastKitPath;
     juce::String lastMapPreset;
+    juce::String lastLayerFolder; ///< last directory used to import a layer WAV
 
     // -- MIDI loop library -------------------------------------------------
     juce::String midiLibraryPath; ///< empty means <config>/midi_library

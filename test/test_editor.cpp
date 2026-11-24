@@ -446,6 +446,50 @@ int main (int argc, char** argv)
             return 0;
         }
 
+        if (juce::String (viewEnv).equalsIgnoreCase ("layermissing"))
+        {
+            for (auto* child : pluginEditor->getChildren())
+            {
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                {
+                    int kickLogical = -1;
+                    for (int i = 0; i < static_cast<int> (ed->getLogicalInstruments().size()); ++i)
+                    {
+                        const auto n = ed->getLogicalInstruments()[static_cast<size_t> (i)].name;
+                        if (n.containsIgnoreCase ("kick") || n.containsIgnoreCase ("kdrum"))
+                        {
+                            kickLogical = i;
+                            break;
+                        }
+                    }
+
+                    if (kickLogical >= 0)
+                        ed->selectLogicalInstrument (kickLogical);
+
+                    glorp::UserLayerParams params;
+                    params.blend = 0.55f;
+                    params.trimMs = 22.0f;
+                    proc.getSampler().markUserLayerMissing (
+                        0, "/tmp/deleted_kick_one_shot.wav", params);
+                    ed->refreshMixerAfterLayerChange();
+                    ed->openLayerDrawer (0);
+
+                    auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+                    juce::File outFile ("test/docs/layer_missing.png");
+                    outFile.deleteFile();
+                    juce::FileOutputStream fos (outFile);
+                    if (fos.openedOk())
+                    {
+                        juce::PNGImageFormat png;
+                        png.writeImageToStream (image, fos);
+                        std::cout << "Saved layer missing snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
+                    }
+                    break;
+                }
+            }
+            return 0;
+        }
+
         if (juce::String (viewEnv).equalsIgnoreCase ("hits"))
         {
             for (auto* child : pluginEditor->getChildren())

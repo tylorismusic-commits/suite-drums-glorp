@@ -89,6 +89,7 @@ class Editor
     void closeLayerDrawer();
     void updateLayerButton();
     void refreshMixerAfterLayerChange();
+    void previewLayerSlot(int slot);
 
     void setOpenGlEnabled(bool enabled);
     bool isOpenGlEnabled() const noexcept;
@@ -286,6 +287,11 @@ class Editor
             repaint();
         }
         bool isLoaded() const noexcept { return loaded; }
+        void setMissing(bool isMissing)
+        {
+            missing = isMissing;
+            repaint();
+        }
         void setOpen(bool isOpen)
         {
             open = isOpen;
@@ -300,6 +306,7 @@ class Editor
 
       private:
         bool loaded = false;
+        bool missing = false;
         bool open = false;
         Theme theme = Theme::suite();
     };
