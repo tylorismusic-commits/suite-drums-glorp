@@ -357,7 +357,7 @@ int main (int argc, char** argv)
         if (juce::String (viewEnv).equalsIgnoreCase ("layer"))
         {
             const auto wav = juce::File::getSpecialLocation (juce::File::tempDirectory)
-                                 .getChildFile ("glorp_ui_layer_probe.wav");
+                                 .getChildFile ("kick_22_custom.wav");
             wav.deleteFile();
 
             {
