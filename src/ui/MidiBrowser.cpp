@@ -1069,7 +1069,7 @@ void MidiBrowser::paint(juce::Graphics &g)
 
     g.setColour(theme.panelEdge);
     g.drawHorizontalLine(60, 20.0f, static_cast<float>(getWidth() - 20));
-    g.drawHorizontalLine(getHeight() - 42, 20.0f, static_cast<float>(getWidth() - 20));
+    g.drawHorizontalLine(getHeight() - 84, 20.0f, static_cast<float>(getWidth() - 20));
 }
 
 void MidiBrowser::resized()

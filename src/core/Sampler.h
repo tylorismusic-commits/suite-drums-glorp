@@ -330,7 +330,7 @@ class Sampler
         int attackSamples = 0;
 
         // Reused scratch, sized to the largest block seen.
-        std::vector<float> mixL, mixR, channelScratch;
+        std::vector<float> mixL, mixR;
     };
 
     /// Owns the voice pool. Kept out of Voice itself so the pool can be resized

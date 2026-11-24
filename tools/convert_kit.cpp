@@ -8,11 +8,8 @@
 #include "../src/editor_app/GlorpKitProject.h"
 
 #include <cctype>
-#include <filesystem>
 #include <iostream>
 #include <string>
-
-namespace fs = std::filesystem;
 
 static bool hasExtensionCI (const std::string& path, const std::string& ext)
 {

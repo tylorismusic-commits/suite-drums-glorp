@@ -21,7 +21,6 @@ that attribution and license in kit.xml.
 """
 
 import argparse
-import os
 import re
 import shutil
 import subprocess
@@ -30,7 +29,7 @@ import tempfile
 import zipfile
 from collections import OrderedDict
 from pathlib import Path
-from xml.sax.saxutils import escape, quoteattr
+from xml.sax.saxutils import quoteattr
 
 
 def strip_comment(line: str) -> str:

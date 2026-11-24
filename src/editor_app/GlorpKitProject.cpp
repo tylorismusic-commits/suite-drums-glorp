@@ -1532,7 +1532,6 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
     }
 
     std::map<std::string, size_t> pieceIndexByKey;
-    std::map<std::string, std::string> micIdByPieceKey;
     std::map<size_t, std::string> micIdByPieceIndex;
     std::map<std::pair<size_t, std::string>, size_t> zoneIndexByKey;
     std::map<std::pair<size_t, std::string>, std::vector<Region>> regionsByZone;
@@ -1606,7 +1605,6 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
                 micId = baseMicId + "_" + std::to_string(suffix++);
 
             mics.push_back({micId, part.pieceName, 1.0f});
-            micIdByPieceKey[part.pieceKey] = micId;
             micIdByPieceIndex[pieceIdx] = micId;
         }
         else

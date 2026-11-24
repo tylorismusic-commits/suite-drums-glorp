@@ -205,7 +205,7 @@ class GlorpKitEditorComponent
     // -- Interactive Hit-Test Geometries -------------------------------------
     // Top Header
     juce::Rectangle<float> headerBounds;
-    juce::Rectangle<float> btnNewKit, btnOpenKit, btnImportDg, btnImportOra, btnSaveKit;
+    juce::Rectangle<float> btnNewKit, btnOpenKit, btnImportKit, btnImportOra, btnSaveKit;
     juce::Rectangle<float> btnUndo, btnRedo;
     juce::Rectangle<float> pillKitMeta, btnGlowColor, btnAudioSettings, btnTour;
 
@@ -339,7 +339,7 @@ class GlorpKitEditorComponent
     void saveFirstTimeTutorialPreference(bool completed);
 
     void promptOpenKit();
-    void promptImportDrumGizmo();
+    void promptImportKit();
     void promptImportOpenRaster();
     void applyOpenRasterImport(const juce::File &file, const OraDocument &doc, const OraImportResult &res);
     void promptSaveGlorpKit();

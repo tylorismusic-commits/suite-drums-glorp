@@ -1590,16 +1590,8 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
                         auto *dstL = micScratchL[static_cast<size_t>(plan.mic)].data();
                         auto *dstR = micScratchR[static_cast<size_t>(plan.mic)].data();
 
-                        if (plan.gainL == plan.gainR)
-                        {
-                            juce::FloatVectorOperations::addWithMultiply(dstL, v.mixL.data(), plan.gainL, blockCount);
-                            juce::FloatVectorOperations::addWithMultiply(dstR, v.mixL.data(), plan.gainR, blockCount);
-                        }
-                        else
-                        {
-                            juce::FloatVectorOperations::addWithMultiply(dstL, v.mixL.data(), plan.gainL, blockCount);
-                            juce::FloatVectorOperations::addWithMultiply(dstR, v.mixL.data(), plan.gainR, blockCount);
-                        }
+                        juce::FloatVectorOperations::addWithMultiply(dstL, v.mixL.data(), plan.gainL, blockCount);
+                        juce::FloatVectorOperations::addWithMultiply(dstR, v.mixL.data(), plan.gainR, blockCount);
                     }
 
                     v.position += blockCount;
