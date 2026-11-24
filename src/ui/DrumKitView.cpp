@@ -573,16 +573,19 @@ KitPiece DrumKitView::pieceForName(const juce::String &name)
     if (n.contains("crash") || n.contains("cymbal"))
         return KitPiece::crash1;
 
-    // Check Tom 2 first (so "tom 2" or "tom_2" or "tom2" or "tom13" never gets stolen by "tom")
+    // Floor toms are checked before rack toms: names like "ftom2" and
+    // "floortom2" also contain "tom2", and would otherwise light the rack tom.
+    if (n.contains("floor") || n.contains("ftom") || n.contains("floortom") || n.contains("tom3")
+        || n.contains("tom4") || n.contains("tom5") || n.contains("tom6") || n.contains("tom7")
+        || n.contains("tom8") || n.contains("tom9") || n.contains("racktom3") || n.contains("lowtom")
+        || n.contains("tom14") || n.contains("tom16") || n.contains("tom18"))
+        return KitPiece::floorTom;
+
+    // Check Tom 2 after floor toms (so "tom 2" or "tom_2" or "tom2" or "tom13" never gets
+    // stolen by "tom", and "ftom2"/"floortom2" stay on the floor tom).
     if (n.contains("tom2") || n.contains("racktom2") || n.contains("rack2") || n.contains("midtom")
         || n.contains("mediumtom") || n.contains("tom13"))
         return KitPiece::tom2;
-
-    // Check Floor Tom ("floor", "ftom", "f_tom", "tom3", "tom14", "tom16", "tom18", etc.)
-    if (n.contains("floor") || n.contains("ftom") || n.contains("floortom") || n.contains("tom3")
-        || n.contains("racktom3") || n.contains("lowtom") || n.contains("tom16") || n.contains("tom18")
-        || n.contains("tom14"))
-        return KitPiece::floorTom;
 
     // Strip out non-tom words containing "tom" substring (e.g. "custom", "bottom") before testing generic "tom"
     const auto nNoCustom = juce::String(n).replace("custom", "").replace("bottom", "");
@@ -730,13 +733,36 @@ void DrumKitView::triggerHit(const juce::String &instrumentName, float velocity)
         }
 
         // When dynamic pieces exist, DO NOT fall back to classic piece categories (e.g. pieceForName -> crash1)
-        // because that would cause all crashes and all toms to glow together!
+        // because that would cause all crashes and all toms to glow together. An extra tom with no
+        // dedicated dynamic piece still gets the floor-tom marker instead of dropping the hit.
+        const auto lower = trimmedName.toLowerCase();
+        if (lower.contains("tom") || lower.contains("floor") || lower.contains("ftom"))
+        {
+            for (auto &dp : dynamicPieces)
+            {
+                if (dp.mappedClassicPiece == KitPiece::floorTom)
+                {
+                    dp.flash = std::clamp(velocity, 0.40f, 1.0f);
+                    dp.squash = std::clamp(velocity * 0.75f, 0.20f, 1.0f);
+                    repaint();
+                    return;
+                }
+            }
+        }
         return;
     }
 
     const auto piece = pieceForName(trimmedName);
     if (piece != KitPiece::count)
         triggerHitForPiece(piece, velocity);
+    else
+    {
+        // Any extra tom that has no dedicated classic piece still belongs to the
+        // floor-tom family visually, so show a marker instead of dropping the hit.
+        const auto lower = trimmedName.toLowerCase();
+        if (lower.contains("tom") || lower.contains("floor") || lower.contains("ftom"))
+            triggerHitForPiece(KitPiece::floorTom, velocity);
+    }
 }
 
 void DrumKitView::triggerHitForDynamicPiece(int index, float velocity)

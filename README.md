@@ -12,7 +12,7 @@
 - **VST3 and LV2** instrument plugins for Linux x86_64.
 - **Suite Kit Studio**, a standalone `.glorpkit` creator/editor.
 - **One Suite theme**: dark charcoal, amber accent, Jost ExtraBold display type.
-- **Kit view** with zones, velocity layers, round-robin, drum-hit animation and MIDI activity ribbon.
+- **Kit view** with zones, velocity layers, round-robin, drum-hit animation and MIDI activity ribbon. Extra tom and floor-tom articulations fall back to the floor-tom marker.
 - **Per-piece controls** for level, pan, pitch and dynamic response.
 - **Full-range velocity selection**: hits are chosen across each kit's recorded power range, so normal-velocity snare hits no longer fall back to ghost-note samples.
 - **Mixer** with per-mic channels, solo/mute, mono/stereo switching, per-mic stems, linked instrument/mixer bus routing, master bus and kit-adaptive presets. Every stock preset keeps kick and trigger mics mono, controls cymbals and pushes kick/snare forward so drums sit in a mix.

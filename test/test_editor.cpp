@@ -54,6 +54,14 @@ int main (int argc, char** argv)
 
     if (const auto* viewEnv = std::getenv ("GLORP_UI_VIEW"))
     {
+        if (juce::String (viewEnv).equalsIgnoreCase ("kitmap"))
+        {
+            for (const auto* n : { "Tom1", "Tom2", "Tom3", "Tom4", "Tom5", "FTom1", "FTom2",
+                                   "Floor Tom 1", "Floor Tom 2", "Floor Tom 3", "Tom", "Floor Tom" })
+                std::cout << n << " -> " << static_cast<int> (glorp::DrumKitView::pieceForName (n)) << std::endl;
+            return 0;
+        }
+
         if (juce::String (viewEnv).equalsIgnoreCase ("clickmidi"))
         {
             for (auto* child : pluginEditor->getChildren())

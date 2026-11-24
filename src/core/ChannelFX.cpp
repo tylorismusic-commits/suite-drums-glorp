@@ -57,7 +57,8 @@ inline MicRoleFlags classifyMic(const juce::String &name)
                && !r.hat;
     r.overhead = n.contains("overhead") || n.contains("oh");
     r.room = n.contains("amb") || n.contains("room") || n.contains("pzm");
-    r.tom = n.contains("tom") || n.contains("floor");
+    r.tom = (n.contains("tom") || n.contains("floor")) && !r.snare && !r.kick && !r.hat && !r.cymbal
+            && !r.overhead && !r.room;
 
     const bool centered = n.contains("center") || n.contains("centre") || n.contains("mono");
     r.left = !centered
@@ -744,195 +745,6 @@ MixerPreset MixerPreset::createPunchyStudio(int numMics, const std::vector<juce:
 {
     MixerPreset p;
     p.name = "Punchy Studio";
-    p.master.level = 0.86f;
-    p.master.limiterEnabled = true;
-    p.master.reverbReturn = 0.15f;
-    p.master.reverbSize = 0.35f; // Tight studio room
-    p.master.reverbDamp = 0.40f;
-    p.micNames = names;
-
-    p.micStrips.resize(static_cast<size_t>(numMics));
-    for (size_t i = 0; i < static_cast<size_t>(numMics); ++i)
-    {
-        const auto n = (i < names.size()) ? names[i].toLowerCase() : juce::String();
-        const auto role = classifyMic(i < names.size() ? names[i] : juce::String());
-        auto &s = p.micStrips[i];
-        s.level = 1.0f;
-        s.eqEnabled = true;
-        s.compEnabled = true;
-        s.compThresholdDb = -15.0f;
-        s.compRatio = 4.0f;
-        s.compAttackMs = 15.0f;
-        s.compReleaseMs = 90.0f;
-        s.compMakeupDb = 1.5f;
-        s.transientAttack = 0.40f;   // Extreme punchy attack!
-        s.transientSustain = -0.15f; // Tight gating tail
-        s.saturationDrive = 0.08f;
-        s.reverbSend = 0.10f;
-
-        if (role.kick)
-        {
-            s.level = role.trigger ? 1.35f : 1.20f;
-            s.mono = true;
-            s.eqLowGainDb = 3.0f;
-            s.eqMidGainDb = role.trigger ? -5.0f : -3.0f;
-            s.eqMidFreq = role.trigger ? 700.0f : 500.0f;
-            s.eqHighGainDb = role.trigger ? 4.5f : 2.5f;
-        }
-        else if (role.snare)
-        {
-            s.level = 1.15f;
-            s.eqLowGainDb = 1.5f;
-            s.eqMidGainDb = 3.0f;
-            s.eqMidFreq = 2000.0f;
-            s.eqHighGainDb = 3.0f;
-        }
-        else if (role.tom)
-        {
-            s.level = 1.05f;
-        }
-        else if (role.hat)
-        {
-            s.level = 0.58f;
-            s.eqLowGainDb = -7.0f;
-            s.eqMidGainDb = -1.0f;
-            s.eqMidFreq = 3000.0f;
-            s.eqHighGainDb = -2.0f;
-            s.compThresholdDb = -22.0f;
-            s.compRatio = 2.0f;
-            s.compAttackMs = 5.0f;
-            s.compReleaseMs = 80.0f;
-            s.compMakeupDb = 0.0f;
-            s.transientAttack = -0.10f;
-            s.transientSustain = -0.10f;
-            s.reverbSend = 0.05f;
-            s.pan = role.left ? -0.25f : (role.right ? 0.25f : -0.15f);
-        }
-        else if (role.cymbal)
-        {
-            s.level = 0.58f;
-            s.eqLowGainDb = -8.0f;
-            s.eqMidGainDb = -1.5f;
-            s.eqMidFreq = 3500.0f;
-            s.eqHighGainDb = -2.0f;
-            s.compThresholdDb = -22.0f;
-            s.compRatio = 2.0f;
-            s.compAttackMs = 5.0f;
-            s.compReleaseMs = 100.0f;
-            s.compMakeupDb = 0.0f;
-            s.transientAttack = -0.15f;
-            s.transientSustain = -0.10f;
-            s.reverbSend = 0.08f;
-            s.pan = role.left ? -0.35f : (role.right ? 0.35f : 0.0f);
-        }
-        else if (role.overhead)
-        {
-            s.level = 0.72f;
-            s.eqLowGainDb = -6.0f;
-            s.eqHighGainDb = 0.5f;
-            s.pan = role.left ? -0.55f : (role.right ? 0.55f : 0.0f);
-        }
-        else if (role.room)
-        {
-            s.level = 0.28f;
-            s.eqLowGainDb = -8.0f;
-            s.pan = role.left ? -0.65f : (role.right ? 0.65f : 0.0f);
-        }
-    }
-    return p;
-}
-
-MixerPreset MixerPreset::createDryTight(int numMics, const std::vector<juce::String> &names)
-{
-    MixerPreset p;
-    p.name = "Dry & Tight";
-    p.master.level = 0.85f;
-    p.master.limiterEnabled = true;
-    p.master.reverbReturn = 0.0f; // Zero reverb!
-    p.micNames = names;
-
-    p.micStrips.resize(static_cast<size_t>(numMics));
-    for (size_t i = 0; i < static_cast<size_t>(numMics); ++i)
-    {
-        const auto n = (i < names.size()) ? names[i].toLowerCase() : juce::String();
-        const auto role = classifyMic(i < names.size() ? names[i] : juce::String());
-        auto &s = p.micStrips[i];
-        s.level = 1.0f;
-        s.eqEnabled = true;
-        s.compEnabled = true;
-        s.compThresholdDb = -16.0f;
-        s.compRatio = 4.5f;
-        s.compAttackMs = 10.0f;
-        s.compReleaseMs = 60.0f; // Fast recovery
-        s.transientAttack = 0.30f;
-        s.transientSustain = -0.40f; // Deadened tight tails
-        s.saturationDrive = 0.05f;
-        s.reverbSend = 0.0f;
-
-        if (role.kick)
-        {
-            s.level = role.trigger ? 1.35f : 1.20f;
-            s.mono = true;
-            s.eqLowGainDb = 2.5f;
-            s.eqMidGainDb = role.trigger ? -4.0f : -2.0f;
-            s.eqMidFreq = role.trigger ? 700.0f : 500.0f;
-            s.eqHighGainDb = role.trigger ? 3.5f : 2.0f;
-        }
-        else if (role.snare)
-        {
-            s.level = 1.15f;
-            s.eqLowGainDb = 1.0f;
-            s.eqMidGainDb = 2.0f;
-            s.eqMidFreq = 2000.0f;
-            s.eqHighGainDb = 2.0f;
-        }
-        else if (role.tom)
-        {
-            s.level = 1.05f;
-        }
-        else if (role.hat)
-        {
-            s.level = 0.58f;
-            s.eqLowGainDb = -8.0f;
-            s.eqHighGainDb = -2.0f;
-            s.compThresholdDb = -22.0f;
-            s.compRatio = 2.0f;
-            s.transientAttack = -0.15f;
-            s.transientSustain = -0.20f;
-            s.pan = role.left ? -0.25f : (role.right ? 0.25f : -0.15f);
-        }
-        else if (role.cymbal)
-        {
-            s.level = 0.56f;
-            s.eqLowGainDb = -8.0f;
-            s.eqHighGainDb = -2.5f;
-            s.compThresholdDb = -22.0f;
-            s.compRatio = 2.0f;
-            s.transientAttack = -0.20f;
-            s.transientSustain = -0.20f;
-            s.pan = role.left ? -0.35f : (role.right ? 0.35f : 0.0f);
-        }
-        else if (role.overhead)
-        {
-            s.level = 0.58f;
-            s.eqLowGainDb = -7.0f;
-            s.pan = role.left ? -0.55f : (role.right ? 0.55f : 0.0f);
-        }
-        else if (role.room)
-        {
-            s.level = 0.20f; // Heavily duck room/ambience
-            s.eqLowGainDb = -9.0f;
-            s.mute = false;
-            s.pan = role.left ? -0.65f : (role.right ? 0.65f : 0.0f);
-        }
-    }
-    return p;
-}
-
-MixerPreset MixerPreset::createMixReady(int numMics, const std::vector<juce::String> &names)
-{
-    MixerPreset p;
-    p.name = "Mix Ready";
     p.master.level = 0.9f;
     p.master.limiterEnabled = true;
     p.master.reverbReturn = 0.12f;
@@ -1092,6 +904,365 @@ MixerPreset MixerPreset::createMixReady(int numMics, const std::vector<juce::Str
             s.saturationDrive = 0.08f;
             s.reverbSend = 0.05f;
             s.pan = left ? -0.65f : (right ? 0.65f : 0.0f);
+        }
+    }
+
+    return p;
+}
+
+MixerPreset MixerPreset::createDryTight(int numMics, const std::vector<juce::String> &names)
+{
+    MixerPreset p;
+    p.name = "Dry & Tight";
+    p.master.level = 0.85f;
+    p.master.limiterEnabled = true;
+    p.master.reverbReturn = 0.0f; // Zero reverb!
+    p.micNames = names;
+
+    p.micStrips.resize(static_cast<size_t>(numMics));
+    for (size_t i = 0; i < static_cast<size_t>(numMics); ++i)
+    {
+        const auto n = (i < names.size()) ? names[i].toLowerCase() : juce::String();
+        const auto role = classifyMic(i < names.size() ? names[i] : juce::String());
+        auto &s = p.micStrips[i];
+        s.level = 1.0f;
+        s.eqEnabled = true;
+        s.compEnabled = true;
+        s.compThresholdDb = -16.0f;
+        s.compRatio = 4.5f;
+        s.compAttackMs = 10.0f;
+        s.compReleaseMs = 60.0f; // Fast recovery
+        s.transientAttack = 0.30f;
+        s.transientSustain = -0.40f; // Deadened tight tails
+        s.saturationDrive = 0.05f;
+        s.reverbSend = 0.0f;
+
+        if (role.kick)
+        {
+            s.level = role.trigger ? 1.35f : 1.20f;
+            s.mono = true;
+            s.eqLowGainDb = 2.5f;
+            s.eqMidGainDb = role.trigger ? -4.0f : -2.0f;
+            s.eqMidFreq = role.trigger ? 700.0f : 500.0f;
+            s.eqHighGainDb = role.trigger ? 3.5f : 2.0f;
+        }
+        else if (role.snare)
+        {
+            s.level = 1.15f;
+            s.eqLowGainDb = 1.0f;
+            s.eqMidGainDb = 2.0f;
+            s.eqMidFreq = 2000.0f;
+            s.eqHighGainDb = 2.0f;
+        }
+        else if (role.tom)
+        {
+            s.level = 1.05f;
+        }
+        else if (role.hat)
+        {
+            s.level = 0.58f;
+            s.eqLowGainDb = -8.0f;
+            s.eqHighGainDb = -2.0f;
+            s.compThresholdDb = -22.0f;
+            s.compRatio = 2.0f;
+            s.transientAttack = -0.15f;
+            s.transientSustain = -0.20f;
+            s.pan = role.left ? -0.25f : (role.right ? 0.25f : -0.15f);
+        }
+        else if (role.cymbal)
+        {
+            s.level = 0.56f;
+            s.eqLowGainDb = -8.0f;
+            s.eqHighGainDb = -2.5f;
+            s.compThresholdDb = -22.0f;
+            s.compRatio = 2.0f;
+            s.transientAttack = -0.20f;
+            s.transientSustain = -0.20f;
+            s.pan = role.left ? -0.35f : (role.right ? 0.35f : 0.0f);
+        }
+        else if (role.overhead)
+        {
+            s.level = 0.58f;
+            s.eqLowGainDb = -7.0f;
+            s.pan = role.left ? -0.55f : (role.right ? 0.55f : 0.0f);
+        }
+        else if (role.room)
+        {
+            s.level = 0.20f; // Heavily duck room/ambience
+            s.eqLowGainDb = -9.0f;
+            s.mute = false;
+            s.pan = role.left ? -0.65f : (role.right ? 0.65f : 0.0f);
+        }
+    }
+    return p;
+}
+
+MixerPreset MixerPreset::createMixReady(int numMics, const std::vector<juce::String> &names)
+{
+    MixerPreset p;
+    p.name = "Mix Ready";
+    p.master.level = 0.9f;
+    p.master.limiterEnabled = true;
+    p.master.reverbReturn = 0.12f;
+    p.master.reverbSize = 0.35f;
+    p.master.reverbDamp = 0.45f;
+    p.master.reverbWidth = 0.9f;
+    p.micNames = names;
+
+    p.micStrips.resize(static_cast<size_t>(numMics));
+
+    // Toms are spread across the image in channel order, with floor toms on the
+    // right. The first floor tom carries the extra body/attack from the saved
+    // preset; the second floor tom stays neutral.
+    std::vector<int> tomIndices;
+    std::vector<bool> floorTomFlags(static_cast<size_t>(numMics), false);
+    for (int i = 0; i < numMics; ++i)
+    {
+        const auto n = (i < static_cast<int>(names.size())) ? names[static_cast<size_t>(i)].toLowerCase() : juce::String();
+        const auto role = classifyMic(i < static_cast<int>(names.size()) ? names[static_cast<size_t>(i)] : juce::String());
+        if (!role.tom)
+            continue;
+
+        const bool explicitFloor = n.contains("floor") || n.contains("ftom")
+                                   || n.contains("tom4") || n.contains("tom5") || n.contains("tom6")
+                                   || n.contains("tom7") || n.contains("tom8");
+        floorTomFlags[static_cast<size_t>(i)] = explicitFloor;
+        tomIndices.push_back(i);
+    }
+
+    bool hasFloorTom = false;
+    for (bool f : floorTomFlags)
+        hasFloorTom = hasFloorTom || f;
+
+    if (!hasFloorTom && !tomIndices.empty())
+        floorTomFlags[static_cast<size_t>(tomIndices.back())] = true;
+
+    std::vector<int> rackToms, floorToms;
+    for (int idx : tomIndices)
+        (floorTomFlags[static_cast<size_t>(idx)] ? floorToms : rackToms).push_back(idx);
+
+    const auto ordinalIn = [] (const std::vector<int> &list, int index)
+    {
+        const auto it = std::find(list.begin(), list.end(), index);
+        return it == list.end() ? -1 : static_cast<int>(it - list.begin());
+    };
+
+    const auto rackPan = [] (int ordinal, int count)
+    {
+        if (count <= 1)
+            return -0.20f;
+        if (count == 2)
+            return ordinal == 0 ? -0.342857f : -0.057143f;
+        if (count == 3)
+            return ordinal == 0 ? -0.342857f : (ordinal == 1 ? -0.20f : -0.057143f);
+
+        const auto t = static_cast<float>(ordinal) / static_cast<float>(count - 1);
+        return -0.342857f + t * 0.285714f;
+    };
+
+    const auto floorPan = [] (int ordinal, int count)
+    {
+        if (count <= 1)
+            return 0.40f;
+        if (count == 2)
+            return ordinal == 0 ? 0.371429f : 0.428571f;
+        if (count == 3)
+            return ordinal == 0 ? 0.371429f : (ordinal == 1 ? 0.40f : 0.428571f);
+
+        const auto t = static_cast<float>(ordinal) / static_cast<float>(count - 1);
+        return 0.371429f + t * 0.057142f;
+    };
+
+    for (int i = 0; i < numMics; ++i)
+    {
+        const auto name = i < static_cast<int>(names.size()) ? names[static_cast<size_t>(i)] : juce::String();
+        const auto n = name.toLowerCase();
+        const auto role = classifyMic(name);
+        auto &s = p.micStrips[static_cast<size_t>(i)];
+
+        s.level = 1.0f;
+        s.pan = 0.0f;
+        s.fxEnabled = true;
+        s.eqEnabled = true;
+        s.compEnabled = false;
+        s.reverbSend = 0.06f;
+
+        if (role.kick)
+        {
+            s.level = role.trigger ? 1.45f : 1.30f;
+            s.mono = true;
+            s.eqLowGainDb = 4.0f;
+            s.eqMidGainDb = role.trigger ? -6.0f : -3.0f;
+            s.eqMidFreq = role.trigger ? 700.0f : 400.0f;
+            s.eqHighGainDb = role.trigger ? 5.0f : 2.5f;
+            s.compEnabled = true;
+            s.compThresholdDb = role.trigger ? -12.0f : -18.0f;
+            s.compRatio = role.trigger ? 6.0f : 4.0f;
+            s.compAttackMs = role.trigger ? 2.0f : 20.0f;
+            s.compReleaseMs = role.trigger ? 50.0f : 90.0f;
+            s.compMakeupDb = role.trigger ? 3.0f : 2.0f;
+            s.saturationDrive = role.trigger ? 0.25f : 0.15f;
+            s.transientAttack = role.trigger ? 0.45f : 0.30f;
+            s.transientSustain = -0.15f;
+            s.reverbSend = 0.0f;
+        }
+        else if (role.snare)
+        {
+            const bool bottom = n.contains("bottom") || n.contains("bot") || n.contains("under");
+
+            s.level = 1.35f;
+            s.eqLowGainDb = 1.5f;
+            s.eqMidGainDb = 2.5f;
+            s.eqMidFreq = 1800.0f;
+            s.eqHighGainDb = 3.5f;
+            s.compEnabled = true;
+            s.compRatio = 3.5f;
+            s.saturationDrive = 0.20f;
+            s.transientAttack = 0.35f;
+            s.reverbSend = 0.12f;
+
+            if (bottom)
+            {
+                s.compThresholdDb = -16.0f;
+                s.compAttackMs = 15.0f;
+                s.compReleaseMs = 120.0f;
+                s.compMakeupDb = 2.0f;
+                s.transientSustain = -0.05f;
+                s.phaseInvert = true;
+            }
+            else
+            {
+                // The top snare is deliberately squashed and held in the saved
+                // preset: more sustain keeps it sitting forward in the mix.
+                s.compThresholdDb = -8.6f;
+                s.compAttackMs = 9.7733f;
+                s.compReleaseMs = 50.9333f;
+                s.compMakeupDb = 5.04f;
+                s.transientSustain = 1.0f;
+            }
+        }
+        else if (role.tom)
+        {
+            s.level = 1.10f;
+            s.eqLowGainDb = 2.0f;
+            s.eqMidGainDb = -1.5f;
+            s.eqMidFreq = 500.0f;
+            s.eqHighGainDb = 1.0f;
+            s.compEnabled = true;
+            s.compThresholdDb = -18.0f;
+            s.compRatio = 3.0f;
+            s.compAttackMs = 20.0f;
+            s.compReleaseMs = 120.0f;
+            s.compMakeupDb = 1.0f;
+            s.saturationDrive = 0.10f;
+            s.transientAttack = 0.20f;
+            s.reverbSend = 0.06f;
+
+            const auto rackOrdinal = ordinalIn(rackToms, i);
+            const auto floorOrdinal = ordinalIn(floorToms, i);
+
+            if (floorOrdinal >= 0)
+                s.pan = floorPan(floorOrdinal, static_cast<int>(floorToms.size()));
+            else if (rackOrdinal >= 0)
+                s.pan = rackPan(rackOrdinal, static_cast<int>(rackToms.size()));
+
+            if (rackOrdinal == 0)
+                s.transientSustain = 0.64f;
+
+            if (floorOrdinal == 0)
+            {
+                s.eqLowGainDb = 5.36f;
+                s.eqHighGainDb = 5.32f;
+                s.compThresholdDb = -17.2f;
+                s.transientAttack = 0.9067f;
+                s.transientSustain = 1.0f;
+            }
+        }
+        else if (role.hat)
+        {
+            s.level = 0.50f;
+            s.eqLowGainDb = -8.0f;
+            s.eqMidGainDb = -1.5f;
+            s.eqMidFreq = 3000.0f;
+            s.eqHighGainDb = -1.5f;
+            s.compEnabled = true;
+            s.compThresholdDb = -22.0f;
+            s.compRatio = 2.0f;
+            s.compAttackMs = 5.0f;
+            s.compReleaseMs = 80.0f;
+            s.transientAttack = -0.10f;
+            s.reverbSend = 0.06f;
+            s.pan = role.left ? -0.25f : (role.right ? 0.25f : -0.15f);
+        }
+        else if (role.cymbal)
+        {
+            s.level = 0.48f;
+            s.eqLowGainDb = -9.0f;
+            s.eqMidGainDb = -2.0f;
+            s.eqMidFreq = 3500.0f;
+            s.eqHighGainDb = -2.0f;
+            s.compEnabled = true;
+            s.compThresholdDb = -22.0f;
+            s.compRatio = 2.0f;
+            s.compAttackMs = 5.0f;
+            s.compReleaseMs = 120.0f;
+            s.transientAttack = -0.15f;
+            s.reverbSend = 0.08f;
+            s.pan = role.left ? -0.35f : (role.right ? 0.35f : 0.0f);
+        }
+        else if (role.overhead)
+        {
+            s.level = role.left ? 0.8867f : (role.right ? 0.8763f : 0.55f);
+            s.eqLowGainDb = -8.0f;
+            s.eqMidGainDb = -1.0f;
+            s.eqMidFreq = 2500.0f;
+            s.eqHighGainDb = 0.5f;
+            s.compEnabled = true;
+            s.compThresholdDb = -22.0f;
+            s.compRatio = 2.0f;
+            s.compAttackMs = 10.0f;
+            s.compReleaseMs = 120.0f;
+            s.saturationDrive = 0.05f;
+            s.reverbSend = 0.08f;
+            s.pan = role.left ? -0.55f : (role.right ? 0.55f : 0.0f);
+        }
+        else if (role.room)
+        {
+            s.level = 0.6489f;
+            s.eqLowGainDb = -10.0f;
+            s.eqMidGainDb = -2.0f;
+            s.eqMidFreq = 800.0f;
+            s.eqHighGainDb = -2.0f;
+            s.compEnabled = true;
+            s.compRatio = 8.0f;
+            s.saturationDrive = 0.08f;
+            s.reverbSend = 0.05f;
+            s.pan = role.left ? -0.65f : (role.right ? 0.65f : 0.0f);
+
+            // The saved preset squeezes the left room hard and leaves the right
+            // room open but loud. Reproduce that asymmetry; a centre/PZM room
+            // gets a middle-ground setting.
+            if (role.left)
+            {
+                s.compThresholdDb = -30.0f;
+                s.compAttackMs = 6.2267f;
+                s.compReleaseMs = 104.0f;
+                s.compMakeupDb = 8.24f;
+            }
+            else if (role.right)
+            {
+                s.compThresholdDb = 0.0f;
+                s.compAttackMs = 6.4067f;
+                s.compReleaseMs = 300.0f;
+                s.compMakeupDb = 6.16f;
+            }
+            else
+            {
+                s.compThresholdDb = -24.0f;
+                s.compAttackMs = 6.32f;
+                s.compReleaseMs = 200.0f;
+                s.compMakeupDb = 7.2f;
+            }
         }
     }
 

@@ -222,6 +222,12 @@ int main (int argc, char** argv)
         else
             preset = glorp::MixerPreset::createMixReady (n, names);
 
+        if (std::getenv ("GLORP_PROBE_PRESET_FULL") != nullptr)
+        {
+            std::cout << preset.toXmlString().toStdString() << std::endl;
+            return 0;
+        }
+
         for (size_t i = 0; i < preset.micStrips.size(); ++i)
         {
             const auto& s = preset.micStrips[i];
