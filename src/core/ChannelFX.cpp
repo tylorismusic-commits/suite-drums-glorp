@@ -1239,30 +1239,13 @@ MixerPreset MixerPreset::createMixReady(int numMics, const std::vector<juce::Str
             s.reverbSend = 0.05f;
             s.pan = role.left ? -0.65f : (role.right ? 0.65f : 0.0f);
 
-            // The saved preset squeezes the left room hard and leaves the right
-            // room open but loud. Reproduce that asymmetry; a centre/PZM room
-            // gets a middle-ground setting.
-            if (role.left)
-            {
-                s.compThresholdDb = -30.0f;
-                s.compAttackMs = 6.2267f;
-                s.compReleaseMs = 104.0f;
-                s.compMakeupDb = 8.24f;
-            }
-            else if (role.right)
-            {
-                s.compThresholdDb = 0.0f;
-                s.compAttackMs = 6.4067f;
-                s.compReleaseMs = 300.0f;
-                s.compMakeupDb = 6.16f;
-            }
-            else
-            {
-                s.compThresholdDb = -24.0f;
-                s.compAttackMs = 6.32f;
-                s.compReleaseMs = 200.0f;
-                s.compMakeupDb = 7.2f;
-            }
+            // Squash both room channels equally. The saved preset had the left
+            // room compressed hard and the right room effectively open; keep the
+            // aggressive squash on both sides for a consistent stereo image.
+            s.compThresholdDb = -30.0f;
+            s.compAttackMs = 6.2267f;
+            s.compReleaseMs = 104.0f;
+            s.compMakeupDb = 8.24f;
         }
     }
 
