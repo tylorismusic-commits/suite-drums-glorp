@@ -6,12 +6,12 @@
 #   tools/package_linux.sh [version]
 #
 # The build must already exist (see README). The version defaults to the
-# project version plus the alpha suffix, e.g. 0.1.0-alpha.38.
+# project version plus the alpha suffix, e.g. 0.1.0-alpha.39.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="${1:-0.1.0-alpha.38}"
+VERSION="${1:-0.1.0-alpha.39}"
 NAME="suite-drums-glorp-${VERSION}-linux-x86_64"
 BUILD="${ROOT}/build"
 ARTEFACTS="${BUILD}/GlorpDrums_artefacts/Release"

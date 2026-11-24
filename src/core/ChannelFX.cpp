@@ -70,6 +70,36 @@ inline MicRoleFlags classifyMic(const juce::String &name)
 
     return r;
 }
+
+inline void applyFactoryMicFilters(MicStripParams &s, const MicRoleFlags &r)
+{
+    if (r.trigger) { s.hpfHz = 20.0f; s.lpfHz = 20000.0f; }
+    else if (r.kick) { s.hpfHz = 25.0f; s.lpfHz = 20000.0f; }
+    else if (r.snare) { s.hpfHz = 50.0f; s.lpfHz = 20000.0f; }
+    else if (r.tom) { s.hpfHz = 40.0f; s.lpfHz = 20000.0f; }
+    else if (r.hat) { s.hpfHz = 300.0f; s.lpfHz = 18000.0f; }
+    else if (r.cymbal) { s.hpfHz = 400.0f; s.lpfHz = 18000.0f; }
+    else if (r.overhead) { s.hpfHz = 200.0f; s.lpfHz = 16000.0f; }
+    else if (r.room) { s.hpfHz = 150.0f; s.lpfHz = 12000.0f; }
+}
+
+inline void setFactoryBus(MasterStripParams &m, float lowDb, float midDb, float midHz, float highDb,
+                          float thresholdDb, float ratio, float attackMs, float releaseMs,
+                          float makeupDb, float parallelMix, float satDrive)
+{
+    m.busEqLowDb = lowDb;
+    m.busEqMidDb = midDb;
+    m.busEqMidFreq = midHz;
+    m.busEqHighDb = highDb;
+    m.busCompEnabled = true;
+    m.busCompThresholdDb = thresholdDb;
+    m.busCompRatio = ratio;
+    m.busCompAttackMs = attackMs;
+    m.busCompReleaseMs = releaseMs;
+    m.busCompMakeupDb = makeupDb;
+    m.busCompMix = parallelMix;
+    m.busSaturationDrive = satDrive;
+}
 } // namespace
 
 //==============================================================================
@@ -621,6 +651,7 @@ MixerPreset MixerPreset::createDefaultClean(int numMics, const std::vector<juce:
     p.master.limiterEnabled = true;
     p.master.reverbReturn = 0.15f;
     p.master.reverbSize = 0.40f;
+    setFactoryBus(p.master, 0.8f, -0.3f, 650.0f, 0.5f, -18.0f, 2.0f, 30.0f, 180.0f, 1.0f, 0.35f, 0.03f);
     p.micNames = names;
 
     p.micStrips.resize(static_cast<size_t>(numMics));
@@ -695,6 +726,7 @@ MixerPreset MixerPreset::createDefaultClean(int numMics, const std::vector<juce:
             s.reverbSend = 0.04f;
             s.pan = role.left ? -0.65f : (role.right ? 0.65f : 0.0f);
         }
+        applyFactoryMicFilters(s, role);
     }
     return p;
 }
@@ -708,6 +740,7 @@ MixerPreset MixerPreset::createMassiveRock(int numMics, const std::vector<juce::
     p.master.reverbReturn = 0.35f;
     p.master.reverbSize = 0.65f;
     p.master.reverbDamp = 0.30f;
+    setFactoryBus(p.master, 1.5f, -0.8f, 500.0f, 0.8f, -16.0f, 4.0f, 20.0f, 120.0f, 2.0f, 0.30f, 0.12f);
     p.micNames = names;
 
     p.micStrips.resize(static_cast<size_t>(numMics));
@@ -829,6 +862,7 @@ MixerPreset MixerPreset::createMassiveRock(int numMics, const std::vector<juce::
             s.transientAttack = 0.20f;
             s.reverbSend = 0.25f;
         }
+        applyFactoryMicFilters(s, role);
     }
     return p;
 }
@@ -842,6 +876,7 @@ MixerPreset MixerPreset::createVintageWarmth(int numMics, const std::vector<juce
     p.master.reverbReturn = 0.30f;
     p.master.reverbSize = 0.55f;
     p.master.reverbDamp = 0.60f; // Dark warm reverb
+    setFactoryBus(p.master, 2.0f, 0.5f, 800.0f, -0.8f, -20.0f, 2.0f, 40.0f, 200.0f, 1.5f, 0.50f, 0.15f);
     p.micNames = names;
 
     p.micStrips.resize(static_cast<size_t>(numMics));
@@ -918,6 +953,9 @@ MixerPreset MixerPreset::createVintageWarmth(int numMics, const std::vector<juce
             s.reverbSend = 0.12f;
             s.pan = role.left ? -0.65f : (role.right ? 0.65f : 0.0f);
         }
+        applyFactoryMicFilters(s, role);
+        if (role.overhead) { s.hpfHz = 150.0f; s.lpfHz = 13000.0f; }
+        else if (role.room) { s.hpfHz = 120.0f; s.lpfHz = 9000.0f; }
     }
     return p;
 }
@@ -932,6 +970,7 @@ MixerPreset MixerPreset::createPunchyStudio(int numMics, const std::vector<juce:
     p.master.reverbSize = 0.35f;
     p.master.reverbDamp = 0.45f;
     p.master.reverbWidth = 0.9f;
+    setFactoryBus(p.master, 1.0f, -0.5f, 600.0f, 1.0f, -18.0f, 3.5f, 12.0f, 90.0f, 1.5f, 0.20f, 0.06f);
     p.micNames = names;
 
     p.micStrips.resize(static_cast<size_t>(numMics));
@@ -939,6 +978,7 @@ MixerPreset MixerPreset::createPunchyStudio(int numMics, const std::vector<juce:
     for (size_t i = 0; i < static_cast<size_t>(numMics); ++i)
     {
         const auto n = (i < names.size()) ? names[i].toLowerCase() : juce::String();
+        const auto role = classifyMic(i < names.size() ? names[i] : juce::String());
         auto &s = p.micStrips[i];
         s.level = 1.0f;
         s.pan = 0.0f;
@@ -1086,6 +1126,7 @@ MixerPreset MixerPreset::createPunchyStudio(int numMics, const std::vector<juce:
             s.reverbSend = 0.05f;
             s.pan = left ? -0.65f : (right ? 0.65f : 0.0f);
         }
+        applyFactoryMicFilters(s, role);
     }
 
     return p;
@@ -1098,6 +1139,7 @@ MixerPreset MixerPreset::createDryTight(int numMics, const std::vector<juce::Str
     p.master.level = 0.85f;
     p.master.limiterEnabled = true;
     p.master.reverbReturn = 0.0f; // Zero reverb!
+    setFactoryBus(p.master, 0.5f, -0.5f, 700.0f, 0.5f, -20.0f, 3.0f, 10.0f, 80.0f, 1.0f, 0.15f, 0.02f);
     p.micNames = names;
 
     p.micStrips.resize(static_cast<size_t>(numMics));
@@ -1174,6 +1216,14 @@ MixerPreset MixerPreset::createDryTight(int numMics, const std::vector<juce::Str
             s.mute = false;
             s.pan = role.left ? -0.65f : (role.right ? 0.65f : 0.0f);
         }
+        applyFactoryMicFilters(s, role);
+        if (role.kick) { s.hpfHz = 30.0f; s.lpfHz = 18000.0f; }
+        else if (role.snare) { s.hpfHz = 80.0f; s.lpfHz = 18000.0f; }
+        else if (role.tom) { s.hpfHz = 40.0f; s.lpfHz = 18000.0f; }
+        else if (role.hat) { s.hpfHz = 500.0f; s.lpfHz = 14000.0f; }
+        else if (role.cymbal) { s.hpfHz = 600.0f; s.lpfHz = 14000.0f; }
+        else if (role.overhead) { s.hpfHz = 300.0f; s.lpfHz = 12000.0f; }
+        else if (role.room) { s.hpfHz = 300.0f; s.lpfHz = 9000.0f; }
     }
     return p;
 }
@@ -1188,6 +1238,7 @@ MixerPreset MixerPreset::createMixReady(int numMics, const std::vector<juce::Str
     p.master.reverbSize = 0.35f;
     p.master.reverbDamp = 0.45f;
     p.master.reverbWidth = 0.9f;
+    setFactoryBus(p.master, 1.0f, -0.5f, 700.0f, 0.7f, -18.0f, 2.5f, 25.0f, 150.0f, 1.2f, 0.35f, 0.06f);
     p.micNames = names;
 
     p.micStrips.resize(static_cast<size_t>(numMics));
@@ -1428,6 +1479,7 @@ MixerPreset MixerPreset::createMixReady(int numMics, const std::vector<juce::Str
             s.compReleaseMs = 104.0f;
             s.compMakeupDb = 8.24f;
         }
+        applyFactoryMicFilters(s, role);
     }
 
     return p;
