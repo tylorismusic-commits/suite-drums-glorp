@@ -222,6 +222,105 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (const auto* attackEnv = std::getenv ("GLORP_PROBE_ATTACK"))
+    {
+        const float amount = juce::String (attackEnv).getFloatValue();
+        for (int i = 0; i < proc.getSampler().numInstruments(); ++i)
+        {
+            auto p = proc.getSampler().getInstrumentParams (i);
+            p.attackAmount = amount;
+            p.damping = 0.0f;
+            proc.getSampler().setInstrumentParams (i, p);
+        }
+
+        proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        midi.addEvent (juce::MidiMessage::noteOn (1, 38, static_cast<juce::uint8> (110)), 0);
+        double early = 0.0, late = 0.0;
+        int earlyN = 0, lateN = 0;
+        for (int block = 0; block < 120; ++block)
+        {
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+            midi.clear();
+            const auto start = block * 512;
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            {
+                const auto* d = buffer.getReadPointer (ch);
+                for (int i = 0; i < buffer.getNumSamples(); ++i)
+                {
+                    const auto pos = start + i;
+                    if (pos < 960)
+                    {
+                        early += static_cast<double> (d[i]) * d[i];
+                        ++earlyN;
+                    }
+                    else if (pos >= 24000 && pos < 48000)
+                    {
+                        late += static_cast<double> (d[i]) * d[i];
+                        ++lateN;
+                    }
+                }
+            }
+        }
+        std::cout << "attack=" << amount
+                  << " earlyDb=" << juce::Decibels::gainToDecibels (static_cast<float> (std::sqrt (early / std::max (1, earlyN))))
+                  << " lateDb=" << juce::Decibels::gainToDecibels (static_cast<float> (std::sqrt (late / std::max (1, lateN))))
+                  << std::endl;
+        return 0;
+    }
+
+    if (std::getenv ("GLORP_PROBE_REVERB") != nullptr)
+    {
+        const bool drySendTest = std::getenv ("GLORP_REVERB_DRY") != nullptr;
+        for (int i = 0; i < proc.getSampler().numMicStrips(); ++i)
+        {
+            auto p = proc.getSampler().getMicStripParams (i);
+            p.reverbSend = drySendTest ? 0.0f : 1.0f;
+            proc.getSampler().setMicStripParams (i, p);
+        }
+
+        auto master = proc.getSampler().getMasterStripParams();
+        master.reverbReturn = 1.0f;
+        master.reverbSize = 0.9f;
+        master.reverbDamp = 0.1f;
+        master.reverbWidth = 1.0f;
+        proc.getSampler().setMasterStripParams (master);
+
+        proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        midi.addEvent (juce::MidiMessage::noteOn (1, 38, static_cast<juce::uint8> (110)), 0);
+        double tailSum = 0.0;
+        int tailCount = 0;
+        float peak = 0.0f;
+        for (int block = 0; block < 120; ++block)
+        {
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+            midi.clear();
+            const auto start = block * 512;
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            {
+                const auto* d = buffer.getReadPointer (ch);
+                for (int i = 0; i < buffer.getNumSamples(); ++i)
+                {
+                    peak = std::max (peak, std::abs (d[i]));
+                    if (start >= 24000 && start < 48000)
+                    {
+                        tailSum += static_cast<double> (d[i]) * d[i];
+                        ++tailCount;
+                    }
+                }
+            }
+        }
+        std::cout << "reverb peak=" << peak << " tailRmsDb="
+                  << juce::Decibels::gainToDecibels (static_cast<float> (std::sqrt (tailSum / std::max (1, tailCount))))
+                  << std::endl;
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_FILTER") != nullptr)
     {
         for (int i = 0; i < proc.getSampler().numMicStrips(); ++i)

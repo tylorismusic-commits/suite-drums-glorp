@@ -541,6 +541,7 @@ void Sampler::setInstrumentParams(int index, const InstrumentParams &params)
     p.spread = std::clamp(params.tuneSpread, 0.0f, 100.0f);
     p.dynamics = std::clamp(params.dynamics, 0.0f, 1.0f);
     p.attackMs = std::clamp(params.attackMs, 0.0f, 200.0f);
+    p.attackAmount = std::clamp(params.attackAmount, -1.0f, 1.0f);
     p.damping = std::clamp(params.damping, 0.0f, 1.0f);
     p.velocityCurve = params.velocityCurve;
     p.useCustomVelocityCurve = params.useCustomVelocityCurve;
@@ -579,6 +580,7 @@ InstrumentParams Sampler::getInstrumentParams(int index) const
     out.tuneSpread = p.spread;
     out.dynamics = p.dynamics;
     out.attackMs = p.attackMs;
+    out.attackAmount = p.attackAmount;
     out.damping = p.damping;
     out.velocityCurve = p.velocityCurve;
     out.useCustomVelocityCurve = p.useCustomVelocityCurve;
@@ -1145,6 +1147,8 @@ void Sampler::triggerVoice(int instrument, int note, float velocity, int64_t tim
     const float attackMs = std::max(globals.attackMs, p.attackMs);
     voice->attackGain = attackMs > 0.0f ? 0.0f : 1.0f;
     voice->attackSamples = static_cast<int>(attackMs * 0.001 * currentSampleRate);
+    voice->attackShape = p.attackAmount;
+    voice->attackShapeWindow = std::max(1, static_cast<int>(0.020 * currentSampleRate));
 
     voice->startSkip = std::max<int64_t>(0, timeInSamples - sampleClock);
 
@@ -1217,6 +1221,8 @@ void Sampler::allNotesOff()
         v.endsAt = 0;
         v.chokeFadeSamples = 0;
         v.chokeStartSample = 0;
+        v.attackShape = 0.0f;
+        v.attackShapeWindow = 1;
     }
 }
 
@@ -1468,7 +1474,9 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
             const auto resamplePos = static_cast<int64_t>(std::floor(v.position));
             const auto sourceFrames =
                 static_cast<int>(std::ceil(std::max(0, numSamples - 1) * v.pitchRatio)) + 3;
+            const bool shaped = std::abs(v.attackShape) > 0.001f;
             const bool canBlockResample = rateOnly && !fading && v.endsAt == 0 && first == 0 && !hasAuxBus
+                                          && !shaped
                                           && sourceFrames > 0
                                           && static_cast<size_t>(sourceFrames) <= v.mixL.size();
 
@@ -1541,6 +1549,7 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
             // case for every sustained tail and is much cheaper on 16/21-mic kits.
             const bool steadyPosition = std::abs(v.position - std::floor(v.position)) < 1.0e-9;
             const bool canBlockMix = !shifting && !fading && v.endsAt == 0 && first == 0 && !hasAuxBus
+                                     && !shaped
                                      && steadyPosition
                                      && static_cast<size_t>(numSamples) <= v.mixL.size();
 
@@ -1647,6 +1656,24 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
                     {
                         const float t = static_cast<float>(remaining) / static_cast<float>(currentSampleRate * 0.015);
                         gain *= 0.5f * (1.0f - std::cos(static_cast<float>(pi) * t));
+                    }
+                }
+
+                if (std::abs(v.attackShape) > 0.001f)
+                {
+                    const auto elapsed = (sampleClock + i) - v.startedAt;
+                    const float t = std::clamp(static_cast<float>(elapsed) / static_cast<float>(v.attackShapeWindow),
+                                               0.0f,
+                                               1.0f);
+                    if (v.attackShape > 0.0f)
+                    {
+                        gain *= 1.0f + 0.9f * v.attackShape * (1.0f - t);
+                    }
+                    else
+                    {
+                        const float soften = -v.attackShape;
+                        gain *= 1.0f - 0.75f * soften * (1.0f - t);
+                        gain *= 1.0f + 0.35f * soften * t;
                     }
                 }
 
@@ -2079,6 +2106,24 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
                     {
                         const float t = static_cast<float>(remaining) / static_cast<float>(currentSampleRate * 0.015);
                         gain *= 0.5f * (1.0f - std::cos(static_cast<float>(pi) * t));
+                    }
+                }
+
+                if (std::abs(v.attackShape) > 0.001f)
+                {
+                    const auto elapsed = (sampleClock + i) - v.startedAt;
+                    const float t = std::clamp(static_cast<float>(elapsed) / static_cast<float>(v.attackShapeWindow),
+                                               0.0f,
+                                               1.0f);
+                    if (v.attackShape > 0.0f)
+                    {
+                        gain *= 1.0f + 0.9f * v.attackShape * (1.0f - t);
+                    }
+                    else
+                    {
+                        const float soften = -v.attackShape;
+                        gain *= 1.0f - 0.75f * soften * (1.0f - t);
+                        gain *= 1.0f + 0.35f * soften * t;
                     }
                 }
 

@@ -62,7 +62,8 @@ struct InstrumentParams
     float pitchSemitones = 0.0f;
     float tuneSpread = 0.0f;                             ///< cents of random detune per hit
     float dynamics = 0.5f;                               ///< 0..1 per-zone velocity response & humanize
-    float attackMs = 0.0f;                               ///< per-piece fade-in (0 = use global)
+    float attackMs = 0.0f;                               ///< legacy per-piece fade-in
+    float attackAmount = 0.0f;                           ///< -1 soft/sustain .. +1 punchy attack
     float damping = 0.0f;                                ///< 0..1 shortens the tail
     VelocityCurve velocityCurve = VelocityCurve::linear; ///< E-drum velocity curve preset
     bool useCustomVelocityCurve = false;                 ///< use the eight-point curve below
@@ -289,6 +290,7 @@ class Sampler
         float spread = 0.0f;
         float dynamics = 0.5f;
         float attackMs = 0.0f;
+        float attackAmount = 0.0f;
         float damping = 0.0f;
         VelocityCurve velocityCurve = VelocityCurve::linear;
         bool useCustomVelocityCurve = false;
@@ -332,6 +334,8 @@ class Sampler
         float pitchSemitones = 0.0f;
         float attackGain = 0.0f; ///< current value of the fade-in
         int attackSamples = 0;
+        float attackShape = 0.0f; ///< -1 soft/sustain .. +1 punchy attack
+        int attackShapeWindow = 1;
 
         // Reused scratch, sized to the largest block seen.
         std::vector<float> mixL, mixR;

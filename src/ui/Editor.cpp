@@ -1658,15 +1658,16 @@ void Editor::buildControls()
 
     instPitchKnob->setLabel("TUNE");
 
-    instAttackKnob = std::make_unique<Knob>("ATTACK");
+    instAttackKnob = std::make_unique<Knob>("ATTACK", -1.0f, 1.0f, 0.0f, "");
     instAttackKnob->setDoubleClickReturnValue(true, 0.0);
+    instAttackKnob->setBipolar(true);
     instAttackKnob->onValueChanged = [this](float v)
     {
         const int samplerIdx = getActiveSamplerIndex();
         if (samplerIdx < 0)
             return;
         auto p = processor.getSampler().getInstrumentParams(samplerIdx);
-        p.attackMs = juce::jlimit(0.0f, 200.0f, v * 200.0f);
+        p.attackAmount = juce::jlimit(-1.0f, 1.0f, v);
         processor.getSampler().setInstrumentParams(samplerIdx, p);
     };
     addAndMakeVisible(*instAttackKnob);
@@ -2172,7 +2173,7 @@ void Editor::updateInstrumentDisplay()
         const auto params = processor.getSampler().getInstrumentParams(samplerIdx);
         instCurveButton.setCurve(params.velocityCurve);
         instCurvePreview.setCurve(params.velocityCurve);
-        instAttackKnob->setNormalized(params.attackMs / 200.0f);
+        instAttackKnob->setValue(params.attackAmount);
         instDampKnob->setNormalized(params.damping);
     }
 

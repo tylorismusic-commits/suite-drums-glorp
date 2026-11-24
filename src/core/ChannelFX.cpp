@@ -540,6 +540,15 @@ void MasterFX::process(float *masterL,
         std::copy(reverbSendL, reverbSendL + numSamples, reverbWetL.data());
         std::copy(reverbSendR, reverbSendR + numSamples, reverbWetR.data());
 
+        // A small dry feed makes the master reverb useful as a master room even
+        // when a preset has all channel reverb sends at zero.
+        constexpr float masterDrySend = 0.15f;
+        for (int i = 0; i < numSamples; ++i)
+        {
+            reverbWetL[static_cast<size_t>(i)] += masterL[i] * masterDrySend;
+            reverbWetR[static_cast<size_t>(i)] += masterR[i] * masterDrySend;
+        }
+
         juce::dsp::Reverb::Parameters rParams;
         rParams.roomSize = std::clamp(params.reverbSize, 0.0f, 1.0f);
         rParams.damping = std::clamp(params.reverbDamp, 0.0f, 1.0f);

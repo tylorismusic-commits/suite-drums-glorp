@@ -640,11 +640,12 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock &destination)
     {
         const auto params = audioEngine.getSampler().getInstrumentParams(i);
 
-        if (params.attackMs <= 0.001f && params.damping <= 0.001f)
+        if (std::abs(params.attackAmount) <= 0.001f && params.attackMs <= 0.001f && params.damping <= 0.001f)
             continue;
 
         auto *tweak = tweaks->createNewChildElement("instrument");
         tweak->setAttribute("index", i);
+        tweak->setAttribute("attackAmount", static_cast<double>(params.attackAmount));
         tweak->setAttribute("attackMs", static_cast<double>(params.attackMs));
         tweak->setAttribute("damping", static_cast<double>(params.damping));
     }
@@ -760,7 +761,22 @@ void PluginProcessor::setStateInformation(const void *data, int sizeInBytes)
                 continue;
 
             auto params = audioEngine.getSampler().getInstrumentParams(index);
-            params.attackMs = static_cast<float>(tweak->getDoubleAttribute("attackMs", 0.0));
+            const auto legacyAttackMs = static_cast<float>(tweak->getDoubleAttribute("attackMs", 0.0));
+
+            if (tweak->hasAttribute("attackAmount"))
+            {
+                params.attackAmount = static_cast<float>(tweak->getDoubleAttribute("attackAmount", 0.0));
+                params.attackMs = 0.0f;
+            }
+            else
+            {
+                // Alpha 37 exposed a fade-in attack as attackMs. Map it to the
+                // new bipolar control as a softened attack instead of leaving a
+                // hidden fade applied to the piece.
+                params.attackAmount = juce::jlimit(-1.0f, 1.0f, -legacyAttackMs / 200.0f);
+                params.attackMs = 0.0f;
+            }
+
             params.damping = static_cast<float>(tweak->getDoubleAttribute("damping", 0.0));
             audioEngine.getSampler().setInstrumentParams(index, params);
         }
