@@ -183,9 +183,15 @@ bool Sampler::loadKit(DrumKit kit, juce::String &error)
         if (n.contains("hat") || n.contains("hh")
             || instruments_[static_cast<size_t>(i)].group.equalsIgnoreCase("hihat"))
         {
-            if (n.contains("splash") || n.contains("spl"))
+            const bool isSplash = n.contains("splash") || n.contains("spl");
+            const bool isPedal = n.contains("pedal") || n.contains("foot");
+
+            if (! isSplash && ! isPedal && (n.contains("open") || n.contains("semi")))
+                hiHat.openArticulations.push_back(i);
+
+            if (isSplash)
                 hiHat.splash = i;
-            else if (n.contains("pedal") || n.contains("foot"))
+            else if (isPedal)
                 hiHat.pedal = i;
             else if (n.contains("open1") || n.contains("op1") || n.contains("op 1"))
                 hiHat.open1 = i;
@@ -1012,9 +1018,15 @@ void Sampler::triggerVoice(int instrument, int note, float velocity, int64_t tim
         return;
 
     // The only zones that stop playback when triggered are chokes (for the same cymbal)
-    // and hi-hat pedal closing.
+    // and hi-hat articulation changes.
     const bool isChoke = runtime.name.containsIgnoreCase("choke");
     const bool isHiHatPedal = (instrument == hiHat.pedal);
+
+    const auto hatName = runtime.name.toLowerCase();
+    const bool isHat = hatName.contains("hihat") || hatName.contains("hi-hat") || hatName.startsWith("hh")
+                       || runtime.group.equalsIgnoreCase("hihat");
+    const bool isHiHatClosed = (isHat && (hatName.contains("closed") || hatName.contains("close")))
+                               || instrument == hiHat.closed || instrument == hiHat.closedEdge;
 
     if (isChoke)
     {
@@ -1032,20 +1044,13 @@ void Sampler::triggerVoice(int instrument, int note, float velocity, int64_t tim
     }
     else if (isHiHatPedal)
     {
-        if (hiHat.open >= 0)
-            chokeInstrument(hiHat.open, 20, timeInSamples);
-        if (hiHat.openEdge >= 0)
-            chokeInstrument(hiHat.openEdge, 20, timeInSamples);
-        if (hiHat.open1 >= 0)
-            chokeInstrument(hiHat.open1, 20, timeInSamples);
-        if (hiHat.open2 >= 0)
-            chokeInstrument(hiHat.open2, 20, timeInSamples);
-        if (hiHat.open3 >= 0)
-            chokeInstrument(hiHat.open3, 20, timeInSamples);
-        if (hiHat.open4 >= 0)
-            chokeInstrument(hiHat.open4, 20, timeInSamples);
-        if (hiHat.semiOpen >= 0)
-            chokeInstrument(hiHat.semiOpen, 20, timeInSamples);
+        chokeOpenHiHats(20, timeInSamples);
+    }
+    else if (isHiHatClosed)
+    {
+        // Striking a closed hat stops any ringing open hat. Leave voices from
+        // the same sample clock alone so a CC4 open/closed crossfade survives.
+        chokeOpenHiHats(20, timeInSamples, timeInSamples);
     }
 
     auto *voice = allocateVoice();
@@ -1142,7 +1147,7 @@ void Sampler::triggerVoice(int instrument, int note, float velocity, int64_t tim
     pushHitEvent({instrument, note, voice->velocity, pitch});
 }
 
-void Sampler::chokeInstrument(int instrument, int64_t fadeMs, int64_t timeInSamples)
+void Sampler::chokeInstrument(int instrument, int64_t fadeMs, int64_t timeInSamples, int64_t skipStartedAt)
 {
     const auto fadeSamples =
         std::max<int64_t>(16, static_cast<int64_t>(static_cast<double>(fadeMs) * currentSampleRate * 0.001));
@@ -1151,12 +1156,32 @@ void Sampler::chokeInstrument(int instrument, int64_t fadeMs, int64_t timeInSamp
     {
         auto &v = *voicePtr;
 
-        if (v.active && v.instrument == instrument)
+        if (v.active && v.instrument == instrument
+            && (skipStartedAt < 0 || v.startedAt != skipStartedAt))
         {
             v.endsAt = timeInSamples + fadeSamples;
             v.chokeFadeSamples = fadeSamples;
             v.chokeStartSample = timeInSamples;
         }
+    }
+}
+
+void Sampler::chokeOpenHiHats(int64_t fadeMs, int64_t timeInSamples, int64_t skipStartedAt)
+{
+    // Prefer the full articulation list: DRS names three open variants, so the
+    // singular hiHat.open index alone would leave the others ringing.
+    for (int index : hiHat.openArticulations)
+        chokeInstrument(index, fadeMs, timeInSamples, skipStartedAt);
+
+    const int singular[] = {
+        hiHat.open, hiHat.openEdge, hiHat.open1, hiHat.open2, hiHat.open3, hiHat.open4, hiHat.semiOpen
+    };
+
+    for (int index : singular)
+    {
+        if (index >= 0 && std::find(hiHat.openArticulations.begin(), hiHat.openArticulations.end(), index)
+                              == hiHat.openArticulations.end())
+            chokeInstrument(index, fadeMs, timeInSamples, skipStartedAt);
     }
 }
 
@@ -1187,22 +1212,7 @@ void Sampler::setHiHatPedal(float pedalValue) noexcept
 
     // Choke open hi-hats when pedal moves from open towards closed
     if (prev < 0.50f && clamped >= 0.55f)
-    {
-        if (hiHat.open >= 0)
-            chokeInstrument(hiHat.open, 20, sampleClock);
-        if (hiHat.openEdge >= 0)
-            chokeInstrument(hiHat.openEdge, 20, sampleClock);
-        if (hiHat.open1 >= 0)
-            chokeInstrument(hiHat.open1, 20, sampleClock);
-        if (hiHat.open2 >= 0)
-            chokeInstrument(hiHat.open2, 20, sampleClock);
-        if (hiHat.open3 >= 0)
-            chokeInstrument(hiHat.open3, 20, sampleClock);
-        if (hiHat.open4 >= 0)
-            chokeInstrument(hiHat.open4, 20, sampleClock);
-        if (hiHat.semiOpen >= 0)
-            chokeInstrument(hiHat.semiOpen, 20, sampleClock);
-    }
+        chokeOpenHiHats(20, sampleClock);
 
     // Firm downward foot stomp: trigger pedal chick
     if (clamped - prev > 0.22f && clamped >= 0.70f)

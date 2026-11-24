@@ -92,6 +92,74 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_HHCHOKE") != nullptr)
+    {
+        int openIdx = -1;
+        int closedIdx = -1;
+        for (int i = 0; i < proc.getSampler().numInstruments(); ++i)
+        {
+            const auto name = proc.getSampler().instrumentName (i);
+            const auto lower = name.toLowerCase();
+            if (openIdx < 0 && lower.contains ("hat") && lower.contains ("open")
+                && ! lower.contains ("pedal") && ! lower.contains ("splash"))
+                openIdx = i;
+            if (closedIdx < 0 && lower.contains ("hat") && lower.contains ("close")
+                && ! lower.contains ("open"))
+                closedIdx = i;
+        }
+
+        std::cout << "open=" << openIdx << " closed=" << closedIdx << std::endl;
+        if (openIdx < 0 || closedIdx < 0)
+            return 2;
+
+        proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+
+        auto renderTail = [&] (bool addClosed)
+        {
+            proc.getSampler().allNotesOff();
+            proc.getSampler().noteOn (openIdx, 46, 0.95f, proc.getSampler().currentSamplePosition());
+
+            double tailSum = 0.0;
+            int tailCount = 0;
+
+            for (int block = 0; block < 60; ++block)
+            {
+                buffer.clear();
+                juce::MidiBuffer noMidi;
+                proc.processBlock (buffer, noMidi);
+
+                const auto startSample = block * 512;
+                if (addClosed && startSample >= 4800 && startSample < 5312)
+                    proc.getSampler().noteOn (closedIdx, 42, 0.95f, proc.getSampler().currentSamplePosition());
+
+                // Measure the open-hat tail after the closed hit has decayed.
+                if (startSample >= 14400 && startSample < 28800)
+                {
+                    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+                    {
+                        const auto* d = buffer.getReadPointer (ch);
+                        for (int i = 0; i < buffer.getNumSamples(); ++i)
+                        {
+                            tailSum += static_cast<double> (d[i]) * d[i];
+                            ++tailCount;
+                        }
+                    }
+                }
+            }
+
+            const auto rms = std::sqrt (tailSum / std::max (1, tailCount));
+            return juce::Decibels::gainToDecibels (static_cast<float> (rms));
+        };
+
+        const auto openTailDb = renderTail (false);
+        const auto chokedTailDb = renderTail (true);
+
+        std::cout << "open tail=" << openTailDb << " dB, with closed hat=" << chokedTailDb
+                  << " dB, reduction=" << (openTailDb - chokedTailDb) << " dB" << std::endl;
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_HITS") != nullptr)
     {
         proc.prepareToPlay (48000.0, 512);

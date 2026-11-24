@@ -155,10 +155,15 @@ class Sampler
 
     /// Fades out every voice of an instrument that matches a note. Kept simple:
     /// drum voices are one-shot, so a note off only matters for choking.
-    void chokeInstrument(int instrument, int64_t fadeMs, int64_t timeInSamples);
+    /// `skipStartedAt` leaves voices triggered at that sample clock alone, which
+    /// keeps a same-hit CC4 open/closed crossfade from choking itself.
+    void chokeInstrument(int instrument, int64_t fadeMs, int64_t timeInSamples, int64_t skipStartedAt = -1);
 
     /// Chokes a cymbal instrument and all associated articulations (edge/bow/bell).
     void chokeCymbal(int instrumentIndex, int64_t fadeMs, int64_t timeInSamples);
+
+    /// Chokes every open/semi-open hi-hat articulation.
+    void chokeOpenHiHats(int64_t fadeMs, int64_t timeInSamples, int64_t skipStartedAt = -1);
 
     /// Chokes all currently active cymbal voices (for channel pressure / master choke).
     void chokeAllCymbals(int64_t fadeMs, int64_t timeInSamples);
@@ -390,6 +395,10 @@ class Sampler
         int open4 = -1;
         int pedal = -1;
         int splash = -1;
+        /// Every open/semi-open articulation, including kit variants such as
+        /// DRS's open_tip and open_whisker. The singular indices above are for
+        /// CC4 crossfading; choking must silence all of them.
+        std::vector<int> openArticulations;
     } hiHat;
 
     std::atomic<float> hiHatPedal {0.0f};    ///< 0 = open, 1 = closed
