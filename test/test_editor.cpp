@@ -147,8 +147,10 @@ int main (int argc, char** argv)
             return 0;
         }
 
-        if (juce::String (viewEnv).equalsIgnoreCase ("mixer-mixready"))
+        if (juce::String (viewEnv).equalsIgnoreCase ("mixer-mixready")
+            || juce::String (viewEnv).equalsIgnoreCase ("mixer-preset"))
         {
+            const auto buttonName = juce::SystemStats::getEnvironmentVariable ("GLORP_PRESET_BUTTON", "MIX READY");
             for (auto* child : pluginEditor->getChildren())
             {
                 if (auto* ed = dynamic_cast<glorp::Editor*> (child))
@@ -161,7 +163,7 @@ int main (int argc, char** argv)
                 {
                     if (auto* b = dynamic_cast<juce::Button*> (sub))
                     {
-                        if (b->getButtonText() == "MIX READY")
+                        if (b->getButtonText() == buttonName)
                         {
                             if (b->onClick)
                                 b->onClick();
@@ -174,14 +176,15 @@ int main (int argc, char** argv)
             clickByName (pluginEditor);
 
             auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
-            juce::File outFile ("test/docs/mixer_mixready.png");
+            juce::File outFile (juce::String (viewEnv).equalsIgnoreCase ("mixer-preset")
+                                    ? "test/docs/mixer_preset.png" : "test/docs/mixer_mixready.png");
             outFile.deleteFile();
             juce::FileOutputStream fos (outFile);
             if (fos.openedOk())
             {
                 juce::PNGImageFormat png;
                 png.writeImageToStream (image, fos);
-                std::cout << "Saved Mix Ready snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
+                std::cout << "Saved preset snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
             }
             return 0;
         }

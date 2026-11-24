@@ -92,6 +92,38 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (const auto* presetName = std::getenv ("GLORP_PROBE_PRESET"))
+    {
+        std::vector<juce::String> names;
+        for (int i = 0; i < proc.getSampler().numMicStrips(); ++i)
+            names.push_back (proc.getSampler().micStripTitle (i));
+
+        const int n = static_cast<int> (names.size());
+        const juce::String requested (presetName);
+        glorp::MixerPreset preset;
+
+        if (requested.equalsIgnoreCase ("Default Clean"))
+            preset = glorp::MixerPreset::createDefaultClean (n, names);
+        else if (requested.equalsIgnoreCase ("Massive Rock"))
+            preset = glorp::MixerPreset::createMassiveRock (n, names);
+        else if (requested.equalsIgnoreCase ("Vintage Warmth"))
+            preset = glorp::MixerPreset::createVintageWarmth (n, names);
+        else if (requested.equalsIgnoreCase ("Punchy Studio"))
+            preset = glorp::MixerPreset::createPunchyStudio (n, names);
+        else if (requested.equalsIgnoreCase ("Dry & Tight"))
+            preset = glorp::MixerPreset::createDryTight (n, names);
+        else
+            preset = glorp::MixerPreset::createMixReady (n, names);
+
+        for (size_t i = 0; i < preset.micStrips.size(); ++i)
+        {
+            const auto& s = preset.micStrips[i];
+            std::cout << names[i].toStdString() << " level=" << s.level << " mono=" << s.mono
+                      << " pan=" << s.pan << std::endl;
+        }
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_MIXREADY") != nullptr)
     {
         std::vector<juce::String> names;
