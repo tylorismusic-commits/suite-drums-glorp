@@ -44,6 +44,24 @@ No practice view, setlists, song database, backing tracks, tempo detection, metr
 
 ![Suite Kit Studio](docs/kit_editor.png)
 
+### Converting a multi-mic SFZ library
+
+Suite Kit Studio imports flat SFZ instruments directly. Libraries that use
+`#include`, macro definitions and a separate SFZ file per mic need the batch
+converter. The Naked Drums converter is included as an example:
+
+```bash
+./tools/naked_drums_to_glorpkit.py \
+    --source "/path/to/Wilkinson Audio/Naked Drums" \
+    --output "$HOME/.config/SuiteDrumsGlorp/kits/Naked Drums.glorpkit"
+```
+
+It resolves the SFZ includes/macros, merges the 16 mic channels, transcodes
+FLAC to 24-bit WAV (via `sox`), and writes a multi-mic `.glorpkit`. The source
+samples are CC-BY 4.0 by Wilkinson Audio; the converted kit keeps that
+attribution and license in `kit.xml`. A full Naked Drums conversion is about
+2.7 GB.
+
 ## Download
 
 Release bundles are published on GitHub:
@@ -56,6 +74,7 @@ A release package contains:
 vst3/Suite Drums Glorp.vst3
 lv2/Suite Drums Glorp.lv2
 bin/SuiteKitStudio
+bin/SuiteKitConverter
 kits/                     (optional starter kit)
 README.md
 LICENSE
