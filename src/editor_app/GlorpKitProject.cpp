@@ -1101,6 +1101,10 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
     const bool isSmDrums = lowerStem.find("sm_drums") != std::string::npos
                            || lowerStem.find("smdrums") != std::string::npos
                            || lowerStem.find("sm drums") != std::string::npos;
+    const bool isBigRusty = lowerStem.find("big_rusty") != std::string::npos
+                            || lowerStem.find("big rusty") != std::string::npos;
+    const bool isGogodze = lowerStem.find("gogodze") != std::string::npos
+                           || lowerStem.find("phu") != std::string::npos;
 
     struct PartInfo
     {
@@ -1179,6 +1183,51 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         {63, "Ride", "20 bell", "ride", "ride", "none"},
     };
 
+    static const PartInfo bigRustyParts[] = {
+        {35, "Kick", "undamped", "kick", "kick", "none"},
+        {36, "Kick", "head", "kick", "kick", "none"},
+        {37, "Snare", "sidestick", "snare", "snare", "none"},
+        {38, "Snare", "center", "snare", "snare", "none"},
+        {39, "Snare", "edge", "snare", "snare", "none"},
+        {40, "Snare", "rimshot", "snare", "snare", "none"},
+        {42, "Hihat", "closed", "hihat", "hihat", "hihat"},
+        {44, "Hihat", "foot", "hihat", "hihat", "hihat"},
+        {46, "Hihat", "open", "hihat", "hihat", "hihat"},
+        {54, "Hihat", "closed shank", "hihat", "hihat", "hihat"},
+        {56, "Hihat", "splash", "hihat", "hihat", "hihat"},
+        {58, "Hihat", "quarter open shank", "hihat", "hihat", "hihat"},
+        {41, "Floor Tom 22", "head", "ftom22", "ftom", "none"},
+        {43, "Tom 18", "head", "tom18", "tom2", "none"},
+        {45, "Tom 15", "head", "tom15", "tom1", "none"},
+        {47, "Tom 14", "head", "tom14", "tom2", "none"},
+        {49, "Crash 17", "edge", "crash17", "crash1", "none"},
+        {57, "China 18", "edge", "china18", "crash2", "none"},
+        {51, "Ride 22", "bow", "ride22", "ride", "none"},
+        {52, "Ride 22", "edge", "ride22", "ride", "none"},
+        {53, "Ride 22", "bell", "ride22", "ride", "none"},
+        {60, "Sizzle Ride 19", "bow", "sizzleride", "ride", "none"},
+        {61, "Sizzle Ride 19", "edge", "sizzleride", "ride", "none"},
+        {62, "Sizzle Ride 19", "bell", "sizzleride", "ride", "none"},
+        {64, "Sizzle Crash 17", "bow", "sizzlecrash", "crash1", "none"},
+        {65, "Sizzle Crash 17", "crash", "sizzlecrash", "crash1", "none"},
+        {67, "Sizzle Crash 17", "bell", "sizzlecrash", "crash1", "none"},
+        {71, "Stack", "mid", "stack", "crash2", "none"},
+        {72, "Stack", "edge", "stack", "crash2", "none"},
+    };
+
+    static const PartInfo gogodzeParts[] = {
+        {36, "Kick", "head", "kick", "kick", "none"},
+        {37, "Snare", "sidestick", "snare", "snare", "none"},
+        {38, "Snare", "center", "snare", "snare", "none"},
+        {40, "Snare", "edge", "snare", "snare", "none"},
+        {41, "Low Tom", "head", "ftom", "ftom", "none"},
+        {43, "Mid Tom", "head", "tom2", "tom2", "none"},
+        {45, "High Tom", "head", "tom1", "tom1", "none"},
+        {42, "Hihat", "closed", "hihat", "hihat", "hihat"},
+        {44, "Hihat", "foot", "hihat", "hihat", "hihat"},
+        {46, "Hihat", "open", "hihat", "hihat", "hihat"},
+    };
+
     auto findAvlPart = [&](int note) -> const PartInfo *
     {
         if (!isAvlKit)
@@ -1194,6 +1243,26 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         if (!isSmDrums)
             return nullptr;
         for (const auto &part : smParts)
+            if (part.note == note)
+                return &part;
+        return nullptr;
+    };
+
+    auto findBigRustyPart = [&](int note) -> const PartInfo *
+    {
+        if (!isBigRusty)
+            return nullptr;
+        for (const auto &part : bigRustyParts)
+            if (part.note == note)
+                return &part;
+        return nullptr;
+    };
+
+    auto findGogodzePart = [&](int note) -> const PartInfo *
+    {
+        if (!isGogodze)
+            return nullptr;
+        for (const auto &part : gogodzeParts)
             if (part.note == note)
                 return &part;
         return nullptr;
@@ -1536,6 +1605,16 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
             return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
         }
 
+        if (const auto *known = findBigRustyPart(r.key))
+        {
+            return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
+        }
+
+        if (const auto *known = findGogodzePart(r.key))
+        {
+            return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
+        }
+
         auto name = cleanName(r.fileName);
         if (name.empty())
             name = "Note " + std::to_string(r.key);
@@ -1582,6 +1661,22 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         author = "Scott McLean, Tod Stillwell, Suleiman Ali";
         license = "Public Domain";
         description = "SM Drums by Scott McLean, Tod Stillwell and Suleiman Ali, converted from the Sforzando SFZ library.";
+    }
+
+    if (isBigRusty)
+    {
+        title = "Big Rusty Drums";
+        author = "Karoryfer Samples";
+        license = "CC0 1.0";
+        description = "Big Rusty Drums by Karoryfer Samples, close-mic conversion from the SFZ library.";
+    }
+
+    if (isGogodze)
+    {
+        title = "Gogodze Phu Vol II";
+        author = "Karoryfer Samples";
+        license = "CC0 1.0";
+        description = "Gogodze Phu Vol II by Karoryfer Samples, 47 mix close-mic conversion from the SFZ library.";
     }
 
     {
@@ -1757,7 +1852,7 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
     if (mics.empty())
         mics.push_back({"close", "Close Mic", 1.0f});
 
-    if (isSmDrums)
+    if (isSmDrums || isBigRusty)
     {
         auto place = [&](const std::string &id, float x, float y, float w, int z)
         {
@@ -1773,13 +1868,28 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
             }
         };
 
-        // SM Drums has four toms. Put the three rack toms across the top and
-        // keep the floor tom where the default kit art expects it.
-        place("tom3", -140.0f, -420.0f, 140.0f, 5);
-        place("tom2", 15.0f, -410.0f, 150.0f, 4);
-        place("tom4", 150.0f, -350.0f, 145.0f, 3);
-        place("ftom", 110.0f, -270.0f, 195.0f, 2);
-        place("china", -270.0f, -330.0f, 145.0f, 9);
+        if (isSmDrums)
+        {
+            // SM Drums has four toms. Put the three rack toms across the top and
+            // keep the floor tom where the default kit art expects it.
+            place("tom3", -140.0f, -420.0f, 140.0f, 5);
+            place("tom2", 15.0f, -410.0f, 150.0f, 4);
+            place("tom4", 150.0f, -350.0f, 145.0f, 3);
+            place("ftom", 110.0f, -270.0f, 195.0f, 2);
+            place("china", -270.0f, -330.0f, 145.0f, 9);
+        }
+
+        if (isBigRusty)
+        {
+            place("ftom22", 105.0f, -270.0f, 195.0f, 2);
+            place("tom18", -140.0f, -420.0f, 150.0f, 6);
+            place("tom15", 10.0f, -408.0f, 150.0f, 5);
+            place("tom14", 150.0f, -380.0f, 145.0f, 4);
+            place("china18", -330.0f, -330.0f, 145.0f, 12);
+            place("sizzleride", 235.0f, -500.0f, 190.0f, 11);
+            place("sizzlecrash", 250.0f, -380.0f, 180.0f, 10);
+            place("stack", -330.0f, -470.0f, 145.0f, 13);
+        }
     }
 
     normalizeZOrders();

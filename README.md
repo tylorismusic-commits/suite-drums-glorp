@@ -10,7 +10,7 @@
 ## What is included
 
 - **VST3 and LV2** instrument plugins for Linux x86_64.
-- **Suite Kit Studio**, a standalone `.glorpkit` creator/editor that imports DrumGizmo `drumkit.xml` kits and SFZ instruments (including AVL Drumkits and SM Drums) and exports a single `.glorpkit`. A `SuiteKitConverter` CLI is included for batch conversion.
+- **Suite Kit Studio**, a standalone `.glorpkit` creator/editor that imports DrumGizmo `drumkit.xml` kits and SFZ instruments (including AVL Drumkits, SM Drums, Big Rusty Drums and Gogodze Phu Vol II) and exports a single `.glorpkit`. A `SuiteKitConverter` CLI is included for batch conversion.
 - **One Suite theme**: dark charcoal, amber accent, Jost ExtraBold display type.
 - **Kit view** with zones, velocity layers, round-robin, drum-hit animation and MIDI activity ribbon. Extra tom and floor-tom articulations fall back to the floor-tom marker.
 - **Per-piece controls** for level, pan, tune, dynamics, attack and damping.
