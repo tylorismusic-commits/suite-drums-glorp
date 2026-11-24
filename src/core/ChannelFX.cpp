@@ -625,6 +625,175 @@ MixerPreset MixerPreset::createDryTight(int numMics, const std::vector<juce::Str
     return p;
 }
 
+MixerPreset MixerPreset::createMixReady(int numMics, const std::vector<juce::String> &names)
+{
+    MixerPreset p;
+    p.name = "Mix Ready";
+    p.master.level = 0.9f;
+    p.master.limiterEnabled = true;
+    p.master.reverbReturn = 0.12f;
+    p.master.reverbSize = 0.35f;
+    p.master.reverbDamp = 0.45f;
+    p.master.reverbWidth = 0.9f;
+    p.micNames = names;
+
+    p.micStrips.resize(static_cast<size_t>(numMics));
+
+    for (size_t i = 0; i < static_cast<size_t>(numMics); ++i)
+    {
+        const auto n = (i < names.size()) ? names[i].toLowerCase() : juce::String();
+        auto &s = p.micStrips[i];
+        s.level = 1.0f;
+        s.pan = 0.0f;
+        s.fxEnabled = true;
+        s.eqEnabled = true;
+        s.compEnabled = false;
+        s.reverbSend = 0.06f;
+
+        const bool isTrigger = n.contains("trigger");
+        const bool isKick = isTrigger || n.contains("kick") || n.contains("kdrum") || n.contains("bdrum");
+        const bool isSnare = n.contains("snare") || n.contains("snr");
+        const bool isHat = n.contains("hihat") || n.contains("hh") || n.contains("hat");
+        const bool isCymbal = n.contains("ride") || n.contains("crash") || n.contains("china") || n.contains("splash")
+                               || n.contains("cymbal") || n.contains("zilbel") || n.contains("bell");
+        const bool isOverhead = n.contains("overhead") || n.contains("oh");
+        const bool isRoom = n.contains("amb") || n.contains("room") || n.contains("pzm");
+        const bool isTom = n.contains("tom") || n.contains("floor");
+
+        const bool centered = n.contains("center") || n.contains("centre") || n.contains("mono");
+        const bool left = !centered
+                          && (n.endsWith("l") || n.contains("left") || n.contains("_l") || n.contains("ohl")
+                              || n.contains("ambl"));
+        const bool right = !centered
+                           && (n.endsWith("r") || n.contains("right") || n.contains("_r") || n.contains("ohr")
+                               || n.contains("ambr"));
+
+        if (isKick)
+        {
+            s.level = isTrigger ? 1.45f : 1.30f;
+            s.mono = true;
+            s.eqLowGainDb = 4.0f;
+            s.eqMidGainDb = isTrigger ? -6.0f : -3.0f;
+            s.eqMidFreq = isTrigger ? 700.0f : 400.0f;
+            s.eqHighGainDb = isTrigger ? 5.0f : 2.5f;
+            s.compEnabled = true;
+            s.compThresholdDb = isTrigger ? -12.0f : -18.0f;
+            s.compRatio = isTrigger ? 6.0f : 4.0f;
+            s.compAttackMs = isTrigger ? 2.0f : 20.0f;
+            s.compReleaseMs = isTrigger ? 50.0f : 90.0f;
+            s.compMakeupDb = isTrigger ? 3.0f : 2.0f;
+            s.saturationDrive = isTrigger ? 0.25f : 0.15f;
+            s.transientAttack = isTrigger ? 0.45f : 0.30f;
+            s.transientSustain = -0.15f;
+            s.reverbSend = 0.0f;
+        }
+        else if (isSnare)
+        {
+            s.level = 1.35f;
+            s.eqLowGainDb = 1.5f;
+            s.eqMidGainDb = 2.5f;
+            s.eqMidFreq = 1800.0f;
+            s.eqHighGainDb = 3.5f;
+            s.compEnabled = true;
+            s.compThresholdDb = -16.0f;
+            s.compRatio = 3.5f;
+            s.compAttackMs = 15.0f;
+            s.compReleaseMs = 120.0f;
+            s.compMakeupDb = 2.0f;
+            s.saturationDrive = 0.20f;
+            s.transientAttack = 0.35f;
+            s.transientSustain = -0.05f;
+            s.reverbSend = 0.12f;
+
+            if (n.contains("bottom") || n.contains("bot") || n.contains("under"))
+                s.phaseInvert = true;
+        }
+        else if (isTom)
+        {
+            s.level = 1.10f;
+            s.eqLowGainDb = 2.0f;
+            s.eqMidGainDb = -1.5f;
+            s.eqMidFreq = 500.0f;
+            s.eqHighGainDb = 1.0f;
+            s.compEnabled = true;
+            s.compThresholdDb = -18.0f;
+            s.compRatio = 3.0f;
+            s.compAttackMs = 20.0f;
+            s.compReleaseMs = 120.0f;
+            s.compMakeupDb = 1.0f;
+            s.saturationDrive = 0.10f;
+            s.transientAttack = 0.20f;
+            s.reverbSend = 0.06f;
+        }
+        else if (isHat)
+        {
+            s.level = 0.50f;
+            s.eqLowGainDb = -8.0f;
+            s.eqMidGainDb = -1.5f;
+            s.eqMidFreq = 3000.0f;
+            s.eqHighGainDb = -1.5f;
+            s.compEnabled = true;
+            s.compThresholdDb = -22.0f;
+            s.compRatio = 2.0f;
+            s.compAttackMs = 5.0f;
+            s.compReleaseMs = 80.0f;
+            s.transientAttack = -0.10f;
+            s.reverbSend = 0.06f;
+            s.pan = left ? -0.25f : (right ? 0.25f : -0.15f);
+        }
+        else if (isCymbal)
+        {
+            s.level = 0.48f;
+            s.eqLowGainDb = -9.0f;
+            s.eqMidGainDb = -2.0f;
+            s.eqMidFreq = 3500.0f;
+            s.eqHighGainDb = -2.0f;
+            s.compEnabled = true;
+            s.compThresholdDb = -22.0f;
+            s.compRatio = 2.0f;
+            s.compAttackMs = 5.0f;
+            s.compReleaseMs = 120.0f;
+            s.transientAttack = -0.15f;
+            s.reverbSend = 0.08f;
+            s.pan = left ? -0.35f : (right ? 0.35f : 0.0f);
+        }
+        else if (isOverhead)
+        {
+            s.level = 0.55f;
+            s.eqLowGainDb = -8.0f;
+            s.eqMidGainDb = -1.0f;
+            s.eqMidFreq = 2500.0f;
+            s.eqHighGainDb = 0.5f;
+            s.compEnabled = true;
+            s.compThresholdDb = -22.0f;
+            s.compRatio = 2.0f;
+            s.compAttackMs = 10.0f;
+            s.compReleaseMs = 120.0f;
+            s.saturationDrive = 0.05f;
+            s.reverbSend = 0.08f;
+            s.pan = left ? -0.55f : (right ? 0.55f : 0.0f);
+        }
+        else if (isRoom)
+        {
+            s.level = 0.28f;
+            s.eqLowGainDb = -10.0f;
+            s.eqMidGainDb = -2.0f;
+            s.eqMidFreq = 800.0f;
+            s.eqHighGainDb = -2.0f;
+            s.compEnabled = true;
+            s.compThresholdDb = -24.0f;
+            s.compRatio = 2.5f;
+            s.compAttackMs = 10.0f;
+            s.compReleaseMs = 180.0f;
+            s.saturationDrive = 0.08f;
+            s.reverbSend = 0.05f;
+            s.pan = left ? -0.65f : (right ? 0.65f : 0.0f);
+        }
+    }
+
+    return p;
+}
+
 //==============================================================================
 // XML Serialization
 //==============================================================================

@@ -147,6 +147,45 @@ int main (int argc, char** argv)
             return 0;
         }
 
+        if (juce::String (viewEnv).equalsIgnoreCase ("mixer-mixready"))
+        {
+            for (auto* child : pluginEditor->getChildren())
+            {
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                    ed->setViewMode (glorp::Editor::EditorView::mixerView);
+            }
+
+            std::function<void (juce::Component*)> clickByName = [&] (juce::Component* c)
+            {
+                for (auto* sub : c->getChildren())
+                {
+                    if (auto* b = dynamic_cast<juce::Button*> (sub))
+                    {
+                        if (b->getButtonText() == "MIX READY")
+                        {
+                            if (b->onClick)
+                                b->onClick();
+                            return;
+                        }
+                    }
+                    clickByName (sub);
+                }
+            };
+            clickByName (pluginEditor);
+
+            auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+            juce::File outFile ("test/docs/mixer_mixready.png");
+            outFile.deleteFile();
+            juce::FileOutputStream fos (outFile);
+            if (fos.openedOk())
+            {
+                juce::PNGImageFormat png;
+                png.writeImageToStream (image, fos);
+                std::cout << "Saved Mix Ready snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
+            }
+            return 0;
+        }
+
         if (juce::String (viewEnv).equalsIgnoreCase ("mixer"))
         {
             for (auto* child : pluginEditor->getChildren())

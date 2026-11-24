@@ -319,6 +319,7 @@ class MixerView
     HandButton presetWarmBtn {"WARM", false};
     HandButton presetPunchBtn {"PUNCH", false};
     HandButton presetDryBtn {"DRY", false};
+    HandButton presetMixBtn {"MIX READY", false};
     HandButton savePresetBtn {"SAVE .glorpmix"};
     HandButton loadPresetBtn {"LOAD..."};
 

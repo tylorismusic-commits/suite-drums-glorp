@@ -92,6 +92,23 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_MIXREADY") != nullptr)
+    {
+        std::vector<juce::String> names;
+        for (int i = 0; i < proc.getSampler().numMicStrips(); ++i)
+            names.push_back (proc.getSampler().micStripTitle (i));
+
+        auto preset = glorp::MixerPreset::createMixReady (static_cast<int> (names.size()), names);
+
+        for (size_t i = 0; i < preset.micStrips.size(); ++i)
+        {
+            const auto& s = preset.micStrips[i];
+            std::cout << names[i].toStdString() << " level=" << s.level << " mono=" << s.mono
+                      << " pan=" << s.pan << std::endl;
+        }
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_BUSLINK") != nullptr)
     {
         int snareMic = -1;

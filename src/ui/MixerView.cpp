@@ -2130,6 +2130,7 @@ MixerView::MixerView(PluginProcessor &proc) : processor(proc)
     presetWarmBtn.onClick = [this]() { applyPreset(2); };
     presetPunchBtn.onClick = [this]() { applyPreset(3); };
     presetDryBtn.onClick = [this]() { applyPreset(4); };
+    presetMixBtn.onClick = [this]() { applyPreset(5); };
 
     savePresetBtn.onClick = [this]() { promptSavePreset(); };
     loadPresetBtn.onClick = [this]() { promptLoadPreset(); };
@@ -2139,6 +2140,7 @@ MixerView::MixerView(PluginProcessor &proc) : processor(proc)
     addAndMakeVisible(presetWarmBtn);
     addAndMakeVisible(presetPunchBtn);
     addAndMakeVisible(presetDryBtn);
+    addAndMakeVisible(presetMixBtn);
     addAndMakeVisible(savePresetBtn);
     addAndMakeVisible(loadPresetBtn);
 
@@ -2277,6 +2279,10 @@ void MixerView::applyPreset(int presetIndex)
             p = MixerPreset::createDryTight(numMics, names);
             activePresetName = "Dry & Tight";
             break;
+        case 5:
+            p = MixerPreset::createMixReady(numMics, names);
+            activePresetName = "Mix Ready";
+            break;
         default:
             break;
     }
@@ -2397,10 +2403,11 @@ void MixerView::resized()
     presetWarmBtn.setBounds(160, btnY, 68, btnH);
     presetPunchBtn.setBounds(232, btnY, 68, btnH);
     presetDryBtn.setBounds(304, btnY, 68, btnH);
+    presetMixBtn.setBounds(380, btnY, 78, btnH);
 
-    savePresetBtn.setBounds(386, btnY, 104, btnH);
-    loadPresetBtn.setBounds(494, btnY, 74, btnH);
-    bleedMatrixBtn.setBounds(574, btnY, 114, btnH);
+    savePresetBtn.setBounds(466, btnY, 104, btnH);
+    loadPresetBtn.setBounds(578, btnY, 74, btnH);
+    bleedMatrixBtn.setBounds(660, btnY, 114, btnH);
 
     // Channel Area vs Master Strip
     const float contentY = 46.0f;
@@ -2474,6 +2481,7 @@ void MixerView::setTheme(const Theme &newTheme)
     presetWarmBtn.setTheme(theme);
     presetPunchBtn.setTheme(theme);
     presetDryBtn.setTheme(theme);
+    presetMixBtn.setTheme(theme);
     savePresetBtn.setTheme(theme);
     loadPresetBtn.setTheme(theme);
     bleedMatrixBtn.setTheme(theme);

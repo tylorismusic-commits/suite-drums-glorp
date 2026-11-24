@@ -183,6 +183,7 @@ struct MixerPreset
     static MixerPreset createVintageWarmth(int numMics, const std::vector<juce::String> &names);
     static MixerPreset createPunchyStudio(int numMics, const std::vector<juce::String> &names);
     static MixerPreset createDryTight(int numMics, const std::vector<juce::String> &names);
+    static MixerPreset createMixReady(int numMics, const std::vector<juce::String> &names);
 
     juce::String toXmlString() const;
     static bool fromXmlString(const juce::String &xmlText, MixerPreset &outPreset);
