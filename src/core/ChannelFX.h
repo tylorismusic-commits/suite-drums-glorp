@@ -41,6 +41,10 @@ struct MicStripParams
     // FX rack settings
     bool fxEnabled = true;
 
+    // Filters
+    float hpfHz = 20.0f;  ///< high-pass cutoff (20 = bypass)
+    float lpfHz = 20000.0f; ///< low-pass cutoff (20000 = bypass)
+
     // 3-Band Parametric EQ
     bool eqEnabled = true;
     float eqLowGainDb = 0.0f;  ///< -12 .. +12 dB (Low Shelf at 80 Hz)
@@ -78,6 +82,20 @@ struct MasterStripParams
     float reverbSize = 0.45f;   ///< room size (0.0 .. 1.0)
     float reverbDamp = 0.40f;   ///< high frequency damping (0.0 .. 1.0)
     float reverbWidth = 0.85f;  ///< stereo width (0.0 .. 1.0)
+
+    // Drum-bus glue
+    float busEqLowDb = 0.0f;
+    float busEqMidDb = 0.0f;
+    float busEqMidFreq = 800.0f;
+    float busEqHighDb = 0.0f;
+    bool busCompEnabled = false;
+    float busCompThresholdDb = -12.0f;
+    float busCompRatio = 2.0f;
+    float busCompAttackMs = 30.0f;
+    float busCompReleaseMs = 150.0f;
+    float busCompMakeupDb = 0.0f;
+    float busCompMix = 1.0f; ///< 0 = dry, 1 = compressed
+    float busSaturationDrive = 0.0f;
 };
 
 //==============================================================================
@@ -114,6 +132,11 @@ class ChannelStripFX
     IIRFilter lowShelfL, lowShelfR;
     IIRFilter midPeakL, midPeakR;
     IIRFilter highShelfL, highShelfR;
+
+    IIRFilter hpfL, hpfR;
+    IIRFilter lpfL, lpfR;
+    float lastHpf = 20.0f;
+    float lastLpf = 20000.0f;
 
     float lastLowGain = 0.0f;
     float lastMidGain = 0.0f;
@@ -164,8 +187,17 @@ class MasterFX
     juce::dsp::Reverb reverb;
     juce::dsp::Reverb::Parameters lastReverbParams;
 
+    // Drum-bus glue
+    using IIRFilter = juce::dsp::IIR::Filter<float>;
+    IIRFilter busLowL, busLowR, busMidL, busMidR, busHighL, busHighR;
+    float lastBusLow = 0.0f, lastBusMid = 0.0f, lastBusHigh = 0.0f, lastBusMidFreq = 800.0f;
+    juce::dsp::Compressor<float> busCompressor;
+    float lastBusCompThreshold = -12.0f, lastBusCompRatio = 2.0f;
+    float lastBusCompAttack = 30.0f, lastBusCompRelease = 150.0f;
+
     // Scratch buffers for reverb wet output
     std::vector<float> reverbWetL, reverbWetR;
+    std::vector<float> parallelL, parallelR;
 };
 
 //==============================================================================

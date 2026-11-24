@@ -129,6 +129,24 @@ void ChannelStripFX::reset()
 
 void ChannelStripFX::updateFilters(const MicStripParams &params)
 {
+    const auto hpf = std::clamp(params.hpfHz, 20.0f, 500.0f);
+    if (std::abs(hpf - lastHpf) > 0.5f)
+    {
+        lastHpf = hpf;
+        auto c = juce::dsp::IIR::Coefficients<float>::makeHighPass(currentSampleRate, lastHpf, 0.707f);
+        hpfL.coefficients = c;
+        hpfR.coefficients = c;
+    }
+
+    const auto lpf = std::clamp(params.lpfHz, 2000.0f, 20000.0f);
+    if (std::abs(lpf - lastLpf) > 0.5f)
+    {
+        lastLpf = lpf;
+        auto c = juce::dsp::IIR::Coefficients<float>::makeLowPass(currentSampleRate, lastLpf, 0.707f);
+        lpfL.coefficients = c;
+        lpfR.coefficients = c;
+    }
+
     if (std::abs(params.eqLowGainDb - lastLowGain) > 0.05f)
     {
         lastLowGain = params.eqLowGainDb;
@@ -203,7 +221,25 @@ void ChannelStripFX::process(
 
     updateFilters(params);
 
-    // 2. 3-Band Parametric EQ
+    // 2. High-pass / low-pass filters
+    if (lastHpf > 21.0f)
+    {
+        for (int i = 0; i < numSamples; ++i)
+        {
+            left[i] = hpfL.processSample(left[i]);
+            right[i] = hpfR.processSample(right[i]);
+        }
+    }
+    if (lastLpf < 19900.0f)
+    {
+        for (int i = 0; i < numSamples; ++i)
+        {
+            left[i] = lpfL.processSample(left[i]);
+            right[i] = lpfR.processSample(right[i]);
+        }
+    }
+
+    // 3. 3-Band Parametric EQ
     if (params.eqEnabled)
     {
         if (std::abs(lastLowGain) > 0.05f)
@@ -339,6 +375,8 @@ void MasterFX::prepare(double sampleRate, int maxBlockSize)
 
     reverbWetL.resize(static_cast<size_t>(currentBlockSize));
     reverbWetR.resize(static_cast<size_t>(currentBlockSize));
+    parallelL.resize(static_cast<size_t>(currentBlockSize));
+    parallelR.resize(static_cast<size_t>(currentBlockSize));
 
     juce::dsp::ProcessSpec spec;
     spec.sampleRate = currentSampleRate;
@@ -346,12 +384,20 @@ void MasterFX::prepare(double sampleRate, int maxBlockSize)
     spec.numChannels = 2;
 
     reverb.prepare(spec);
+    busCompressor.prepare(spec);
     reset();
 }
 
 void MasterFX::reset()
 {
     reverb.reset();
+    busCompressor.reset();
+    busLowL.reset();
+    busLowR.reset();
+    busMidL.reset();
+    busMidR.reset();
+    busHighL.reset();
+    busHighR.reset();
 }
 
 void MasterFX::process(float *masterL,
@@ -364,7 +410,131 @@ void MasterFX::process(float *masterL,
     if (numSamples <= 0)
         return;
 
-    // 1. Process algorithmic reverb
+    // 1. Drum-bus EQ
+    if (std::abs(params.busEqLowDb - lastBusLow) > 0.05f)
+    {
+        lastBusLow = params.busEqLowDb;
+        auto c = juce::dsp::IIR::Coefficients<float>::makeLowShelf(
+            currentSampleRate, 80.0f, 0.707f, dbToGain(lastBusLow));
+        busLowL.coefficients = c;
+        busLowR.coefficients = c;
+    }
+    if (std::abs(params.busEqMidDb - lastBusMid) > 0.05f
+        || std::abs(params.busEqMidFreq - lastBusMidFreq) > 1.0f)
+    {
+        lastBusMid = params.busEqMidDb;
+        lastBusMidFreq = std::clamp(params.busEqMidFreq, 100.0f, 10000.0f);
+        auto c = juce::dsp::IIR::Coefficients<float>::makePeakFilter(
+            currentSampleRate, lastBusMidFreq, 0.9f, dbToGain(lastBusMid));
+        busMidL.coefficients = c;
+        busMidR.coefficients = c;
+    }
+    if (std::abs(params.busEqHighDb - lastBusHigh) > 0.05f)
+    {
+        lastBusHigh = params.busEqHighDb;
+        auto c = juce::dsp::IIR::Coefficients<float>::makeHighShelf(
+            currentSampleRate, 10000.0f, 0.707f, dbToGain(lastBusHigh));
+        busHighL.coefficients = c;
+        busHighR.coefficients = c;
+    }
+
+    if (std::abs(lastBusLow) > 0.05f || std::abs(lastBusMid) > 0.05f || std::abs(lastBusHigh) > 0.05f)
+    {
+        for (int i = 0; i < numSamples; ++i)
+        {
+            float l = masterL[i];
+            float r = masterR[i];
+
+            if (std::abs(lastBusLow) > 0.05f)
+            {
+                l = busLowL.processSample(l);
+                r = busLowR.processSample(r);
+            }
+            if (std::abs(lastBusMid) > 0.05f)
+            {
+                l = busMidL.processSample(l);
+                r = busMidR.processSample(r);
+            }
+            if (std::abs(lastBusHigh) > 0.05f)
+            {
+                l = busHighL.processSample(l);
+                r = busHighR.processSample(r);
+            }
+
+            masterL[i] = l;
+            masterR[i] = r;
+        }
+    }
+
+    // 2. Drum-bus glue compressor, with a dry/compressed mix for parallel use.
+    if (params.busCompEnabled)
+    {
+        if (std::abs(params.busCompThresholdDb - lastBusCompThreshold) > 0.1f)
+        {
+            lastBusCompThreshold = params.busCompThresholdDb;
+            busCompressor.setThreshold(lastBusCompThreshold);
+        }
+        if (std::abs(params.busCompRatio - lastBusCompRatio) > 0.1f)
+        {
+            lastBusCompRatio = params.busCompRatio;
+            busCompressor.setRatio(lastBusCompRatio);
+        }
+        if (std::abs(params.busCompAttackMs - lastBusCompAttack) > 0.5f)
+        {
+            lastBusCompAttack = params.busCompAttackMs;
+            busCompressor.setAttack(lastBusCompAttack);
+        }
+        if (std::abs(params.busCompReleaseMs - lastBusCompRelease) > 1.0f)
+        {
+            lastBusCompRelease = params.busCompReleaseMs;
+            busCompressor.setRelease(lastBusCompRelease);
+        }
+
+        const float mix = std::clamp(params.busCompMix, 0.0f, 1.0f);
+        const bool parallel = mix < 0.999f;
+
+        if (parallel)
+        {
+            std::copy(masterL, masterL + numSamples, parallelL.data());
+            std::copy(masterR, masterR + numSamples, parallelR.data());
+        }
+
+        float *channels[2] = {masterL, masterR};
+        juce::dsp::AudioBlock<float> block(channels, 2, static_cast<size_t>(numSamples));
+        juce::dsp::ProcessContextReplacing<float> context(block);
+        busCompressor.process(context);
+
+        if (params.busCompMakeupDb > 0.05f)
+        {
+            const float makeup = dbToGain(params.busCompMakeupDb);
+            juce::FloatVectorOperations::multiply(masterL, makeup, numSamples);
+            juce::FloatVectorOperations::multiply(masterR, makeup, numSamples);
+        }
+
+        if (parallel)
+        {
+            for (int i = 0; i < numSamples; ++i)
+            {
+                masterL[i] = parallelL[static_cast<size_t>(i)] * (1.0f - mix) + masterL[i] * mix;
+                masterR[i] = parallelR[static_cast<size_t>(i)] * (1.0f - mix) + masterR[i] * mix;
+            }
+        }
+    }
+
+    // 3. Drum-bus saturation
+    if (params.busSaturationDrive > 0.01f)
+    {
+        const float driveAmount = 1.0f + 2.5f * params.busSaturationDrive;
+        const float normFactor = 1.0f / (1.0f + 1.2f * params.busSaturationDrive);
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            masterL[i] = std::tanh(masterL[i] * driveAmount) * normFactor;
+            masterR[i] = std::tanh(masterR[i] * driveAmount) * normFactor;
+        }
+    }
+
+    // 4. Process algorithmic reverb return
     if (params.reverbReturn > 0.01f && reverbSendL != nullptr && reverbSendR != nullptr)
     {
         std::copy(reverbSendL, reverbSendL + numSamples, reverbWetL.data());
@@ -1272,6 +1442,18 @@ juce::String MixerPreset::toXmlString() const
     mXml->setAttribute("reverbSize", static_cast<double>(master.reverbSize));
     mXml->setAttribute("reverbDamp", static_cast<double>(master.reverbDamp));
     mXml->setAttribute("reverbWidth", static_cast<double>(master.reverbWidth));
+    mXml->setAttribute("busEqLowDb", static_cast<double>(master.busEqLowDb));
+    mXml->setAttribute("busEqMidDb", static_cast<double>(master.busEqMidDb));
+    mXml->setAttribute("busEqMidFreq", static_cast<double>(master.busEqMidFreq));
+    mXml->setAttribute("busEqHighDb", static_cast<double>(master.busEqHighDb));
+    mXml->setAttribute("busCompEnabled", master.busCompEnabled);
+    mXml->setAttribute("busCompThresholdDb", static_cast<double>(master.busCompThresholdDb));
+    mXml->setAttribute("busCompRatio", static_cast<double>(master.busCompRatio));
+    mXml->setAttribute("busCompAttackMs", static_cast<double>(master.busCompAttackMs));
+    mXml->setAttribute("busCompReleaseMs", static_cast<double>(master.busCompReleaseMs));
+    mXml->setAttribute("busCompMakeupDb", static_cast<double>(master.busCompMakeupDb));
+    mXml->setAttribute("busCompMix", static_cast<double>(master.busCompMix));
+    mXml->setAttribute("busSaturationDrive", static_cast<double>(master.busSaturationDrive));
 
     for (size_t i = 0; i < micStrips.size(); ++i)
     {
@@ -1287,6 +1469,9 @@ juce::String MixerPreset::toXmlString() const
         chXml->setAttribute("mute", s.mute);
         chXml->setAttribute("solo", s.solo);
         chXml->setAttribute("phaseInvert", s.phaseInvert);
+
+        chXml->setAttribute("hpfHz", static_cast<double>(s.hpfHz));
+        chXml->setAttribute("lpfHz", static_cast<double>(s.lpfHz));
 
         chXml->setAttribute("eqEnabled", s.eqEnabled);
         chXml->setAttribute("eqLowGainDb", static_cast<double>(s.eqLowGainDb));
@@ -1328,6 +1513,20 @@ bool MixerPreset::fromXmlString(const juce::String &xmlText, MixerPreset &outPre
         outPreset.master.reverbSize = static_cast<float>(mXml->getDoubleAttribute("reverbSize", 0.45));
         outPreset.master.reverbDamp = static_cast<float>(mXml->getDoubleAttribute("reverbDamp", 0.40));
         outPreset.master.reverbWidth = static_cast<float>(mXml->getDoubleAttribute("reverbWidth", 0.85));
+        outPreset.master.busEqLowDb = static_cast<float>(mXml->getDoubleAttribute("busEqLowDb", 0.0));
+        outPreset.master.busEqMidDb = static_cast<float>(mXml->getDoubleAttribute("busEqMidDb", 0.0));
+        outPreset.master.busEqMidFreq = static_cast<float>(mXml->getDoubleAttribute("busEqMidFreq", 800.0));
+        outPreset.master.busEqHighDb = static_cast<float>(mXml->getDoubleAttribute("busEqHighDb", 0.0));
+        outPreset.master.busCompEnabled = mXml->getBoolAttribute("busCompEnabled", false);
+        outPreset.master.busCompThresholdDb =
+            static_cast<float>(mXml->getDoubleAttribute("busCompThresholdDb", -12.0));
+        outPreset.master.busCompRatio = static_cast<float>(mXml->getDoubleAttribute("busCompRatio", 2.0));
+        outPreset.master.busCompAttackMs = static_cast<float>(mXml->getDoubleAttribute("busCompAttackMs", 30.0));
+        outPreset.master.busCompReleaseMs = static_cast<float>(mXml->getDoubleAttribute("busCompReleaseMs", 150.0));
+        outPreset.master.busCompMakeupDb = static_cast<float>(mXml->getDoubleAttribute("busCompMakeupDb", 0.0));
+        outPreset.master.busCompMix = static_cast<float>(mXml->getDoubleAttribute("busCompMix", 1.0));
+        outPreset.master.busSaturationDrive =
+            static_cast<float>(mXml->getDoubleAttribute("busSaturationDrive", 0.0));
     }
 
     outPreset.micStrips.clear();
@@ -1342,6 +1541,9 @@ bool MixerPreset::fromXmlString(const juce::String &xmlText, MixerPreset &outPre
         s.mute = chXml->getBoolAttribute("mute", false);
         s.solo = chXml->getBoolAttribute("solo", false);
         s.phaseInvert = chXml->getBoolAttribute("phaseInvert", false);
+
+        s.hpfHz = static_cast<float>(chXml->getDoubleAttribute("hpfHz", 20.0));
+        s.lpfHz = static_cast<float>(chXml->getDoubleAttribute("lpfHz", 20000.0));
 
         s.eqEnabled = chXml->getBoolAttribute("eqEnabled", true);
         s.eqLowGainDb = static_cast<float>(chXml->getDoubleAttribute("eqLowGainDb", 0.0));

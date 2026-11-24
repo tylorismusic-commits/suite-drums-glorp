@@ -57,6 +57,7 @@ class Settings
     int editorHeight = 860;
     bool editorMaximised = false;
     float uiTextScale = 1.0f; ///< UI font scale multiplier (0.85..1.35)
+    float uiScale = 1.0f;     ///< optional whole-window UI scale (1.0 = adaptive)
 #if defined(__linux__)
     bool openGlEnabled = false; ///< Hardware GPU acceleration disabled by default on Linux (X11/Xfce resize stability)
 #else

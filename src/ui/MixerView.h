@@ -113,6 +113,10 @@ class MixerView
         std::unique_ptr<Knob> compReleaseKnob;
         std::unique_ptr<Knob> compMakeupKnob;
 
+        // Filters
+        std::unique_ptr<Knob> hpfKnob;
+        std::unique_ptr<Knob> lpfKnob;
+
         // Saturation & Transient Shaper Knobs
         std::unique_ptr<Knob> satDriveKnob;
         std::unique_ptr<Knob> transAttackKnob;
@@ -142,11 +146,79 @@ class MixerView
 
         HandButton closeBtn {"CLOSE"};
         HandButton limiterToggle {"LIMITER", true};
+        HandButton busCompToggle {"BUS COMP", false};
+
+        std::unique_ptr<Knob> busLowKnob;
+        std::unique_ptr<Knob> busMidKnob;
+        std::unique_ptr<Knob> busMidFreqKnob;
+        std::unique_ptr<Knob> busHighKnob;
+        std::unique_ptr<Knob> busThreshKnob;
+        std::unique_ptr<Knob> busRatioKnob;
+        std::unique_ptr<Knob> busAttackKnob;
+        std::unique_ptr<Knob> busReleaseKnob;
+        std::unique_ptr<Knob> busMakeupKnob;
+        std::unique_ptr<Knob> busMixKnob;
+        std::unique_ptr<Knob> busSatKnob;
 
         std::unique_ptr<Knob> revReturnKnob;
         std::unique_ptr<Knob> revSizeKnob;
         std::unique_ptr<Knob> revDampKnob;
         std::unique_ptr<Knob> revWidthKnob;
+    };
+
+    //==========================================================================
+    // Preset Browser (factory + user presets, A/B compare, favourites)
+    //==========================================================================
+    class PresetBrowserPopup : public juce::Component
+    {
+      public:
+        PresetBrowserPopup(MixerView &owner, PluginProcessor &processor);
+        void open();
+        void close();
+        bool isOpen() const noexcept { return isVisible(); }
+        void setTheme(const Theme &t);
+
+        void paint(juce::Graphics &g) override;
+        void resized() override;
+        void mouseDown(const juce::MouseEvent &e) override;
+
+      private:
+        struct Entry
+        {
+            juce::String name;
+            juce::String filePath;
+            int factoryIndex = -1;
+            bool favourite = false;
+        };
+
+        MixerView &owner;
+        PluginProcessor &processor;
+        Theme theme = Theme::suite();
+
+        HandButton closeBtn {"CLOSE"};
+        HandButton favouriteBtn {"FAVOURITE"};
+        HandButton slotABtn {"A"};
+        HandButton slotBBtn {"B"};
+        HandButton storeABtn {"STORE A"};
+        HandButton storeBBtn {"STORE B"};
+        juce::Component listContent;
+        juce::Viewport listViewport;
+        std::vector<std::unique_ptr<HandButton>> rowButtons;
+        std::vector<Entry> entries;
+        int selectedEntry = -1;
+
+        MixerPreset slotA;
+        MixerPreset slotB;
+        int activeSlot = 0;
+
+        juce::File favouritesFile() const;
+        void loadFavourites();
+        void saveFavourites() const;
+        void rebuildEntries();
+        void rebuildRows();
+        void applyEntry(int index);
+        void storeCurrentInActiveSlot();
+        void recallSlot(int slot);
     };
 
     //==========================================================================
@@ -289,7 +361,7 @@ class MixerView
         PluginProcessor &processor;
         Theme theme = Theme::suite();
 
-        HandButton fxBtn {"REVERB FX"};
+        HandButton fxBtn {"MASTER FX"};
         HandButton limiterBtn {"LIMITER", true};
 
         juce::Rectangle<float> faderTrackBounds;
@@ -321,7 +393,7 @@ class MixerView
     HandButton presetDryBtn {"DRY", false};
     HandButton presetMixBtn {"MIX READY", false};
     HandButton savePresetBtn {"SAVE .glorpmix"};
-    HandButton loadPresetBtn {"LOAD..."};
+    HandButton presetBrowserBtn {"MIXES"};
 
     // Bleed Matrix Button
     HandButton bleedMatrixBtn {"BLEED MATRIX"};
@@ -329,11 +401,11 @@ class MixerView
     // FX Drawers & Popups
     std::unique_ptr<ChannelFXPopup> channelFXPopup;
     std::unique_ptr<MasterFXPopup> masterFXPopup;
+    std::unique_ptr<PresetBrowserPopup> presetBrowser;
     std::unique_ptr<BleedMatrixPopup> bleedMatrixPopup;
 
     void applyPreset(int presetIndex);
     void promptSavePreset();
-    void promptLoadPreset();
 
     juce::String activePresetName {"Default Clean"};
 

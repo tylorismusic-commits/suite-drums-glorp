@@ -83,6 +83,7 @@ class Editor
     GlorpLookAndFeel *getGlorpLookAndFeel() const noexcept { return lookAndFeel.get(); }
     void applyTheme(const Theme &newTheme);
     void applyTextScale(float newScale);
+    void applyWindowScale(float factor);
 
     void setOpenGlEnabled(bool enabled);
     bool isOpenGlEnabled() const noexcept;
@@ -329,6 +330,8 @@ class Editor
     std::unique_ptr<Knob> instPanKnob;
     std::unique_ptr<Knob> instPitchKnob;
     std::unique_ptr<Knob> instDynamicsKnob;
+    std::unique_ptr<Knob> instAttackKnob;
+    std::unique_ptr<Knob> instDampKnob;
 
     CurveButton instCurveButton;
     VelocityCurvePreview instCurvePreview;

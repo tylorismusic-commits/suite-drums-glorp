@@ -13,9 +13,13 @@
 - **Suite Kit Studio**, a standalone `.glorpkit` creator/editor that imports DrumGizmo `drumkit.xml` kits and SFZ instruments (including AVL Drumkits) and exports a single `.glorpkit`. A `SuiteKitConverter` CLI is included for batch conversion.
 - **One Suite theme**: dark charcoal, amber accent, Jost ExtraBold display type.
 - **Kit view** with zones, velocity layers, round-robin, drum-hit animation and MIDI activity ribbon. Extra tom and floor-tom articulations fall back to the floor-tom marker.
-- **Per-piece controls** for level, pan, pitch and dynamic response.
+- **Per-piece controls** for level, pan, tune, dynamics, attack and damping.
 - **Full-range velocity selection**: hits are chosen across each kit's recorded power range, so normal-velocity snare hits no longer fall back to ghost-note samples.
 - **Mixer** with per-mic channels, solo/mute, mono/stereo switching, per-mic stems, linked instrument/mixer bus routing, master bus and kit-adaptive presets. Every stock preset keeps kick and trigger mics mono, controls cymbals and pushes kick/snare forward so drums sit in a mix.
+- **Drum-bus glue** with bus EQ, compressor, saturation and a parallel dry/compressed mix.
+- **Per-mic high-pass/low-pass filters** alongside the EQ, compressor, saturation and transient shaper.
+- **Preset browser** for factory and user `.glorpmix` files, with A/B compare and favourites.
+- **Scalable UI** with 100%, 125% and 150% window scaling.
 - **Channel FX**: 3-band EQ, VCA compressor, tape saturation and transient shaper.
 - **MIDI mapping page**: up to three notes per hit, per-slot MIDI learn and an eight-point velocity curve editor.
 - **Piano-roll note names**: VST3 hosts show the current kit's drum names on mapped note keys.

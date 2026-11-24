@@ -854,6 +854,16 @@ void Editor::applyTheme(const Theme &newTheme)
         instDynamicsKnob->setTheme(theme);
         instDynamicsKnob->setAccentColour(theme.accentWarm);
     }
+    if (instAttackKnob != nullptr)
+    {
+        instAttackKnob->setTheme(theme);
+        instAttackKnob->setAccentColour(theme.accentWarm);
+    }
+    if (instDampKnob != nullptr)
+    {
+        instDampKnob->setTheme(theme);
+        instDampKnob->setAccentColour(theme.accentWarm);
+    }
     if (masterVolumeKnob != nullptr)
     {
         masterVolumeKnob->setTheme(theme);
@@ -906,6 +916,21 @@ void Editor::applyTextScale(float newScale)
         lookAndFeel->setTheme(theme);
         sendLookAndFeelChange();
     }
+
+    resized();
+    repaint();
+}
+
+void Editor::applyWindowScale(float factor)
+{
+    auto &settings = processor.getSettings();
+    settings.uiScale = juce::jlimit(1.0f, 2.5f, factor);
+    settings.markDirty();
+    settings.saveIfChanged();
+
+    if (auto *top = getTopLevelComponent())
+        top->setSize(juce::roundToInt(900.0f * settings.uiScale),
+                     juce::roundToInt(620.0f * settings.uiScale));
 
     resized();
     repaint();
@@ -968,6 +993,10 @@ void Editor::setViewMode(EditorView mode)
         instPitchKnob->setVisible(isKit);
     if (instDynamicsKnob != nullptr)
         instDynamicsKnob->setVisible(isKit);
+    if (instAttackKnob != nullptr)
+        instAttackKnob->setVisible(isKit);
+    if (instDampKnob != nullptr)
+        instDampKnob->setVisible(isKit);
 
     instCurveButton.setVisible(isKit);
     instCurvePreview.setVisible(isKit);
@@ -1355,6 +1384,35 @@ juce::PopupMenu Editor::buildSettingsMenu()
     juce::PopupMenu menu;
 
     {
+        juce::PopupMenu windowMenu;
+        struct WindowOption
+        {
+            const char *label;
+            float factor;
+        };
+        const WindowOption options[] = {
+            {"100% (Standard)", 1.00f},
+            {"125% (Large)", 1.25f},
+            {"150% (Extra Large)", 1.50f},
+        };
+        const float curWindowScale = processor.getSettings().uiScale;
+        for (const auto &opt : options)
+        {
+            const bool active = std::abs(curWindowScale - opt.factor) < 0.01f;
+            windowMenu.addItem(opt.label,
+                               true,
+                               active,
+                               [this, opt]
+                               {
+                                   applyWindowScale(opt.factor);
+                                   statusText = juce::String("Window scale: ") + opt.label;
+                                   repaint();
+                               });
+        }
+        menu.addSubMenu("Window Scale", windowMenu);
+    }
+
+    {
         juce::PopupMenu scaleMenu;
         struct ScaleOption
         {
@@ -1594,9 +1652,37 @@ void Editor::buildControls()
     instPitchKnob->setDoubleClickReturnValue(true, 0.5);
     addAndMakeVisible(*instPitchKnob);
 
-    instDynamicsKnob = std::make_unique<Knob>("DYNAMICS");
+    instDynamicsKnob = std::make_unique<Knob>("DYN");
     instDynamicsKnob->setDoubleClickReturnValue(true, 0.5);
     addAndMakeVisible(*instDynamicsKnob);
+
+    instPitchKnob->setLabel("TUNE");
+
+    instAttackKnob = std::make_unique<Knob>("ATTACK");
+    instAttackKnob->setDoubleClickReturnValue(true, 0.0);
+    instAttackKnob->onValueChanged = [this](float v)
+    {
+        const int samplerIdx = getActiveSamplerIndex();
+        if (samplerIdx < 0)
+            return;
+        auto p = processor.getSampler().getInstrumentParams(samplerIdx);
+        p.attackMs = juce::jlimit(0.0f, 200.0f, v * 200.0f);
+        processor.getSampler().setInstrumentParams(samplerIdx, p);
+    };
+    addAndMakeVisible(*instAttackKnob);
+
+    instDampKnob = std::make_unique<Knob>("DAMP");
+    instDampKnob->setDoubleClickReturnValue(true, 0.0);
+    instDampKnob->onValueChanged = [this](float v)
+    {
+        const int samplerIdx = getActiveSamplerIndex();
+        if (samplerIdx < 0)
+            return;
+        auto p = processor.getSampler().getInstrumentParams(samplerIdx);
+        p.damping = juce::jlimit(0.0f, 1.0f, v);
+        processor.getSampler().setInstrumentParams(samplerIdx, p);
+    };
+    addAndMakeVisible(*instDampKnob);
 
     // Left Panel: Velocity Curve Button & DrumGizmo-style Curve Preview
     addAndMakeVisible(instCurveButton);
@@ -2086,6 +2172,8 @@ void Editor::updateInstrumentDisplay()
         const auto params = processor.getSampler().getInstrumentParams(samplerIdx);
         instCurveButton.setCurve(params.velocityCurve);
         instCurvePreview.setCurve(params.velocityCurve);
+        instAttackKnob->setNormalized(params.attackMs / 200.0f);
+        instDampKnob->setNormalized(params.damping);
     }
 
     const bool isLearningThis = (learningInstrument >= 0 && learningInstrument == samplerIdx);
@@ -2581,21 +2669,25 @@ void Editor::resized()
         currentZoneBottom = zoneY + zoneH;
     }
 
-    // 4 Knobs (2x2 Grid)
-    const int kSize = 68;
-    const int kPadX = 16;
+    // 6 Knobs (3x2 Grid)
+    const int kSize = 52;
+    const int kGap = 6;
+    const int kPadX = 14;
     const int kCol1 = panelX + kPadX;
-    const int kCol2 = panelX + panelW - kPadX - kSize;
+    const int kCol2 = kCol1 + kSize + kGap;
+    const int kCol3 = kCol2 + kSize + kGap;
     const int kRow1 = currentZoneBottom + (compact ? 6 : 10);
-    const int kRow2 = kRow1 + kSize + (compact ? 12 : 14);
+    const int kRow2 = kRow1 + kSize + (compact ? 10 : 12);
 
     instVolumeKnob->setBounds(kCol1, kRow1, kSize, kSize + 14);
     instPanKnob->setBounds(kCol2, kRow1, kSize, kSize + 14);
-    instPitchKnob->setBounds(kCol1, kRow2, kSize, kSize + 14);
-    instDynamicsKnob->setBounds(kCol2, kRow2, kSize, kSize + 14);
+    instPitchKnob->setBounds(kCol3, kRow1, kSize, kSize + 14);
+    instDynamicsKnob->setBounds(kCol1, kRow2, kSize, kSize + 14);
+    instAttackKnob->setBounds(kCol2, kRow2, kSize, kSize + 14);
+    instDampKnob->setBounds(kCol3, kRow2, kSize, kSize + 14);
 
     // Velocity Curve row: Preset button + DrumGizmo-style Curve Preview
-    const int curveY = kRow2 + kSize + (compact ? 10 : 12);
+    const int curveY = kRow2 + kSize + (compact ? 12 : 14);
     const int curveH = compact ? 20 : 24;
     instCurveButton.setBounds(panelX + 14, curveY, panelW - 28, curveH);
 

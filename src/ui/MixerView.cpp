@@ -149,7 +149,11 @@ MixerView::ChannelStripComponent::ChannelStripComponent(MixerView &o, PluginProc
 
     fxBtn.setButtonText("FX");
     fxBtn.activeColour = juce::Colour(0xfff39c12);
-    fxBtn.onClick = [this]() { owner.channelFXPopup->openForChannel(channelIndex_); };
+    fxBtn.onClick = [this]()
+    {
+        owner.closePopups();
+        owner.channelFXPopup->openForChannel(channelIndex_);
+    };
     addAndMakeVisible(fxBtn);
 
     bleedBtn.setButtonText("BLD");
@@ -551,9 +555,13 @@ MixerView::MasterStripComponent::MasterStripComponent(MixerView &o, PluginProces
     };
     addAndMakeVisible(limiterBtn);
 
-    fxBtn.setButtonText("REVERB FX");
+    fxBtn.setButtonText("MASTER FX");
     fxBtn.activeColour = juce::Colour(0xff9b59b6);
-    fxBtn.onClick = [this]() { owner.masterFXPopup->open(); };
+    fxBtn.onClick = [this]()
+    {
+        owner.closePopups();
+        owner.masterFXPopup->open();
+    };
     addAndMakeVisible(fxBtn);
 
     updateFromState();
@@ -838,6 +846,9 @@ MixerView::ChannelFXPopup::ChannelFXPopup(MixerView &o, PluginProcessor &proc) :
     compReleaseKnob = std::make_unique<Knob>("RELEASE", 20.0f, 300.0f, 100.0f, "ms");
     compMakeupKnob = std::make_unique<Knob>("MAKEUP", 0.0f, 12.0f, 0.0f, "dB");
 
+    hpfKnob = std::make_unique<Knob>("HPF", 20.0f, 500.0f, 20.0f, "Hz");
+    lpfKnob = std::make_unique<Knob>("LPF", 2000.0f, 20000.0f, 20000.0f, "Hz");
+
     satDriveKnob = std::make_unique<Knob>("SAT DRIVE", 0.0f, 1.0f, 0.0f, "");
     transAttackKnob = std::make_unique<Knob>("ATTACK", -1.0f, 1.0f, 0.0f, "");
     transSustainKnob = std::make_unique<Knob>("SUSTAIN", -1.0f, 1.0f, 0.0f, "");
@@ -866,6 +877,9 @@ MixerView::ChannelFXPopup::ChannelFXPopup(MixerView &o, PluginProcessor &proc) :
     bindKnob(*compReleaseKnob, [](auto &p, float v) { p.compReleaseMs = v; });
     bindKnob(*compMakeupKnob, [](auto &p, float v) { p.compMakeupDb = v; });
 
+    bindKnob(*hpfKnob, [](auto &p, float v) { p.hpfHz = v; });
+    bindKnob(*lpfKnob, [](auto &p, float v) { p.lpfHz = v; });
+
     bindKnob(*satDriveKnob, [](auto &p, float v) { p.saturationDrive = v; });
     bindKnob(*transAttackKnob, [](auto &p, float v) { p.transientAttack = v; });
     bindKnob(*transSustainKnob, [](auto &p, float v) { p.transientSustain = v; });
@@ -880,6 +894,9 @@ MixerView::ChannelFXPopup::ChannelFXPopup(MixerView &o, PluginProcessor &proc) :
     addAndMakeVisible(*compAttackKnob);
     addAndMakeVisible(*compReleaseKnob);
     addAndMakeVisible(*compMakeupKnob);
+
+    addAndMakeVisible(*hpfKnob);
+    addAndMakeVisible(*lpfKnob);
 
     addAndMakeVisible(*satDriveKnob);
     addAndMakeVisible(*transAttackKnob);
@@ -909,6 +926,9 @@ void MixerView::ChannelFXPopup::openForChannel(int chIdx)
     compAttackKnob->setValue(p.compAttackMs);
     compReleaseKnob->setValue(p.compReleaseMs);
     compMakeupKnob->setValue(p.compMakeupDb);
+
+    hpfKnob->setValue(p.hpfHz);
+    lpfKnob->setValue(p.lpfHz);
 
     satDriveKnob->setValue(p.saturationDrive);
     transAttackKnob->setValue(p.transientAttack);
@@ -950,6 +970,10 @@ void MixerView::ChannelFXPopup::resized()
     satDriveKnob->setBounds(124, 194, 60, 60);
     transAttackKnob->setBounds(244, 194, 60, 60);
     transSustainKnob->setBounds(314, 194, 60, 60);
+
+    // Section 4: Filters
+    hpfKnob->setBounds(124, 266, 60, 60);
+    lpfKnob->setBounds(204, 266, 60, 60);
 }
 
 void MixerView::ChannelFXPopup::setTheme(const Theme &t)
@@ -976,6 +1000,10 @@ void MixerView::ChannelFXPopup::setTheme(const Theme &t)
         compReleaseKnob->setTheme(t);
     if (compMakeupKnob)
         compMakeupKnob->setTheme(t);
+    if (hpfKnob)
+        hpfKnob->setTheme(t);
+    if (lpfKnob)
+        lpfKnob->setTheme(t);
     if (satDriveKnob)
         satDriveKnob->setTheme(t);
     if (transAttackKnob)
@@ -1018,6 +1046,7 @@ void MixerView::ChannelFXPopup::paint(juce::Graphics &g)
     g.setColour(theme.ink.withAlpha(0.25f));
     g.drawHorizontalLine(112, 20.0f, getWidth() - 20.0f);
     g.drawHorizontalLine(186, 20.0f, getWidth() - 20.0f);
+    g.drawHorizontalLine(258, 20.0f, getWidth() - 20.0f);
 
     // Section labels
     g.setColour(theme.ink);
@@ -1025,6 +1054,7 @@ void MixerView::ChannelFXPopup::paint(juce::Graphics &g)
     g.drawText("3-BAND EQ", 24, 78, 90, 20, juce::Justification::left, false);
     g.drawText("VCA COMP", 24, 152, 90, 20, juce::Justification::left, false);
     g.drawText("TAPE & TRANSIENT", 24, 214, 96, 20, juce::Justification::left, false);
+    g.drawText("FILTERS", 24, 286, 90, 20, juce::Justification::left, false);
 }
 
 void MixerView::ChannelFXPopup::mouseDown(const juce::MouseEvent &e)
@@ -1050,7 +1080,50 @@ MixerView::MasterFXPopup::MasterFXPopup(MixerView &o, PluginProcessor &proc) : o
     };
     addAndMakeVisible(limiterToggle);
 
-    revReturnKnob = std::make_unique<Knob>("REVERB WET", 0.0f, 1.0f, 0.25f, "");
+    busCompToggle.onClick = [this]()
+    {
+        auto params = processor.getSampler().getMasterStripParams();
+        params.busCompEnabled = !params.busCompEnabled;
+        processor.getSampler().setMasterStripParams(params);
+        busCompToggle.setActive(params.busCompEnabled);
+    };
+    addAndMakeVisible(busCompToggle);
+
+    busLowKnob = std::make_unique<Knob>("LOW", -12.0f, 12.0f, 0.0f, "dB");
+    busMidKnob = std::make_unique<Knob>("MID", -12.0f, 12.0f, 0.0f, "dB");
+    busMidFreqKnob = std::make_unique<Knob>("MID FREQ", 100.0f, 10000.0f, 800.0f, "Hz");
+    busHighKnob = std::make_unique<Knob>("HIGH", -12.0f, 12.0f, 0.0f, "dB");
+    busThreshKnob = std::make_unique<Knob>("THRESH", -30.0f, 0.0f, -12.0f, "dB");
+    busRatioKnob = std::make_unique<Knob>("RATIO", 1.0f, 8.0f, 2.0f, ":1");
+    busAttackKnob = std::make_unique<Knob>("ATTACK", 1.0f, 100.0f, 30.0f, "ms");
+    busReleaseKnob = std::make_unique<Knob>("RELEASE", 20.0f, 500.0f, 150.0f, "ms");
+    busMakeupKnob = std::make_unique<Knob>("MAKEUP", 0.0f, 12.0f, 0.0f, "dB");
+    busMixKnob = std::make_unique<Knob>("PARALLEL", 0.0f, 1.0f, 1.0f, "");
+    busSatKnob = std::make_unique<Knob>("DRIVE", 0.0f, 1.0f, 0.0f, "");
+
+    auto bindBusKnob = [this](Knob &k, auto setter)
+    {
+        k.onValueChanged = [this, setter](float v)
+        {
+            auto params = processor.getSampler().getMasterStripParams();
+            setter(params, v);
+            processor.getSampler().setMasterStripParams(params);
+        };
+    };
+
+    bindBusKnob(*busLowKnob, [](auto &p, float v) { p.busEqLowDb = v; });
+    bindBusKnob(*busMidKnob, [](auto &p, float v) { p.busEqMidDb = v; });
+    bindBusKnob(*busMidFreqKnob, [](auto &p, float v) { p.busEqMidFreq = v; });
+    bindBusKnob(*busHighKnob, [](auto &p, float v) { p.busEqHighDb = v; });
+    bindBusKnob(*busThreshKnob, [](auto &p, float v) { p.busCompThresholdDb = v; });
+    bindBusKnob(*busRatioKnob, [](auto &p, float v) { p.busCompRatio = v; });
+    bindBusKnob(*busAttackKnob, [](auto &p, float v) { p.busCompAttackMs = v; });
+    bindBusKnob(*busReleaseKnob, [](auto &p, float v) { p.busCompReleaseMs = v; });
+    bindBusKnob(*busMakeupKnob, [](auto &p, float v) { p.busCompMakeupDb = v; });
+    bindBusKnob(*busMixKnob, [](auto &p, float v) { p.busCompMix = v; });
+    bindBusKnob(*busSatKnob, [](auto &p, float v) { p.busSaturationDrive = v; });
+
+    revReturnKnob = std::make_unique<Knob>("WET", 0.0f, 1.0f, 0.25f, "");
     revSizeKnob = std::make_unique<Knob>("ROOM SIZE", 0.0f, 1.0f, 0.45f, "");
     revDampKnob = std::make_unique<Knob>("DAMPING", 0.0f, 1.0f, 0.40f, "");
     revWidthKnob = std::make_unique<Knob>("WIDTH", 0.0f, 1.0f, 0.85f, "");
@@ -1080,6 +1153,18 @@ MixerView::MasterFXPopup::MasterFXPopup(MixerView &o, PluginProcessor &proc) : o
         processor.getSampler().setMasterStripParams(params);
     };
 
+    addAndMakeVisible(*busLowKnob);
+    addAndMakeVisible(*busMidKnob);
+    addAndMakeVisible(*busMidFreqKnob);
+    addAndMakeVisible(*busHighKnob);
+    addAndMakeVisible(*busThreshKnob);
+    addAndMakeVisible(*busRatioKnob);
+    addAndMakeVisible(*busAttackKnob);
+    addAndMakeVisible(*busReleaseKnob);
+    addAndMakeVisible(*busMakeupKnob);
+    addAndMakeVisible(*busMixKnob);
+    addAndMakeVisible(*busSatKnob);
+
     addAndMakeVisible(*revReturnKnob);
     addAndMakeVisible(*revSizeKnob);
     addAndMakeVisible(*revDampKnob);
@@ -1093,6 +1178,18 @@ void MixerView::MasterFXPopup::open()
 {
     const auto p = processor.getSampler().getMasterStripParams();
     limiterToggle.setActive(p.limiterEnabled);
+    busCompToggle.setActive(p.busCompEnabled);
+    busLowKnob->setValue(p.busEqLowDb);
+    busMidKnob->setValue(p.busEqMidDb);
+    busMidFreqKnob->setValue(p.busEqMidFreq);
+    busHighKnob->setValue(p.busEqHighDb);
+    busThreshKnob->setValue(p.busCompThresholdDb);
+    busRatioKnob->setValue(p.busCompRatio);
+    busAttackKnob->setValue(p.busCompAttackMs);
+    busReleaseKnob->setValue(p.busCompReleaseMs);
+    busMakeupKnob->setValue(p.busCompMakeupDb);
+    busMixKnob->setValue(p.busCompMix);
+    busSatKnob->setValue(p.busSaturationDrive);
     revReturnKnob->setValue(p.reverbReturn);
     revSizeKnob->setValue(p.reverbSize);
     revDampKnob->setValue(p.reverbDamp);
@@ -1113,12 +1210,26 @@ void MixerView::MasterFXPopup::close()
 void MixerView::MasterFXPopup::resized()
 {
     closeBtn.setBounds(getWidth() - 90, 14, 76, 24);
-    limiterToggle.setBounds(24, 60, 100, 24);
+    limiterToggle.setBounds(24, 52, 100, 24);
+    busCompToggle.setBounds(134, 52, 110, 24);
 
-    revReturnKnob->setBounds(144, 52, 60, 60);
-    revSizeKnob->setBounds(214, 52, 60, 60);
-    revDampKnob->setBounds(284, 52, 60, 60);
-    revWidthKnob->setBounds(354, 52, 60, 60);
+    busLowKnob->setBounds(24, 100, 60, 60);
+    busMidKnob->setBounds(94, 100, 60, 60);
+    busMidFreqKnob->setBounds(164, 100, 60, 60);
+    busHighKnob->setBounds(234, 100, 60, 60);
+
+    busThreshKnob->setBounds(24, 186, 60, 60);
+    busRatioKnob->setBounds(94, 186, 60, 60);
+    busAttackKnob->setBounds(164, 186, 60, 60);
+    busReleaseKnob->setBounds(234, 186, 60, 60);
+    busMakeupKnob->setBounds(304, 186, 60, 60);
+    busMixKnob->setBounds(374, 186, 60, 60);
+
+    busSatKnob->setBounds(24, 272, 60, 60);
+    revReturnKnob->setBounds(94, 272, 60, 60);
+    revSizeKnob->setBounds(164, 272, 60, 60);
+    revDampKnob->setBounds(234, 272, 60, 60);
+    revWidthKnob->setBounds(304, 272, 60, 60);
 }
 
 void MixerView::MasterFXPopup::setTheme(const Theme &t)
@@ -1126,6 +1237,29 @@ void MixerView::MasterFXPopup::setTheme(const Theme &t)
     theme = t;
     closeBtn.setTheme(t);
     limiterToggle.setTheme(t);
+    busCompToggle.setTheme(t);
+    if (busLowKnob)
+        busLowKnob->setTheme(t);
+    if (busMidKnob)
+        busMidKnob->setTheme(t);
+    if (busMidFreqKnob)
+        busMidFreqKnob->setTheme(t);
+    if (busHighKnob)
+        busHighKnob->setTheme(t);
+    if (busThreshKnob)
+        busThreshKnob->setTheme(t);
+    if (busRatioKnob)
+        busRatioKnob->setTheme(t);
+    if (busAttackKnob)
+        busAttackKnob->setTheme(t);
+    if (busReleaseKnob)
+        busReleaseKnob->setTheme(t);
+    if (busMakeupKnob)
+        busMakeupKnob->setTheme(t);
+    if (busMixKnob)
+        busMixKnob->setTheme(t);
+    if (busSatKnob)
+        busSatKnob->setTheme(t);
     if (revReturnKnob)
         revReturnKnob->setTheme(t);
     if (revSizeKnob)
@@ -1162,7 +1296,19 @@ void MixerView::MasterFXPopup::paint(juce::Graphics &g)
 
     g.setColour(theme.isDark ? juce::Colours::white : ink);
     g.setFont(displayFont(15.0f));
-    g.drawText("MASTER REVERB & DYNAMICS", 24, 14, getWidth() - 120, 24, juce::Justification::left, false);
+    g.drawText("MASTER BUS & REVERB", 24, 14, getWidth() - 120, 24, juce::Justification::left, false);
+
+    g.setColour(theme.ink.withAlpha(0.25f));
+    g.drawHorizontalLine(88, 20.0f, getWidth() - 20.0f);
+    g.drawHorizontalLine(174, 20.0f, getWidth() - 20.0f);
+    g.drawHorizontalLine(260, 20.0f, getWidth() - 20.0f);
+
+    g.setColour(theme.ink);
+    g.setFont(displayFont(11.5f));
+    g.drawText("BUS EQ", 24, 88, 90, 12, juce::Justification::left, false);
+    g.drawText("GLUE COMP", 24, 174, 90, 12, juce::Justification::left, false);
+    g.drawText("SAT", 24, 260, 60, 12, juce::Justification::left, false);
+    g.drawText("REVERB", 94, 260, 90, 12, juce::Justification::left, false);
 }
 
 void MixerView::MasterFXPopup::mouseDown(const juce::MouseEvent &e)
@@ -1326,6 +1472,289 @@ static void drawPieceVectorIcon(
 //==============================================================================
 // BleedMatrixPopup
 //==============================================================================
+
+MixerView::PresetBrowserPopup::PresetBrowserPopup(MixerView &o, PluginProcessor &proc) : owner(o), processor(proc)
+{
+    closeBtn.onClick = [this]() { close(); };
+    addAndMakeVisible(closeBtn);
+
+    favouriteBtn.onClick = [this]()
+    {
+        if (selectedEntry < 0 || selectedEntry >= static_cast<int>(entries.size()))
+            return;
+
+        entries[static_cast<size_t>(selectedEntry)].favourite =
+            !entries[static_cast<size_t>(selectedEntry)].favourite;
+        saveFavourites();
+        rebuildRows();
+        repaint();
+    };
+    addAndMakeVisible(favouriteBtn);
+
+    slotABtn.onClick = [this]() { recallSlot(0); };
+    slotBBtn.onClick = [this]() { recallSlot(1); };
+    storeABtn.onClick = [this]()
+    {
+        activeSlot = 0;
+        storeCurrentInActiveSlot();
+    };
+    storeBBtn.onClick = [this]()
+    {
+        activeSlot = 1;
+        storeCurrentInActiveSlot();
+    };
+    addAndMakeVisible(slotABtn);
+    addAndMakeVisible(slotBBtn);
+    addAndMakeVisible(storeABtn);
+    addAndMakeVisible(storeBBtn);
+
+    listViewport.setViewedComponent(&listContent, false);
+    listViewport.setScrollBarsShown(true, false);
+    addAndMakeVisible(listViewport);
+
+    setVisible(false);
+    setTheme(owner.theme);
+}
+
+juce::File MixerView::PresetBrowserPopup::favouritesFile() const
+{
+    return processor.getSettings().getConfigDirectory().getChildFile("mix_presets").getChildFile("favourites.txt");
+}
+
+void MixerView::PresetBrowserPopup::loadFavourites()
+{
+    const auto file = favouritesFile();
+    if (!file.existsAsFile())
+        return;
+
+    juce::StringArray lines;
+    lines.addLines(file.loadFileAsString());
+
+    for (auto &entry : entries)
+        entry.favourite = lines.contains(entry.name, true);
+}
+
+void MixerView::PresetBrowserPopup::saveFavourites() const
+{
+    auto file = favouritesFile();
+    file.getParentDirectory().createDirectory();
+
+    juce::StringArray lines;
+    for (const auto &entry : entries)
+        if (entry.favourite)
+            lines.add(entry.name);
+
+    file.replaceWithText(lines.joinIntoString("\n"));
+}
+
+void MixerView::PresetBrowserPopup::rebuildEntries()
+{
+    entries.clear();
+
+    static const char *factoryNames[] = {
+        "Default Clean", "Massive Rock", "Vintage Warmth", "Punchy Studio", "Dry & Tight", "Mix Ready"
+    };
+
+    for (int i = 0; i < static_cast<int>(std::size(factoryNames)); ++i)
+        entries.push_back({factoryNames[i], {}, i, false});
+
+    const auto dir = processor.getSettings().getConfigDirectory().getChildFile("mix_presets");
+    if (dir.isDirectory())
+    {
+        const auto files = dir.findChildFiles(juce::File::findFiles, false, "*.glorpmix");
+        for (const auto &file : files)
+        {
+            MixerPreset preset;
+            if (!MixerPreset::fromXmlString(file.loadFileAsString(), preset))
+                continue;
+
+            entries.push_back({preset.name.isEmpty() ? file.getFileNameWithoutExtension() : preset.name,
+                               file.getFullPathName(),
+                               -1,
+                               false});
+        }
+    }
+
+    loadFavourites();
+}
+
+void MixerView::PresetBrowserPopup::rebuildRows()
+{
+    rowButtons.clear();
+
+    const int rowH = 27;
+    const int rowGap = 2;
+    const int width = juce::jmax(120, listViewport.getWidth() - 12);
+
+    for (int i = 0; i < static_cast<int>(entries.size()); ++i)
+    {
+        const auto &entry = entries[static_cast<size_t>(i)];
+        auto button = std::make_unique<HandButton>(
+            (entry.favourite ? juce::String("* ") : juce::String("  ")) + entry.name, false);
+        button->setTheme(theme);
+        button->setActive(i == selectedEntry);
+        button->onClick = [this, i]()
+        {
+            selectedEntry = i;
+            for (size_t row = 0; row < rowButtons.size(); ++row)
+                rowButtons[row]->setActive(static_cast<int>(row) == i);
+            applyEntry(i);
+        };
+        button->setBounds(4, 4 + i * (rowH + rowGap), width, rowH);
+        listContent.addAndMakeVisible(*button);
+        rowButtons.push_back(std::move(button));
+    }
+
+    listContent.setSize(width + 8, juce::jmax(1, 8 + static_cast<int>(entries.size()) * (rowH + rowGap)));
+    repaint();
+}
+
+void MixerView::PresetBrowserPopup::applyEntry(int index)
+{
+    if (index < 0 || index >= static_cast<int>(entries.size()))
+        return;
+
+    selectedEntry = index;
+    const auto &entry = entries[static_cast<size_t>(index)];
+
+    if (entry.factoryIndex >= 0)
+    {
+        owner.applyPreset(entry.factoryIndex);
+    }
+    else
+    {
+        MixerPreset preset;
+        if (!MixerPreset::fromXmlString(juce::File(entry.filePath).loadFileAsString(), preset))
+            return;
+
+        owner.activePresetName = preset.name;
+        processor.getSampler().applyMixerPreset(preset);
+
+        for (auto &strip : owner.channelStrips)
+            strip->updateFromState();
+        if (owner.masterStrip != nullptr)
+            owner.masterStrip->updateFromState();
+        owner.repaint();
+    }
+
+    repaint();
+}
+
+void MixerView::PresetBrowserPopup::storeCurrentInActiveSlot()
+{
+    auto snapshot = processor.getSampler().getCurrentMixerPreset(owner.activePresetName);
+    if (activeSlot == 0)
+        slotA = std::move(snapshot);
+    else
+        slotB = std::move(snapshot);
+
+    slotABtn.setActive(activeSlot == 0);
+    slotBBtn.setActive(activeSlot == 1);
+    repaint();
+}
+
+void MixerView::PresetBrowserPopup::recallSlot(int slotIndex)
+{
+    const auto &preset = slotIndex == 0 ? slotA : slotB;
+    if (preset.micStrips.empty())
+        return;
+
+    activeSlot = slotIndex;
+    owner.activePresetName = preset.name;
+    processor.getSampler().applyMixerPreset(preset);
+
+    for (auto &strip : owner.channelStrips)
+        strip->updateFromState();
+    if (owner.masterStrip != nullptr)
+        owner.masterStrip->updateFromState();
+
+    slotABtn.setActive(activeSlot == 0);
+    slotBBtn.setActive(activeSlot == 1);
+    owner.repaint();
+    repaint();
+}
+
+void MixerView::PresetBrowserPopup::open()
+{
+    rebuildEntries();
+
+    setVisible(true);
+    toFront(true);
+    resized();
+    rebuildRows();
+
+    const auto current = processor.getSampler().getCurrentMixerPreset(owner.activePresetName);
+    slotA = current;
+    slotB = current;
+    activeSlot = 0;
+    slotABtn.setActive(true);
+    slotBBtn.setActive(false);
+
+    repaint();
+}
+
+void MixerView::PresetBrowserPopup::close()
+{
+    setVisible(false);
+}
+
+void MixerView::PresetBrowserPopup::resized()
+{
+    closeBtn.setBounds(getWidth() - 86, 12, 72, 24);
+
+    listViewport.setBounds(14, 52, getWidth() - 28, getHeight() - 144);
+
+    const int y = getHeight() - 76;
+    favouriteBtn.setBounds(16, y, 104, 26);
+    slotABtn.setBounds(132, y, 38, 26);
+    slotBBtn.setBounds(174, y, 38, 26);
+    storeABtn.setBounds(222, y, 82, 26);
+    storeBBtn.setBounds(310, y, 82, 26);
+}
+
+void MixerView::PresetBrowserPopup::setTheme(const Theme &t)
+{
+    theme = t;
+    closeBtn.setTheme(t);
+    favouriteBtn.setTheme(t);
+    slotABtn.setTheme(t);
+    slotBBtn.setTheme(t);
+    storeABtn.setTheme(t);
+    storeBBtn.setTheme(t);
+    for (auto &row : rowButtons)
+        row->setTheme(t);
+    repaint();
+}
+
+void MixerView::PresetBrowserPopup::paint(juce::Graphics &g)
+{
+    const auto r = getLocalBounds().toFloat().reduced(2.0f);
+    g.setColour(theme.panel);
+    g.fillRoundedRectangle(r, 8.0f);
+    drawSketchRect(g, r, theme.panelEdge, 2.2f, 211);
+
+    auto headerR = juce::Rectangle<float>(r.getX() + 4.0f, r.getY() + 4.0f, r.getWidth() - 8.0f, 34.0f);
+    g.setColour(theme.isDark ? juce::Colour(0xff3a3c44) : juce::Colour(0xffdfe6e9));
+    g.fillRoundedRectangle(headerR, 6.0f);
+    drawSketchRect(g, headerR, theme.isDark ? theme.panelEdge : theme.ink, 1.4f, 212);
+
+    g.setColour(theme.isDark ? juce::Colours::white : theme.ink);
+    g.setFont(displayFont(15.0f));
+    g.drawText("PRESET BROWSER", 24, 12, getWidth() - 120, 26, juce::Justification::left, false);
+
+    g.setColour(theme.inkSoft);
+    g.setFont(uiFont(9.0f));
+    g.drawText("FACTORY & USER PRESETS", 16, 42, getWidth() - 32, 10, juce::Justification::left, false);
+    g.drawText("A/B COMPARE", 16, getHeight() - 88, getWidth() - 32, 10, juce::Justification::left, false);
+
+    g.setColour(theme.panelEdge);
+    g.drawHorizontalLine(getHeight() - 92, 16.0f, static_cast<float>(getWidth() - 16));
+}
+
+void MixerView::PresetBrowserPopup::mouseDown(const juce::MouseEvent &e)
+{
+    juce::ignoreUnused(e);
+}
 
 MixerView::BleedMatrixPopup::BleedMatrixPopup(MixerView &o, PluginProcessor &proc) : owner(o), processor(proc)
 {
@@ -2133,7 +2562,14 @@ MixerView::MixerView(PluginProcessor &proc) : processor(proc)
     presetMixBtn.onClick = [this]() { applyPreset(5); };
 
     savePresetBtn.onClick = [this]() { promptSavePreset(); };
-    loadPresetBtn.onClick = [this]() { promptLoadPreset(); };
+    presetBrowserBtn.onClick = [this]()
+    {
+        if (presetBrowser != nullptr)
+        {
+            closePopups();
+            presetBrowser->open();
+        }
+    };
 
     addAndMakeVisible(presetCleanBtn);
     addAndMakeVisible(presetRockBtn);
@@ -2142,7 +2578,7 @@ MixerView::MixerView(PluginProcessor &proc) : processor(proc)
     addAndMakeVisible(presetDryBtn);
     addAndMakeVisible(presetMixBtn);
     addAndMakeVisible(savePresetBtn);
-    addAndMakeVisible(loadPresetBtn);
+    addAndMakeVisible(presetBrowserBtn);
 
     bleedMatrixBtn.setButtonText("BLEED MATRIX");
     bleedMatrixBtn.activeColour = juce::Colour(0xffe67e22);
@@ -2151,9 +2587,11 @@ MixerView::MixerView(PluginProcessor &proc) : processor(proc)
 
     channelFXPopup = std::make_unique<ChannelFXPopup>(*this, processor);
     masterFXPopup = std::make_unique<MasterFXPopup>(*this, processor);
+    presetBrowser = std::make_unique<PresetBrowserPopup>(*this, processor);
     bleedMatrixPopup = std::make_unique<BleedMatrixPopup>(*this, processor);
     addChildComponent(*channelFXPopup);
     addChildComponent(*masterFXPopup);
+    addChildComponent(*presetBrowser);
     addChildComponent(*bleedMatrixPopup);
 
     refreshChannels();
@@ -2197,7 +2635,10 @@ void MixerView::refreshBusStates()
 void MixerView::openChannelFX(int channelIndex)
 {
     if (channelFXPopup != nullptr)
+    {
+        closePopups();
         channelFXPopup->openForChannel(channelIndex);
+    }
 }
 
 void MixerView::openMasterFX()
@@ -2247,6 +2688,9 @@ void MixerView::closePopups()
 
     if (masterFXPopup != nullptr && masterFXPopup->isOpen())
         masterFXPopup->close();
+
+    if (presetBrowser != nullptr && presetBrowser->isOpen())
+        presetBrowser->close();
 }
 
 void MixerView::applyPreset(int presetIndex)
@@ -2305,46 +2749,6 @@ void MixerView::promptSavePreset()
     auto file = dir.getChildFile(activePresetName.toLowerCase().replace(" ", "_") + ".glorpmix");
     const auto preset = processor.getSampler().getCurrentMixerPreset(activePresetName);
     file.replaceWithText(preset.toXmlString());
-}
-
-void MixerView::promptLoadPreset()
-{
-    const auto dir = processor.getSettings().getConfigDirectory().getChildFile("mix_presets");
-    if (!dir.isDirectory())
-        return;
-
-    juce::PopupMenu m;
-    const auto files = dir.findChildFiles(juce::File::findFiles, false, "*.glorpmix");
-    if (files.isEmpty())
-    {
-        m.addItem(1, "(No saved .glorpmix presets yet)", false);
-        m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this));
-        return;
-    }
-
-    int id = 1;
-    for (const auto &f : files)
-        m.addItem(id++, f.getFileNameWithoutExtension());
-
-    m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
-                    [this, files](int result)
-                    {
-                        if (result > 0 && result <= files.size())
-                        {
-                            const auto text = files[result - 1].loadFileAsString();
-                            MixerPreset p;
-                            if (MixerPreset::fromXmlString(text, p))
-                            {
-                                activePresetName = p.name;
-                                processor.getSampler().applyMixerPreset(p);
-                                for (auto &s : channelStrips)
-                                    s->updateFromState();
-                                if (masterStrip != nullptr)
-                                    masterStrip->updateFromState();
-                                repaint();
-                            }
-                        }
-                    });
 }
 
 void MixerView::ChannelStripComponent::repaintMeter()
@@ -2406,7 +2810,7 @@ void MixerView::resized()
     presetMixBtn.setBounds(380, btnY, 78, btnH);
 
     savePresetBtn.setBounds(466, btnY, 104, btnH);
-    loadPresetBtn.setBounds(578, btnY, 74, btnH);
+    presetBrowserBtn.setBounds(578, btnY, 74, btnH);
     bleedMatrixBtn.setBounds(660, btnY, 114, btnH);
 
     // Channel Area vs Master Strip
@@ -2450,10 +2854,13 @@ void MixerView::resized()
                            static_cast<int>(stripH));
 
     if (channelFXPopup != nullptr)
-        channelFXPopup->setBounds(50, 40, std::min(480, getWidth() - 100), 270);
+        channelFXPopup->setBounds(50, 40, std::min(480, getWidth() - 100), 340);
 
     if (masterFXPopup != nullptr)
-        masterFXPopup->setBounds(getWidth() - 460, 40, 430, 130);
+        masterFXPopup->setBounds(std::max(8, getWidth() - 740), 40, 720, 360);
+
+    if (presetBrowser != nullptr)
+        presetBrowser->setBounds(std::max(8, getWidth() - 450), 40, 430, 430);
 
     if (bleedMatrixPopup != nullptr)
     {
@@ -2483,7 +2890,9 @@ void MixerView::setTheme(const Theme &newTheme)
     presetDryBtn.setTheme(theme);
     presetMixBtn.setTheme(theme);
     savePresetBtn.setTheme(theme);
-    loadPresetBtn.setTheme(theme);
+    presetBrowserBtn.setTheme(theme);
+    if (presetBrowser != nullptr)
+        presetBrowser->setTheme(theme);
     bleedMatrixBtn.setTheme(theme);
 
     for (auto &strip : channelStrips)
@@ -2534,6 +2943,9 @@ void MixerView::mouseDown(const juce::MouseEvent &e)
 
     if (masterFXPopup && masterFXPopup->isOpen() && !masterFXPopup->getBounds().contains(e.position.toInt()))
         masterFXPopup->close();
+
+    if (presetBrowser && presetBrowser->isOpen() && !presetBrowser->getBounds().contains(e.position.toInt()))
+        presetBrowser->close();
 
     if (bleedMatrixPopup && bleedMatrixPopup->isOpen() && !bleedMatrixPopup->getBounds().contains(e.position.toInt()))
         bleedMatrixPopup->close();

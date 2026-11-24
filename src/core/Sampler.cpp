@@ -540,6 +540,8 @@ void Sampler::setInstrumentParams(int index, const InstrumentParams &params)
     p.pitch = newPitch;
     p.spread = std::clamp(params.tuneSpread, 0.0f, 100.0f);
     p.dynamics = std::clamp(params.dynamics, 0.0f, 1.0f);
+    p.attackMs = std::clamp(params.attackMs, 0.0f, 200.0f);
+    p.damping = std::clamp(params.damping, 0.0f, 1.0f);
     p.velocityCurve = params.velocityCurve;
     p.useCustomVelocityCurve = params.useCustomVelocityCurve;
     p.customVelocityCurve = params.customVelocityCurve;
@@ -576,6 +578,8 @@ InstrumentParams Sampler::getInstrumentParams(int index) const
     out.pitchSemitones = p.pitch;
     out.tuneSpread = p.spread;
     out.dynamics = p.dynamics;
+    out.attackMs = p.attackMs;
+    out.damping = p.damping;
     out.velocityCurve = p.velocityCurve;
     out.useCustomVelocityCurve = p.useCustomVelocityCurve;
     out.customVelocityCurve = p.customVelocityCurve;
@@ -1138,8 +1142,9 @@ void Sampler::triggerVoice(int instrument, int note, float velocity, int64_t tim
     voice->endsAt = 0;
     voice->chokeFadeSamples = 0;
     voice->chokeStartSample = 0;
-    voice->attackGain = globals.attackMs > 0.0f ? 0.0f : 1.0f;
-    voice->attackSamples = static_cast<int>(globals.attackMs * 0.001 * currentSampleRate);
+    const float attackMs = std::max(globals.attackMs, p.attackMs);
+    voice->attackGain = attackMs > 0.0f ? 0.0f : 1.0f;
+    voice->attackSamples = static_cast<int>(attackMs * 0.001 * currentSampleRate);
 
     voice->startSkip = std::max<int64_t>(0, timeInSamples - sampleClock);
 
@@ -1147,10 +1152,11 @@ void Sampler::triggerVoice(int instrument, int note, float velocity, int64_t tim
         timeInSamples + static_cast<int64_t>(static_cast<double>(hit.numFrames) / voice->pitchRatio);
     voice->endsAtAbsolute = naturalEnd;
 
-    if (globals.decayScale < 0.999f)
+    const float effectiveDecay = std::min(globals.decayScale, 1.0f - 0.8f * p.damping);
+    if (effectiveDecay < 0.999f)
         voice->endsAt =
             timeInSamples
-            + static_cast<int64_t>(static_cast<double>(hit.numFrames) * globals.decayScale / voice->pitchRatio);
+            + static_cast<int64_t>(static_cast<double>(hit.numFrames) * effectiveDecay / voice->pitchRatio);
     else
         voice->endsAt = 0;
 

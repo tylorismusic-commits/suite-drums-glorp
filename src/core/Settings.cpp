@@ -142,6 +142,7 @@ void Settings::readState(const juce::MemoryBlock &source)
     editorHeight = root->getIntAttribute("editorHeight", editorHeight);
     editorMaximised = root->getBoolAttribute("editorMaximised", editorMaximised);
     uiTextScale = juce::jlimit(0.85f, 1.35f, static_cast<float>(root->getDoubleAttribute("uiTextScale", uiTextScale)));
+    uiScale = juce::jlimit(1.0f, 2.5f, static_cast<float>(root->getDoubleAttribute("uiScale", uiScale)));
     openGlEnabled = root->getBoolAttribute("openGlEnabled", openGlEnabled);
 }
 

@@ -634,6 +634,21 @@ void PluginProcessor::getStateInformation(juce::MemoryBlock &destination)
                                 static_cast<double>(params.customVelocityCurve[point]));
     }
 
+    auto *tweaks = state.createNewChildElement("InstrumentTweaks");
+
+    for (int i = 0; i < audioEngine.getSampler().numInstruments(); ++i)
+    {
+        const auto params = audioEngine.getSampler().getInstrumentParams(i);
+
+        if (params.attackMs <= 0.001f && params.damping <= 0.001f)
+            continue;
+
+        auto *tweak = tweaks->createNewChildElement("instrument");
+        tweak->setAttribute("index", i);
+        tweak->setAttribute("attackMs", static_cast<double>(params.attackMs));
+        tweak->setAttribute("damping", static_cast<double>(params.damping));
+    }
+
     if (auto *map = getMidiMap().exportXml())
     {
         map->setTagName("MidiMap");
@@ -734,6 +749,21 @@ void PluginProcessor::setStateInformation(const void *data, int sizeInBytes)
         params.useCustomVelocityCurve = true;
         params.customVelocityCurve = stored.points;
         audioEngine.getSampler().setInstrumentParams(stored.instrument, params);
+    }
+
+    if (auto *tweaks = xml->getChildByName("InstrumentTweaks"))
+    {
+        for (auto *tweak : tweaks->getChildIterator())
+        {
+            const int index = tweak->getIntAttribute("index", -1);
+            if (index < 0 || index >= audioEngine.getSampler().numInstruments())
+                continue;
+
+            auto params = audioEngine.getSampler().getInstrumentParams(index);
+            params.attackMs = static_cast<float>(tweak->getDoubleAttribute("attackMs", 0.0));
+            params.damping = static_cast<float>(tweak->getDoubleAttribute("damping", 0.0));
+            audioEngine.getSampler().setInstrumentParams(index, params);
+        }
     }
 }
 

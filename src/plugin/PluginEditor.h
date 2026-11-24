@@ -36,10 +36,30 @@ class PluginEditor : public juce::AudioProcessorEditor
     void resized() override
     {
         auto bounds = getLocalBounds();
-        editor.setBounds(bounds);
+        auto &settings = proc.getSettings();
+
+        if (settings.uiScale > 1.001f)
+        {
+            // Scale the whole logical 900x620 editor into the window. This keeps
+            // the existing layout intact while making everything larger.
+            const float scale = juce::jlimit(
+                1.0f, 2.5f, std::min(bounds.getWidth() / 900.0f, bounds.getHeight() / 620.0f));
+            const int scaledW = juce::roundToInt(900.0f * scale);
+            const int scaledH = juce::roundToInt(620.0f * scale);
+            editor.setBounds((bounds.getWidth() - scaledW) / 2,
+                             (bounds.getHeight() - scaledH) / 2,
+                             900,
+                             620);
+            editor.setTransform(juce::AffineTransform::scale(scale));
+        }
+        else
+        {
+            editor.setTransform({});
+            editor.setBounds(bounds);
+        }
+
         if (bounds.getWidth() >= 900 && bounds.getHeight() >= 620)
         {
-            auto &settings = proc.getSettings();
             if (settings.editorWidth != bounds.getWidth() || settings.editorHeight != bounds.getHeight())
             {
                 settings.editorWidth = bounds.getWidth();

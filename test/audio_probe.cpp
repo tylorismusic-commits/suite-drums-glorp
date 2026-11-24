@@ -222,6 +222,105 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_FILTER") != nullptr)
+    {
+        for (int i = 0; i < proc.getSampler().numMicStrips(); ++i)
+        {
+            auto p = proc.getSampler().getMicStripParams (i);
+            p.hpfHz = 120.0f;
+            p.lpfHz = 8000.0f;
+            proc.getSampler().setMicStripParams (i, p);
+        }
+
+        proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        midi.addEvent (juce::MidiMessage::noteOn (1, 38, static_cast<juce::uint8> (110)), 0);
+        float peak = 0.0f;
+        for (int block = 0; block < 60; ++block)
+        {
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+            midi.clear();
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            {
+                const auto* d = buffer.getReadPointer (ch);
+                for (int i = 0; i < buffer.getNumSamples(); ++i)
+                    peak = std::max (peak, std::abs (d[i]));
+            }
+        }
+        std::cout << "filter peak=" << peak << " peakDb=" << juce::Decibels::gainToDecibels (peak) << std::endl;
+        return 0;
+    }
+
+    if (std::getenv ("GLORP_PROBE_SHAPE") != nullptr)
+    {
+        for (int i = 0; i < proc.getSampler().numInstruments(); ++i)
+        {
+            auto p = proc.getSampler().getInstrumentParams (i);
+            p.attackMs = 40.0f;
+            p.damping = 0.6f;
+            proc.getSampler().setInstrumentParams (i, p);
+        }
+
+        proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        midi.addEvent (juce::MidiMessage::noteOn (1, 38, static_cast<juce::uint8> (110)), 0);
+        float peak = 0.0f;
+        for (int block = 0; block < 60; ++block)
+        {
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+            midi.clear();
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            {
+                const auto* d = buffer.getReadPointer (ch);
+                for (int i = 0; i < buffer.getNumSamples(); ++i)
+                    peak = std::max (peak, std::abs (d[i]));
+            }
+        }
+        std::cout << "shape peak=" << peak << " peakDb=" << juce::Decibels::gainToDecibels (peak) << std::endl;
+        return 0;
+    }
+
+    if (std::getenv ("GLORP_PROBE_BUS") != nullptr)
+    {
+        auto params = proc.getSampler().getMasterStripParams();
+        params.busEqLowDb = 3.0f;
+        params.busEqMidDb = -2.0f;
+        params.busEqHighDb = 1.5f;
+        params.busCompEnabled = true;
+        params.busCompThresholdDb = -20.0f;
+        params.busCompRatio = 4.0f;
+        params.busCompMix = 0.5f;
+        params.busCompMakeupDb = 2.0f;
+        params.busSaturationDrive = 0.2f;
+        proc.getSampler().setMasterStripParams (params);
+
+        proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        midi.addEvent (juce::MidiMessage::noteOn (1, 38, static_cast<juce::uint8> (110)), 0);
+
+        float peak = 0.0f;
+        for (int block = 0; block < 60; ++block)
+        {
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+            midi.clear();
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            {
+                const auto* d = buffer.getReadPointer (ch);
+                for (int i = 0; i < buffer.getNumSamples(); ++i)
+                    peak = std::max (peak, std::abs (d[i]));
+            }
+        }
+
+        std::cout << "bus peak=" << peak << " peakDb=" << juce::Decibels::gainToDecibels (peak) << std::endl;
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_STRESS") != nullptr)
     {
         constexpr double sr = 48000.0;

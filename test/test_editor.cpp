@@ -197,6 +197,97 @@ int main (int argc, char** argv)
             return 0;
         }
 
+        if (juce::String (viewEnv).equalsIgnoreCase ("scalecheck"))
+        {
+            proc.getSettings().uiScale = 1.25f;
+            pluginEditor->setSize (1125, 775);
+            pluginEditor->resized();
+            for (auto* child : pluginEditor->getChildren())
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                    std::cout << "Editor bounds=" << ed->getBounds().toString().toStdString()
+                              << " scale=" << ed->getTransform().mat00 << std::endl;
+            auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+            juce::File outFile ("test/docs/scalecheck.png");
+            outFile.deleteFile();
+            juce::FileOutputStream fos (outFile);
+            if (fos.openedOk())
+            {
+                juce::PNGImageFormat png;
+                png.writeImageToStream (image, fos);
+                std::cout << "Saved scale snapshot" << std::endl;
+            }
+            return 0;
+        }
+
+        if (juce::String (viewEnv).equalsIgnoreCase ("mixer-channelfx"))
+        {
+            for (auto* child : pluginEditor->getChildren())
+            {
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                {
+                    ed->setViewMode (glorp::Editor::EditorView::mixerView);
+                    for (auto* edChild : ed->getChildren())
+                        if (auto* mv = dynamic_cast<glorp::MixerView*> (edChild))
+                            mv->openChannelFX (0);
+                }
+            }
+
+            auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+            juce::File outFile ("test/docs/mixer_channelfx.png");
+            outFile.deleteFile();
+            juce::FileOutputStream fos (outFile);
+            if (fos.openedOk())
+            {
+                juce::PNGImageFormat png;
+                png.writeImageToStream (image, fos);
+                std::cout << "Saved channel FX snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
+            }
+            return 0;
+        }
+
+        if (juce::String (viewEnv).equalsIgnoreCase ("mixer-masterfx")
+            || juce::String (viewEnv).equalsIgnoreCase ("mixer-presets"))
+        {
+            for (auto* child : pluginEditor->getChildren())
+            {
+                if (auto* ed = dynamic_cast<glorp::Editor*> (child))
+                    ed->setViewMode (glorp::Editor::EditorView::mixerView);
+            }
+
+            const juce::String target = juce::String (viewEnv).equalsIgnoreCase ("mixer-presets")
+                                            ? "MIXES" : "REVERB FX";
+            std::function<void (juce::Component*)> clickByName = [&] (juce::Component* c)
+            {
+                for (auto* sub : c->getChildren())
+                {
+                    if (auto* b = dynamic_cast<juce::Button*> (sub))
+                    {
+                        if (b->getButtonText() == target)
+                        {
+                            if (b->onClick)
+                                b->onClick();
+                            return;
+                        }
+                    }
+                    clickByName (sub);
+                }
+            };
+            clickByName (pluginEditor);
+
+            auto image = pluginEditor->createComponentSnapshot (pluginEditor->getLocalBounds());
+            juce::File outFile (juce::String (viewEnv).equalsIgnoreCase ("mixer-presets")
+                                    ? "test/docs/mixer_presets.png" : "test/docs/mixer_masterfx.png");
+            outFile.deleteFile();
+            juce::FileOutputStream fos (outFile);
+            if (fos.openedOk())
+            {
+                juce::PNGImageFormat png;
+                png.writeImageToStream (image, fos);
+                std::cout << "Saved popup snapshot to: " << outFile.getFullPathName().toStdString() << std::endl;
+            }
+            return 0;
+        }
+
         if (juce::String (viewEnv).equalsIgnoreCase ("mixer"))
         {
             for (auto* child : pluginEditor->getChildren())
