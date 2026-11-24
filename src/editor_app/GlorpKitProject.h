@@ -1,7 +1,7 @@
 /*
     GlorpKitProject.h - Editable in-memory project model for the standalone GlorpKitEditor app.
     Supports creating new kits, opening & editing existing .glorpkit (v1.0 & v2.0) archives,
-    importing DrumGizmo drumkit.xml folders, managing custom PNG assets, 2D canvas positions,
+    importing DrumGizmo drumkit.xml folders and SFZ instruments, managing custom PNG assets, 2D canvas positions,
     Z-order layering, articulation zones, velocity layers, round-robins, and exporting
     uncompressed (ZIP_STORED) .glorpkit v2.0 packages.
 */
@@ -208,6 +208,7 @@ class GlorpKitProject
 
     bool openGlorpKitArchive(const std::string &archivePath, std::string &outError);
     bool importDrumGizmoXml(const std::string &drumkitXmlPath, std::string &outError);
+    bool importSfzKit(const std::string &sfzFilePath, std::string &outError);
     bool exportToGlorpKit(const std::string &outputArchivePath, std::string &outError) const;
     bool relinkSamplesFromDirectory(const std::string &directoryPath);
 

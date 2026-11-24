@@ -10,7 +10,7 @@
 ## What is included
 
 - **VST3 and LV2** instrument plugins for Linux x86_64.
-- **Suite Kit Studio**, a standalone `.glorpkit` creator/editor.
+- **Suite Kit Studio**, a standalone `.glorpkit` creator/editor that imports DrumGizmo `drumkit.xml` kits and SFZ instruments (including AVL Drumkits) and exports a single `.glorpkit`. A `SuiteKitConverter` CLI is included for batch conversion.
 - **One Suite theme**: dark charcoal, amber accent, Jost ExtraBold display type.
 - **Kit view** with zones, velocity layers, round-robin, drum-hit animation and MIDI activity ribbon. Extra tom and floor-tom articulations fall back to the floor-tom marker.
 - **Per-piece controls** for level, pan, pitch and dynamic response.
@@ -22,7 +22,7 @@
 - **MIDI loop browser**: PACK / SONG / LOOP columns, double-click audition, play/pause/stop, loop repeat, host-tempo sync, 0.5x/1x/2x preview-and-export speed, source-map translation (General MIDI, Toontrack, GGD Groove Player, Ugritone GM, Ugritone KVLT and saved presets), closest-alternative fallbacks when a kit lacks a piece, drag-and-drop MIDI export into the DAW, and background playback with a global header STOP.
 - **E-drum support**: CC#4 continuous hi-hat, cymbal chokes, closed hats choke ringing open hats, note mapping and calibration wizard.
 - **Multi-mic bleed matrix** for acoustic leakage between close mics, overheads, room and PZM channels.
-- **GlorpKit and DrumGizmo kits**: `.glorpkit`, folder kits with `drumkit.xml`, and packaged archives.
+- **GlorpKit and DrumGizmo kits**: `.glorpkit`, folder kits with `drumkit.xml`, packaged archives, and SFZ instruments imported through Suite Kit Studio.
 
 No practice view, setlists, song database, backing tracks, tempo detection, metronome, WAV/MIDI recorder, OBS/stream routing or standalone plugin host.
 

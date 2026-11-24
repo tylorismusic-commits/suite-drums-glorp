@@ -100,7 +100,8 @@ int main (int argc, char** argv)
         {
             const auto name = proc.getSampler().instrumentName (i);
             const auto lower = name.toLowerCase();
-            if (openIdx < 0 && lower.contains ("hat") && lower.contains ("open")
+            if (openIdx < 0 && lower.contains ("hat")
+                && (lower.contains ("open") || lower.contains ("semi") || lower.contains ("swish"))
                 && ! lower.contains ("pedal") && ! lower.contains ("splash"))
                 openIdx = i;
             if (closedIdx < 0 && lower.contains ("hat") && lower.contains ("close")

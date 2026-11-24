@@ -54,11 +54,13 @@ inline MicRoleFlags classifyMic(const juce::String &name)
     r.hat = n.contains("hihat") || n.contains("hh") || n.contains("hat");
     r.cymbal = (n.contains("ride") || n.contains("crash") || n.contains("china") || n.contains("splash")
                 || n.contains("cymbal") || n.contains("zilbel") || n.contains("bell"))
-               && !r.hat;
+               && !r.hat && !n.contains("cowbell");
     r.overhead = n.contains("overhead") || n.contains("oh");
-    r.room = n.contains("amb") || n.contains("room") || n.contains("pzm");
+    r.room = n.contains("room") || n.contains("pzm") || n.contains("ambience") || n.contains("ambient")
+             || n.startsWith("ambl") || n.startsWith("ambr") || n.startsWith("amb ") || n.startsWith("amb_")
+             || n == "amb";
     r.tom = (n.contains("tom") || n.contains("floor")) && !r.snare && !r.kick && !r.hat && !r.cymbal
-            && !r.overhead && !r.room;
+            && !r.overhead && !r.room && !n.contains("stomp") && !n.contains("custom") && !n.contains("bottom");
 
     const bool centered = n.contains("center") || n.contains("centre") || n.contains("mono");
     r.left = !centered

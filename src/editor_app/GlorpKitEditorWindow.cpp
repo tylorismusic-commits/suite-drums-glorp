@@ -377,6 +377,8 @@ bool GlorpKitEditorComponent::openKitFile(const juce::File &file)
         ok = project.openGlorpKitArchive(file.getFullPathName().toStdString(), err);
     else if (file.hasFileExtension(".xml"))
         ok = project.importDrumGizmoXml(file.getFullPathName().toStdString(), err);
+    else if (file.hasFileExtension(".sfz"))
+        ok = project.importSfzKit(file.getFullPathName().toStdString(), err);
 
     if (!ok)
     {
@@ -819,7 +821,7 @@ void GlorpKitEditorComponent::paintHeader(juce::Graphics &g)
 
     drawHeaderBtn(btnNewKit, 68.0f, "New Kit", theme.trough, 21);
     drawHeaderBtn(btnOpenKit, 86.0f, "Open Kit...", theme.trough, 23);
-    drawHeaderBtn(btnImportDg, 108.0f, "Import XML...", theme.trough, 25);
+    drawHeaderBtn(btnImportDg, 108.0f, "Import Kit...", theme.trough, 25);
     drawHeaderBtn(btnImportOra, 114.0f, "Import .ORA...", theme.trough, 26);
     drawHeaderBtn(btnSaveKit, 124.0f, "Save .glorpkit", theme.accent, 27);
 
@@ -3332,7 +3334,7 @@ void GlorpKitEditorComponent::promptOpenKit()
 
 void GlorpKitEditorComponent::promptImportDrumGizmo()
 {
-    auto chooser = std::make_shared<juce::FileChooser>("Import DrumGizmo Kit XML", juce::File(), "*.xml");
+    auto chooser = std::make_shared<juce::FileChooser>("Import DrumGizmo XML or SFZ Kit", juce::File(), "*.xml;*.sfz");
     chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                          [this, chooser](const juce::FileChooser &fc)
                          {

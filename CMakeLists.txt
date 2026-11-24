@@ -284,6 +284,40 @@ if(GLORP_BUILD_KIT_EDITOR)
         juce::juce_dsp
         juce::juce_recommended_warning_flags
     )
+
+    # Headless DrumGizmo XML / SFZ -> .glorpkit batch converter.
+    add_executable(glorp_kit_converter
+        tools/convert_kit.cpp
+        src/editor_app/GlorpKitProject.cpp
+        src/core/GlorpKitWriter.cpp
+        src/core/GlorpKit.cpp
+        src/core/DrumKit.cpp
+        src/core/XmlLite.cpp
+        src/core/SampleCache.cpp
+        src/core/Sampler.cpp
+        src/core/PitchShifter.cpp
+        src/core/BleedMatrix.cpp
+        src/core/AcousticCrosstalk.cpp
+        src/core/ChannelFX.cpp
+    )
+    set_target_properties(glorp_kit_converter PROPERTIES OUTPUT_NAME SuiteKitConverter)
+    target_include_directories(glorp_kit_converter PRIVATE
+        src
+        src/core
+        src/editor_app
+    )
+    target_compile_definitions(glorp_kit_converter PRIVATE
+        JUCE_USE_CURL=0
+        JUCE_WEB_BROWSER=0
+        GLORP_MAX_INSTRUMENT_BUSES=${GLORP_MAX_INSTRUMENT_BUSES}
+    )
+    target_link_libraries(glorp_kit_converter PRIVATE
+        juce::juce_core
+        juce::juce_audio_basics
+        juce::juce_audio_formats
+        juce::juce_dsp
+        juce::juce_recommended_warning_flags
+    )
 endif()
 
 #==================================================================================

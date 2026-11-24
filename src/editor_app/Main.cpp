@@ -35,12 +35,13 @@ class GlorpKitEditorMainWindow : public juce::DocumentWindow
                 peer->setIcon(icon);
         }
 
-        // Allow passing a .glorpkit or DrumGizmo .xml file path on the command line
+        // Allow passing a .glorpkit, DrumGizmo .xml or SFZ file path on the command line
         auto args = juce::StringArray::fromTokens(commandLine, true);
         for (const auto &rawArg : args)
         {
             juce::String cleaned = rawArg.unquoted().trim();
-            if (cleaned.endsWithIgnoreCase(".glorpkit") || cleaned.endsWithIgnoreCase(".xml"))
+            if (cleaned.endsWithIgnoreCase(".glorpkit") || cleaned.endsWithIgnoreCase(".xml")
+                || cleaned.endsWithIgnoreCase(".sfz"))
             {
                 juce::File f(cleaned);
                 if (f.existsAsFile())

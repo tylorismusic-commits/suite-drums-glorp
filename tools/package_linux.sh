@@ -6,23 +6,24 @@
 #   tools/package_linux.sh [version]
 #
 # The build must already exist (see README). The version defaults to the
-# project version plus the alpha suffix, e.g. 0.1.0-alpha.31.
+# project version plus the alpha suffix, e.g. 0.1.0-alpha.32.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="${1:-0.1.0-alpha.31}"
+VERSION="${1:-0.1.0-alpha.32}"
 NAME="suite-drums-glorp-${VERSION}-linux-x86_64"
 BUILD="${ROOT}/build"
 ARTEFACTS="${BUILD}/GlorpDrums_artefacts/Release"
 KIT_EDITOR="${BUILD}/GlorpKitEditor_artefacts/Release/SuiteKitStudio"
+KIT_CONVERTER="${BUILD}/SuiteKitConverter"
 STAGE="${BUILD}/stage/${NAME}"
 DIST="${BUILD}/dist"
 
 VST3="${ARTEFACTS}/VST3/Suite Drums Glorp.vst3"
 LV2="${ARTEFACTS}/LV2/Suite Drums Glorp.lv2"
 
-for required in "${VST3}" "${LV2}" "${KIT_EDITOR}"; do
+for required in "${VST3}" "${LV2}" "${KIT_EDITOR}" "${KIT_CONVERTER}"; do
     if [ ! -e "${required}" ]; then
         echo "error: missing build artefact: ${required}" >&2
         echo "Build first with: cmake --build build -j\"\$(nproc)\"" >&2
@@ -36,7 +37,8 @@ mkdir -p "${STAGE}/vst3" "${STAGE}/lv2" "${STAGE}/bin" "${STAGE}/kits" "${STAGE}
 cp -r "${VST3}" "${STAGE}/vst3/"
 cp -r "${LV2}" "${STAGE}/lv2/"
 cp "${KIT_EDITOR}" "${STAGE}/bin/SuiteKitStudio"
-chmod +x "${STAGE}/bin/SuiteKitStudio"
+cp "${KIT_CONVERTER}" "${STAGE}/bin/SuiteKitConverter"
+chmod +x "${STAGE}/bin/SuiteKitStudio" "${STAGE}/bin/SuiteKitConverter"
 
 cp "${ROOT}/README.md" "${ROOT}/LICENSE" "${ROOT}/NOTICE.md" "${STAGE}/"
 cp "${ROOT}/docs/screenshot.png" "${ROOT}/docs/mixer_view.png" \
@@ -82,6 +84,7 @@ rm -rf "$HOME/.lv2/$PLUGIN.lv2"
 cp -r "$HERE/lv2/$PLUGIN.lv2" "$HOME/.lv2/"
 
 install -m 0755 "$HERE/bin/SuiteKitStudio" "$HOME/.local/bin/SuiteKitStudio"
+install -m 0755 "$HERE/bin/SuiteKitConverter" "$HOME/.local/bin/SuiteKitConverter"
 
 if [ -d "$HERE/kits/GlorpDemoKit" ]; then
     rm -rf "$HOME/.config/SuiteDrumsGlorp/kits/GlorpDemoKit"
@@ -107,6 +110,7 @@ DESKTOP
 
 echo "Installed Suite Drums Glorp to $HOME/.vst3 and $HOME/.lv2"
 echo "Installed Suite Kit Studio to $HOME/.local/bin/SuiteKitStudio"
+echo "Installed SuiteKitConverter to $HOME/.local/bin/SuiteKitConverter"
 echo "Rescan plugins in your DAW."
 EOF
 chmod +x "${STAGE}/install.sh"

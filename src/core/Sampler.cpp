@@ -186,7 +186,7 @@ bool Sampler::loadKit(DrumKit kit, juce::String &error)
             const bool isSplash = n.contains("splash") || n.contains("spl");
             const bool isPedal = n.contains("pedal") || n.contains("foot");
 
-            if (! isSplash && ! isPedal && (n.contains("open") || n.contains("semi")))
+            if (! isSplash && ! isPedal && (n.contains("open") || n.contains("semi") || n.contains("swish")))
                 hiHat.openArticulations.push_back(i);
 
             if (isSplash)

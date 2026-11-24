@@ -7,6 +7,7 @@
 #include "../core/SampleCache.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <filesystem>
 #include <iomanip>
@@ -1070,6 +1071,633 @@ bool GlorpKitProject::openGlorpKitArchive(const std::string &archivePath, std::s
 
         pieces.push_back(std::move(p));
     }
+
+    normalizeZOrders();
+    return true;
+}
+
+//==============================================================================
+bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &outError)
+{
+    std::ifstream input(sfzFilePath);
+    if (!input.is_open())
+    {
+        outError = "Could not open SFZ file: " + sfzFilePath;
+        return false;
+    }
+
+    const fs::path sfzPath(sfzFilePath);
+    const fs::path sfzDir = sfzPath.parent_path();
+    const std::string sfzStem = sfzPath.stem().string();
+    std::string lowerStem = sfzStem;
+    for (auto &c : lowerStem)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    const bool isAvlKit = lowerStem.find("black_pearl") != std::string::npos
+                          || lowerStem.find("red_zeppelin") != std::string::npos
+                          || lowerStem.find("blonde_bop") != std::string::npos;
+    const bool isAvlPercussion = lowerStem.find("buskman") != std::string::npos;
+    const bool isAvl = isAvlKit || isAvlPercussion;
+
+    struct PartInfo
+    {
+        int note;
+        const char *piece;
+        const char *zone;
+        const char *id;
+        const char *graphic;
+        const char *chokeGroup;
+    };
+
+    // AVL Drumkits / x42 note layout. Grouping notes into logical pieces keeps
+    // the mixer and kit view readable instead of creating 28 unrelated strips.
+    static const PartInfo avlParts[] = {
+        {35, "Stick Click", "head", "stickclick", "snare", "none"},
+        {36, "Kick", "head", "kick", "kick", "none"},
+        {37, "Snare", "sidestick", "snare", "snare", "none"},
+        {38, "Snare", "center", "snare", "snare", "none"},
+        {39, "Hand Clap", "head", "handclap", "snare", "none"},
+        {40, "Snare", "edge", "snare", "snare", "none"},
+        {41, "Floor Tom", "center", "ftom", "ftom", "none"},
+        {42, "Hihat", "closed", "hihat", "hihat", "hihat"},
+        {43, "Floor Tom", "edge", "ftom", "ftom", "none"},
+        {44, "Hihat", "pedal", "hihat", "hihat", "hihat"},
+        {45, "Tom", "center", "tom2", "tom2", "none"},
+        {46, "Hihat", "semi", "hihat", "hihat", "hihat"},
+        {47, "Tom", "edge", "tom2", "tom2", "none"},
+        {48, "Hihat", "swish", "hihat", "hihat", "hihat"},
+        {49, "Crash 1", "hit", "crash1", "crash1", "crash1"},
+        {50, "Crash 1", "choke", "crash1", "crash1", "crash1"},
+        {51, "Ride", "tip", "ride", "ride", "ride"},
+        {52, "Ride", "choke", "ride", "ride", "ride"},
+        {53, "Ride", "bell", "ride", "ride", "ride"},
+        {54, "Tambourine", "head", "tambourine", "hihat", "none"},
+        {55, "Splash", "hit", "splash", "crash2", "splash"},
+        {56, "Cowbell", "head", "cowbell", "snare", "none"},
+        {57, "Crash 2", "hit", "crash2", "crash2", "crash2"},
+        {58, "Crash 2", "choke", "crash2", "crash2", "crash2"},
+        {59, "Ride", "shank", "ride", "ride", "ride"},
+        {60, "Crash 3", "hit", "crash3", "crash1", "crash3"},
+        {61, "Maraca", "head", "maraca", "hihat", "none"},
+        {62, "China", "hit", "china", "crash2", "china"},
+    };
+
+    auto findAvlPart = [&](int note) -> const PartInfo *
+    {
+        if (!isAvlKit)
+            return nullptr;
+        for (const auto &part : avlParts)
+            if (part.note == note)
+                return &part;
+        return nullptr;
+    };
+
+    auto trim = [](std::string s)
+    {
+        while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front())))
+            s.erase(s.begin());
+        while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
+            s.pop_back();
+        return s;
+    };
+
+    auto lowerCopy = [](std::string s)
+    {
+        for (auto &c : s)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return s;
+    };
+
+    auto parseInt = [](const std::string &s, int fallback)
+    {
+        try
+        {
+            return std::stoi(s);
+        }
+        catch (...)
+        {
+            return fallback;
+        }
+    };
+
+    auto parseNote = [&](const std::string &raw, int fallback)
+    {
+        const auto s = trim(raw);
+        if (s.empty())
+            return fallback;
+        bool numeric = true;
+        for (char c : s)
+            if (!std::isdigit(static_cast<unsigned char>(c)) && c != '-' && c != '+')
+                numeric = false;
+        if (numeric)
+            return std::clamp(parseInt(s, fallback), 0, 127);
+
+        const std::string letters = "C D EF G A B";
+        int semitone = -1;
+        switch (std::toupper(static_cast<unsigned char>(s[0])))
+        {
+            case 'C': semitone = 0; break;
+            case 'D': semitone = 2; break;
+            case 'E': semitone = 4; break;
+            case 'F': semitone = 5; break;
+            case 'G': semitone = 7; break;
+            case 'A': semitone = 9; break;
+            case 'B': semitone = 11; break;
+            default: break;
+        }
+        if (semitone < 0)
+            return fallback;
+        size_t pos = 1;
+        if (pos < s.size() && (s[pos] == '#' || s[pos] == 'b'))
+        {
+            semitone += (s[pos] == '#') ? 1 : -1;
+            ++pos;
+        }
+        int octave = 4;
+        if (pos < s.size())
+            octave = parseInt(s.substr(pos), 4);
+        const int midi = (octave + 1) * 12 + semitone;
+        return std::clamp(midi, 0, 127);
+    };
+
+    auto parseOps = [&](const std::string &text, std::map<std::string, std::string> &ops)
+    {
+        size_t i = 0;
+        while (i < text.size())
+        {
+            while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
+                ++i;
+            if (i >= text.size())
+                break;
+
+            const size_t keyStart = i;
+            while (i < text.size() && text[i] != '=' && !std::isspace(static_cast<unsigned char>(text[i])))
+                ++i;
+            const auto key = lowerCopy(text.substr(keyStart, i - keyStart));
+
+            while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
+                ++i;
+            if (i >= text.size() || text[i] != '=')
+                continue;
+            ++i;
+            while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
+                ++i;
+
+            std::string value;
+            if (i < text.size() && (text[i] == '"' || text[i] == '\''))
+            {
+                const char quote = text[i++];
+                while (i < text.size() && text[i] != quote)
+                    value += text[i++];
+                if (i < text.size())
+                    ++i;
+            }
+            else
+            {
+                const size_t valueStart = i;
+                while (i < text.size() && !std::isspace(static_cast<unsigned char>(text[i])))
+                    ++i;
+                value = text.substr(valueStart, i - valueStart);
+            }
+
+            if (!key.empty())
+                ops[key] = value;
+        }
+    };
+
+    struct RawRegion
+    {
+        std::map<std::string, std::string> ops;
+    };
+
+    std::vector<RawRegion> rawRegions;
+    std::map<std::string, std::string> globalOps;
+    std::map<std::string, std::string> groupOps;
+    RawRegion currentRegion;
+    bool inRegion = false;
+
+    std::string line;
+    while (std::getline(input, line))
+    {
+        const auto comment = line.find("//");
+        if (comment != std::string::npos)
+            line.erase(comment);
+        line = trim(line);
+        if (line.empty())
+            continue;
+
+        if (line[0] == '<')
+        {
+            const auto close = line.find('>');
+            if (close == std::string::npos)
+                continue;
+
+            const auto tag = lowerCopy(trim(line.substr(1, close - 1)));
+            const auto rest = line.substr(close + 1);
+
+            if (tag == "region")
+            {
+                if (inRegion)
+                    rawRegions.push_back(currentRegion);
+                currentRegion = RawRegion {};
+                currentRegion.ops = groupOps;
+                parseOps(rest, currentRegion.ops);
+                inRegion = true;
+            }
+            else
+            {
+                if (inRegion)
+                {
+                    rawRegions.push_back(currentRegion);
+                    inRegion = false;
+                }
+
+                if (tag == "global")
+                {
+                    globalOps.clear();
+                    parseOps(rest, globalOps);
+                    groupOps = globalOps;
+                }
+                else
+                {
+                    groupOps = globalOps;
+                    parseOps(rest, groupOps);
+                }
+            }
+        }
+        else if (inRegion)
+        {
+            parseOps(line, currentRegion.ops);
+        }
+        else
+        {
+            parseOps(line, groupOps);
+        }
+    }
+
+    if (inRegion)
+        rawRegions.push_back(currentRegion);
+
+    if (rawRegions.empty())
+    {
+        outError = "No SFZ regions found in " + sfzFilePath;
+        return false;
+    }
+
+    struct Region
+    {
+        std::string samplePath;
+        std::string fileName;
+        int key = 60;
+        int lovel = 0;
+        int hivel = 127;
+        int group = 0;
+        int offBy = 0;
+        int seqPos = 0;
+        int seqLen = 0;
+    };
+
+    auto getOp = [] (const std::map<std::string, std::string> &ops, const std::string &key,
+                     const std::string &fallback = {})
+    {
+        const auto it = ops.find(key);
+        return it == ops.end() ? fallback : it->second;
+    };
+
+    std::vector<Region> regions;
+    int missingSamples = 0;
+
+    for (const auto &raw : rawRegions)
+    {
+        const auto sample = trim(getOp(raw.ops, "sample"));
+        if (sample.empty())
+            continue;
+
+        fs::path samplePath(sample);
+        if (samplePath.is_relative())
+            samplePath = sfzDir / samplePath;
+
+        if (!fs::exists(samplePath) || !fs::is_regular_file(samplePath))
+        {
+            ++missingSamples;
+            continue;
+        }
+
+        Region r;
+        r.samplePath = samplePath.string();
+        r.fileName = samplePath.filename().string();
+        r.key = parseNote(getOp(raw.ops, "key", getOp(raw.ops, "pitch_keycenter", getOp(raw.ops, "lokey", "60"))), 60);
+        r.lovel = std::clamp(parseInt(getOp(raw.ops, "lovel", "0"), 0), 0, 127);
+        r.hivel = std::clamp(parseInt(getOp(raw.ops, "hivel", "127"), 127), 0, 127);
+        if (r.hivel < r.lovel)
+            std::swap(r.lovel, r.hivel);
+        r.group = parseInt(getOp(raw.ops, "group", "0"), 0);
+        r.offBy = parseInt(getOp(raw.ops, "off_by", getOp(raw.ops, "offby", "0")), 0);
+        r.seqPos = parseInt(getOp(raw.ops, "seq_position", "0"), 0);
+        r.seqLen = parseInt(getOp(raw.ops, "seq_length", "0"), 0);
+        regions.push_back(std::move(r));
+    }
+
+    if (regions.empty())
+    {
+        outError = "No readable samples found for SFZ file: " + sfzFilePath
+                   + (missingSamples > 0 ? " (" + std::to_string(missingSamples) + " missing)" : "");
+        return false;
+    }
+
+    auto cleanName = [&](const std::string &fileName)
+    {
+        std::string s = fs::path(fileName).stem().string();
+
+        // Drop a trailing velocity/round-robin number such as -1, _2 or " 3".
+        auto isDigits = [](const std::string &v)
+        {
+            if (v.empty() || v.size() > 2)
+                return false;
+            for (char c : v)
+                if (!std::isdigit(static_cast<unsigned char>(c)))
+                    return false;
+            return true;
+        };
+        const auto sep = s.find_last_of(" _-");
+        if (sep != std::string::npos && isDigits(s.substr(sep + 1)))
+            s = s.substr(0, sep);
+
+        // Drop a leading MIDI-note prefix such as 38- or 49_.
+        size_t lead = 0;
+        while (lead < s.size() && std::isdigit(static_cast<unsigned char>(s[lead])))
+            ++lead;
+        if (lead > 0 && lead < s.size() && (s[lead] == '-' || s[lead] == '_' || s[lead] == ' '))
+            s = s.substr(lead + 1);
+
+        for (auto &c : s)
+            if (c == '_' || c == '-' || c == '.')
+                c = ' ';
+
+        s = trim(s);
+        std::string out;
+        for (char c : s)
+        {
+            if (c == ' ' && !out.empty() && out.back() == ' ')
+                continue;
+            out += c;
+        }
+        return trim(out);
+    };
+
+    auto graphicForName = [&] (const std::string &name)
+    {
+        const auto n = lowerCopy(name);
+        if (n.find("kick") != std::string::npos || n.find("bd") != std::string::npos)
+            return std::string("kick");
+        if (n.find("snare") != std::string::npos || n.find("clap") != std::string::npos
+            || n.find("stick") != std::string::npos)
+            return std::string("snare");
+        if (n.find("hat") != std::string::npos)
+            return std::string("hihat");
+        if (n.find("floor") != std::string::npos || n.find("ftom") != std::string::npos)
+            return std::string("ftom");
+        if (n.find("tom") != std::string::npos)
+            return std::string("tom2");
+        if (n.find("ride") != std::string::npos)
+            return std::string("ride");
+        if (n.find("crash") != std::string::npos || n.find("china") != std::string::npos
+            || n.find("splash") != std::string::npos || n.find("cymbal") != std::string::npos)
+            return std::string("crash1");
+        return std::string("snare");
+    };
+
+    struct PartChoice
+    {
+        std::string pieceKey;
+        std::string pieceName;
+        std::string zoneName;
+        std::string pieceId;
+        std::string graphic;
+        std::string chokeGroup;
+    };
+
+    auto choosePart = [&](const Region &r)
+    {
+        if (const auto *known = findAvlPart(r.key))
+        {
+            return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
+        }
+
+        auto name = cleanName(r.fileName);
+        if (name.empty())
+            name = "Note " + std::to_string(r.key);
+
+        return PartChoice {"note_" + std::to_string(r.key) + "_" + sanitizeId(name),
+                           name,
+                           "head",
+                           sanitizeId(name),
+                           graphicForName(name),
+                           "none"};
+    };
+
+    // Reset the project metadata, then build pieces and mics.
+    pieces.clear();
+    mics.clear();
+    title = sfzStem;
+    std::replace(title.begin(), title.end(), '_', ' ');
+    std::replace(title.begin(), title.end(), '-', ' ');
+    author = isAvl ? "Glen MacArthur / AVL Drumkits" : "Imported SFZ";
+    version = "2.0";
+    license = isAvl ? "CC-BY-SA 3.0" : "See original SFZ license";
+    description = isAvl ? "AVL Drumkits by Glen MacArthur, converted from SFZ by Suite Kit Studio."
+                        : "Imported from an SFZ instrument by Suite Kit Studio.";
+    hitGlowColor = "#ff8200";
+    loadedFilePath = sfzFilePath;
+
+    if (isAvlKit || isAvlPercussion)
+    {
+        if (lowerStem.find("black_pearl") != std::string::npos)
+            title = "Black Pearl";
+        else if (lowerStem.find("red_zeppelin") != std::string::npos)
+            title = "Red Zeppelin";
+        else if (lowerStem.find("blonde_bop_hr") != std::string::npos)
+            title = "Blonde Bop Hot Rods";
+        else if (lowerStem.find("blonde_bop") != std::string::npos)
+            title = "Blonde Bop";
+        else if (isAvlPercussion)
+            title = "Buskman's Holiday";
+    }
+
+    {
+        SampleCache probe;
+        const auto handle = probe.open(regions.front().samplePath);
+        if (handle.valid && handle.sampleRate > 0.0)
+            sampleRate = static_cast<int>(std::lround(handle.sampleRate));
+    }
+
+    std::map<std::string, size_t> pieceIndexByKey;
+    std::map<std::string, std::string> micIdByPieceKey;
+    std::map<size_t, std::string> micIdByPieceIndex;
+    std::map<std::pair<size_t, std::string>, size_t> zoneIndexByKey;
+    std::map<std::pair<size_t, std::string>, std::vector<Region>> regionsByZone;
+    std::map<std::string, int> layoutUseCount;
+    int fallbackLayoutIndex = 0;
+    int zCounter = 1;
+
+    for (const auto &r : regions)
+    {
+        const auto part = choosePart(r);
+
+        size_t pieceIdx = 0;
+        const auto pieceIt = pieceIndexByKey.find(part.pieceKey);
+        if (pieceIt == pieceIndexByKey.end())
+        {
+            EditablePiece ep;
+            ep.name = part.pieceName;
+
+            std::string pieceId = part.pieceId.empty() ? "piece" : part.pieceId;
+            const std::string basePieceId = pieceId;
+            int pieceSuffix = 2;
+            auto pieceIdExists = [&](const std::string &id)
+            {
+                for (const auto &existing : pieces)
+                    if (existing.id == id)
+                        return true;
+                return false;
+            };
+            while (pieceIdExists(pieceId))
+                pieceId = basePieceId + "_" + std::to_string(pieceSuffix++);
+
+            ep.id = pieceId;
+            ep.graphicId = part.graphic;
+            ep.outputBus = 0;
+            ep.chokeGroup = part.chokeGroup;
+
+            const int useCount = layoutUseCount[part.pieceId]++;
+            if (const auto *def = findDefaultPieceLayout(part.pieceId))
+            {
+                ep.normX = def->x + static_cast<float>(useCount * 34);
+                ep.normY = def->y + static_cast<float>(useCount * 24);
+                ep.normW = def->w;
+                ep.zOrder = def->z + useCount;
+            }
+            else
+            {
+                ep.normX = -190.0f + static_cast<float>(fallbackLayoutIndex % 6) * 62.0f;
+                ep.normY = -255.0f - static_cast<float>(fallbackLayoutIndex / 6) * 52.0f;
+                ep.normW = 125.0f;
+                ep.zOrder = zCounter++;
+                ++fallbackLayoutIndex;
+            }
+
+            pieceIdx = pieces.size();
+            pieceIndexByKey[part.pieceKey] = pieceIdx;
+            pieces.push_back(std::move(ep));
+
+            std::string micId = sanitizeId(part.pieceName);
+            if (micId.empty())
+                micId = "mic";
+            const std::string baseMicId = micId;
+            int suffix = 2;
+            auto micExists = [&](const std::string &id)
+            {
+                for (const auto &m : mics)
+                    if (m.name == id)
+                        return true;
+                return false;
+            };
+            while (micExists(micId))
+                micId = baseMicId + "_" + std::to_string(suffix++);
+
+            mics.push_back({micId, part.pieceName, 1.0f});
+            micIdByPieceKey[part.pieceKey] = micId;
+            micIdByPieceIndex[pieceIdx] = micId;
+        }
+        else
+        {
+            pieceIdx = pieceIt->second;
+        }
+
+        const auto zoneKey = std::make_pair(pieceIdx, part.zoneName);
+        if (zoneIndexByKey.find(zoneKey) == zoneIndexByKey.end())
+        {
+            EditableZone ez;
+            ez.name = part.zoneName;
+            ez.graphicId = part.graphic;
+            ez.note = r.key;
+            ez.altNote = -1;
+            ez.numVelocityLayers = 1;
+            ez.numRoundRobins = 1;
+
+            const auto zoneIdx = pieces[pieceIdx].zones.size();
+            zoneIndexByKey[zoneKey] = zoneIdx;
+            pieces[pieceIdx].zones.push_back(std::move(ez));
+        }
+
+        regionsByZone[zoneKey].push_back(r);
+    }
+
+    // Assign velocity layers and round-robins, then create hits.
+    for (auto &[zoneKey, list] : regionsByZone)
+    {
+        auto &piece = pieces[zoneKey.first];
+        auto &zone = piece.zones[zoneIndexByKey[zoneKey]];
+        const auto micIt = micIdByPieceIndex.find(zoneKey.first);
+        const std::string micId = micIt != micIdByPieceIndex.end() ? micIt->second : "close";
+
+        std::sort(list.begin(), list.end(), [] (const Region &a, const Region &b)
+        {
+            if (a.lovel != b.lovel)
+                return a.lovel < b.lovel;
+            if (a.hivel != b.hivel)
+                return a.hivel < b.hivel;
+            if (a.seqPos != b.seqPos)
+                return a.seqPos < b.seqPos;
+            return a.fileName < b.fileName;
+        });
+
+        std::vector<std::pair<int, int>> tiers;
+        for (const auto &r : list)
+        {
+            const auto tier = std::make_pair(r.lovel, r.hivel);
+            if (std::find(tiers.begin(), tiers.end(), tier) == tiers.end())
+                tiers.push_back(tier);
+        }
+
+        std::map<std::pair<int, int>, int> rrCursor;
+        int maxRoundRobins = 1;
+        const int numTiers = std::max(1, static_cast<int>(tiers.size()));
+
+        zone.numVelocityLayers = numTiers;
+        zone.numRoundRobins = 1;
+
+        for (const auto &r : list)
+        {
+            const auto tier = std::make_pair(r.lovel, r.hivel);
+            const int tierIndex = static_cast<int>(std::find(tiers.begin(), tiers.end(), tier) - tiers.begin());
+            int rrIndex = rrCursor[tier];
+            if (r.seqLen > 0 && r.seqPos > 0)
+                rrIndex = r.seqPos - 1;
+            rrCursor[tier] = rrIndex + 1;
+            maxRoundRobins = std::max(maxRoundRobins, rrIndex + 1);
+
+            EditableHit hit;
+            hit.name = fs::path(r.fileName).stem().string();
+            const float t = (numTiers > 1) ? static_cast<float>(tierIndex) / static_cast<float>(numTiers - 1) : 1.0f;
+            hit.power = 0.12f + 0.88f * t;
+            hit.velocityLayerIndex = tierIndex;
+            hit.roundRobinIndex = rrIndex;
+
+            EditableMicSample ms;
+            ms.mic = micId;
+            ms.fileName = r.fileName;
+            ms.sourceDiskPath = r.samplePath;
+            ms.fileChannel = 0;
+            hit.micSamples.push_back(std::move(ms));
+            zone.hits.push_back(std::move(hit));
+        }
+
+        zone.numRoundRobins = std::max(1, maxRoundRobins);
+    }
+
+    if (mics.empty())
+        mics.push_back({"close", "Close Mic", 1.0f});
 
     normalizeZOrders();
     return true;
