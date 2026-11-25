@@ -1107,6 +1107,10 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
                            || lowerStem.find("phu") != std::string::npos;
     const bool isSalamander = lowerStem.find("salamander") != std::string::npos;
     const bool isMonster = lowerStem.find("monster") != std::string::npos;
+    const bool isSamsSonor = lowerStem.find("samsonor") != std::string::npos
+                             || lowerStem.find("sonor") != std::string::npos;
+    const bool isOpenSourceKit = lowerStem.find("opensource") != std::string::npos
+                                 || lowerStem.find("open-source") != std::string::npos;
 
     struct PartInfo
     {
@@ -1263,6 +1267,48 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         {64, "Bell Chime", "hit", "bellchime", "snare", "none"},
     };
 
+    static const PartInfo samsSonorParts[] = {
+        {36, "Kick", "center", "kick", "kick", "none"},
+        {37, "Snare", "rimshot", "snare", "snare", "none"},
+        {38, "Snare", "left hand", "snare", "snare", "none"},
+        {39, "Snare", "center", "snare", "snare", "none"},
+        {40, "Snare", "right hand", "snare", "snare", "none"},
+        {48, "Snare", "off left", "snare", "snare", "none"},
+        {50, "Snare", "off right", "snare", "snare", "none"},
+        {43, "Low Tom", "head", "ftom", "ftom", "none"},
+        {45, "High Tom", "head", "tom1", "tom1", "none"},
+        {47, "Mid Tom", "head", "tom2", "tom2", "none"},
+        {42, "Hihat", "closed", "hihat", "hihat", "hihat"},
+        {44, "Hihat", "pedal", "hihat", "hihat", "hihat"},
+        {46, "Hihat", "open clang", "hihat", "hihat", "hihat"},
+        {56, "Hihat", "half open", "hihat", "hihat", "hihat"},
+        {58, "Hihat", "open tip", "hihat", "hihat", "hihat"},
+        {51, "Ride", "tip", "ride", "ride", "none"},
+        {53, "Ride", "bell", "ride", "ride", "none"},
+        {49, "Crash", "clang", "crash1", "crash1", "none"},
+        {52, "Crash", "tip", "crash1", "crash1", "none"},
+    };
+
+    static const PartInfo openSourceParts[] = {
+        {36, "Kick", "center", "kick", "kick", "none"},
+        {37, "Snare", "sidestick", "snare", "snare", "none"},
+        {38, "Snare", "center", "snare", "snare", "none"},
+        {39, "Snare", "off", "snare", "snare", "none"},
+        {40, "Snare", "rimshot", "snare", "snare", "none"},
+        {42, "Hihat", "closed", "hihat", "hihat", "hihat"},
+        {44, "Hihat", "pedal", "hihat", "hihat", "hihat"},
+        {46, "Hihat", "open", "hihat", "hihat", "hihat"},
+        {48, "High Tom", "head", "tom1", "tom1", "none"},
+        {45, "Mid Tom", "head", "tom2", "tom2", "none"},
+        {43, "Floor Tom", "head", "ftom", "ftom", "none"},
+        {51, "Ride", "bow", "ride", "ride", "none"},
+        {53, "Ride", "bell", "ride", "ride", "none"},
+        {59, "Ride", "edge", "ride", "ride", "none"},
+        {49, "Crash", "bow", "crash1", "crash1", "none"},
+        {57, "Crash", "edge", "crash1", "crash1", "none"},
+        {52, "Gong", "mallet", "china", "china", "none"},
+    };
+
     auto findAvlPart = [&](int note) -> const PartInfo *
     {
         if (!isAvlKit)
@@ -1278,6 +1324,26 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         if (!isSalamander && !isMonster)
             return nullptr;
         for (const auto &part : salamanderParts)
+            if (part.note == note)
+                return &part;
+        return nullptr;
+    };
+
+    auto findSamsSonorPart = [&](int note) -> const PartInfo *
+    {
+        if (!isSamsSonor)
+            return nullptr;
+        for (const auto &part : samsSonorParts)
+            if (part.note == note)
+                return &part;
+        return nullptr;
+    };
+
+    auto findOpenSourcePart = [&](int note) -> const PartInfo *
+    {
+        if (!isOpenSourceKit)
+            return nullptr;
+        for (const auto &part : openSourceParts)
             if (part.note == note)
                 return &part;
         return nullptr;
@@ -1437,6 +1503,11 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
     RawRegion currentRegion;
     bool inRegion = false;
 
+    // Some SFZ mappings define symbolic keys/macros (for example SamsSonor's
+    // "$KEY_KICK 36") and then use them in key= or sample= values. Resolve the
+    // defines before parsing the regions.
+    std::map<std::string, std::string> sfzDefines;
+
     std::string line;
     while (std::getline(input, line))
     {
@@ -1446,6 +1517,30 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         line = trim(line);
         if (line.empty())
             continue;
+
+        if (line.rfind("#define", 0) == 0)
+        {
+            std::istringstream def(line.substr(7));
+            std::string name;
+            std::string value;
+            def >> name >> value;
+            if (!name.empty() && !value.empty())
+                sfzDefines[name] = value;
+            continue;
+        }
+
+        if (!sfzDefines.empty())
+        {
+            for (const auto &[name, value] : sfzDefines)
+            {
+                size_t pos = 0;
+                while ((pos = line.find(name, pos)) != std::string::npos)
+                {
+                    line.replace(pos, name.size(), value);
+                    pos += value.size();
+                }
+            }
+        }
 
         if (line[0] == '<')
         {
@@ -1510,6 +1605,7 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         std::string samplePath;
         std::string fileName;
         int key = 60;
+        int altNote = -1;
         int lovel = 0;
         int hivel = 127;
         int group = 0;
@@ -1548,6 +1644,7 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         r.samplePath = samplePath.string();
         r.fileName = samplePath.filename().string();
         r.key = parseNote(getOp(raw.ops, "key", getOp(raw.ops, "pitch_keycenter", getOp(raw.ops, "lokey", "60"))), 60);
+        r.altNote = parseInt(getOp(raw.ops, "alt_note", "-1"), -1);
         r.lovel = std::clamp(parseInt(getOp(raw.ops, "lovel", "0"), 0), 0, 127);
         r.hivel = std::clamp(parseInt(getOp(raw.ops, "hivel", "127"), 127), 0, 127);
         if (r.hivel < r.lovel)
@@ -1655,6 +1752,16 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
             return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
         }
 
+        if (const auto *known = findSamsSonorPart(r.key))
+        {
+            return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
+        }
+
+        if (const auto *known = findOpenSourcePart(r.key))
+        {
+            return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
+        }
+
         if (const auto *known = findBigRustyPart(r.key))
         {
             return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
@@ -1745,6 +1852,24 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         version = "1.0";
         license = "CC BY-SA 3.0";
         description = "Monster Drumkit, a processed Salamander drum library. Mono downmix conversion.";
+    }
+
+    if (isSamsSonor)
+    {
+        title = "SamsSonor";
+        author = "Sam Greene; SFZ by kinwie";
+        version = "1.0";
+        license = "CC BY-SA 4.0";
+        description = "Sam Greene's Sonor Force 3001 drumkit, converted from kinwie's SFZ mapping.";
+    }
+
+    if (isOpenSourceKit)
+    {
+        title = "The Open Source Drum Kit";
+        author = "Real Music Media";
+        version = "1.0";
+        license = "Public Domain";
+        description = "The Open Source Drum Kit by Real Music Media, mapped to GM extended notes.";
     }
 
     {
@@ -1842,7 +1967,7 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
             ez.name = part.zoneName;
             ez.graphicId = part.graphic;
             ez.note = r.key;
-            ez.altNote = -1;
+            ez.altNote = r.altNote;
             ez.numVelocityLayers = 1;
             ez.numRoundRobins = 1;
 
@@ -1957,6 +2082,39 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
             {"hihat", -0.35f},     {"ride1", 0.3f},      {"ride2", 0.45f},    {"crash1", -0.5f},
             {"crash2", 0.35f},     {"crash3", 0.5f},     {"china1", -0.45f},  {"china2", 0.5f},
             {"splash", -0.55f},    {"bellchime", 0.6f},  {"cowbell", -0.15f},
+        };
+        for (auto &m : mics)
+            for (const auto &pm : panMap)
+                if (m.name == pm.name)
+                    m.pan = pm.pan;
+    }
+
+    if (isSamsSonor)
+    {
+        static const struct
+        {
+            const char *name;
+            float pan;
+        } panMap[] = {
+            {"kick", 0.0f},     {"snare", 0.0f},   {"hihat", -0.35f}, {"ride", 0.4f},
+            {"crash", 0.45f},   {"hightom", -0.3f}, {"midtom", -0.1f}, {"lowtom", 0.3f},
+        };
+        for (auto &m : mics)
+            for (const auto &pm : panMap)
+                if (m.name == pm.name)
+                    m.pan = pm.pan;
+    }
+
+    if (isOpenSourceKit)
+    {
+        static const struct
+        {
+            const char *name;
+            float pan;
+        } panMap[] = {
+            {"kick", 0.0f},   {"snare", 0.0f},   {"hihat", -0.35f}, {"ride", 0.4f},
+            {"crash", 0.45f}, {"hightom", -0.3f}, {"midtom", -0.1f}, {"floortom", 0.3f},
+            {"gong", 0.55f},
         };
         for (auto &m : mics)
             for (const auto &pm : panMap)
