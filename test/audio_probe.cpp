@@ -880,6 +880,44 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_MIDITHRU") != nullptr)
+    {
+        proc.setMidiThruDestination ("Ugritone KVLT (native)");
+        proc.setMidiThruEnabled (true);
+        proc.closeKit();
+        proc.prepareToPlay (48000.0, 512);
+
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        for (const int note : { 50, 41, 38, 57, 42 })
+            midi.addEvent (juce::MidiMessage::noteOn (1, note, static_cast<juce::uint8> (100)), 0);
+
+        proc.processBlock (buffer, midi);
+
+        std::cout << "MIDI thru out:";
+        for (const auto metadata : midi)
+        {
+            const auto message = metadata.getMessage();
+            if (message.isNoteOn())
+                std::cout << " " << message.getNoteNumber();
+        }
+        std::cout << std::endl;
+
+        juce::MidiBuffer offs;
+        for (const int note : { 50, 41, 38, 57, 42 })
+            offs.addEvent (juce::MidiMessage::noteOff (1, note), 0);
+        proc.processBlock (buffer, offs);
+        std::cout << "MIDI thru offs:";
+        for (const auto metadata : offs)
+        {
+            const auto message = metadata.getMessage();
+            if (message.isNoteOff())
+                std::cout << " " << message.getNoteNumber();
+        }
+        std::cout << std::endl;
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_HITS") != nullptr)
     {
         proc.prepareToPlay (48000.0, 512);

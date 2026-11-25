@@ -2105,6 +2105,44 @@ juce::PopupMenu Editor::buildPresetsMenu()
                      repaint();
                  });
 
+    menu.addSeparator();
+    menu.addItem("MIDI Thru (No Kit)",
+                 true,
+                 processor.isMidiThruEnabled(),
+                 [this]
+                 {
+                     const bool enabled = !processor.isMidiThruEnabled();
+                     processor.setMidiThruEnabled(enabled);
+                     statusText = enabled ? "MIDI Thru enabled: notes are remapped to the destination map"
+                                          : "MIDI Thru disabled";
+                     repaint();
+                 });
+
+    juce::PopupMenu destinations;
+    for (const auto &preset : presets)
+    {
+        const bool isCurrent = processor.getMidiThruDestination().equalsIgnoreCase(preset.name);
+        destinations.addItem(preset.name,
+                             true,
+                             isCurrent,
+                             [this, preset]
+                             {
+                                 processor.setMidiThruDestination(preset.name);
+                                 processor.setMidiThruEnabled(true);
+                                 statusText = "MIDI Thru -> " + preset.name;
+                                 repaint();
+                             });
+    }
+    menu.addSubMenu("MIDI Thru Destination", destinations);
+
+    menu.addItem("Close Kit (MIDI Thru)",
+                 [this]
+                 {
+                     processor.closeKit();
+                     statusText = "Kit closed. MIDI Thru can drive another instrument.";
+                     repaint();
+                 });
+
     return menu;
 }
 

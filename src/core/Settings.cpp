@@ -100,6 +100,8 @@ void Settings::writeState(juce::MemoryBlock &destination) const
 
     root.setAttribute("lastKit", lastKitPath);
     root.setAttribute("lastMapPreset", lastMapPreset);
+    root.setAttribute("midiThruEnabled", midiThruEnabled);
+    root.setAttribute("midiThruDestination", midiThruDestination);
     root.setAttribute("lastLayerFolder", lastLayerFolder);
     root.setAttribute("midiLibraryPath", midiLibraryPath);
     root.setAttribute("midiSourceProfile", midiSourceProfile);
@@ -136,6 +138,8 @@ void Settings::readState(const juce::MemoryBlock &source)
 
     lastKitPath = root->getStringAttribute("lastKit", lastKitPath);
     lastMapPreset = root->getStringAttribute("lastMapPreset", lastMapPreset);
+    midiThruEnabled = root->getBoolAttribute("midiThruEnabled", midiThruEnabled);
+    midiThruDestination = root->getStringAttribute("midiThruDestination", midiThruDestination);
     lastLayerFolder = root->getStringAttribute("lastLayerFolder", lastLayerFolder);
     midiLibraryPath = root->getStringAttribute("midiLibraryPath", midiLibraryPath);
     midiSourceProfile = root->getStringAttribute("midiSourceProfile", midiSourceProfile);

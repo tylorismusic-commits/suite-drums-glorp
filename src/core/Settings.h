@@ -53,6 +53,10 @@ class Settings
     juce::String midiSourceProfile {"General MIDI (extended)"}; ///< source-library note map
     double midiPreviewSpeed = 1.0; ///< 0.5x, 1.0x or 2.0x for preview and export
 
+    // -- MIDI thru (no-kit mapper) ----------------------------------------
+    bool midiThruEnabled = false;
+    juce::String midiThruDestination {"Ugritone KVLT (native)"};
+
     // -- editor ------------------------------------------------------------
     int editorWidth = 1180;
     int editorHeight = 860;

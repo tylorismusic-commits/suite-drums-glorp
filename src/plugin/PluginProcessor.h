@@ -24,7 +24,9 @@
 
 #include "Config.h"
 
+#include <array>
 #include <atomic>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -46,7 +48,7 @@ class PluginProcessor : public juce::AudioProcessor
     void releaseResources() override;
 
     bool acceptsMidi() const override { return true; }
-    bool producesMidi() const override { return false; }
+    bool producesMidi() const override { return true; }
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override;
 
@@ -104,6 +106,19 @@ class PluginProcessor : public juce::AudioProcessor
     /// Applies a MIDI-map preset to the loaded kit.
     void applyMapPreset(const juce::String &presetName);
 
+    // -- MIDI thru (no-kit mapper) -----------------------------------------
+    /// When enabled, incoming notes are remapped from the source profile to the
+    /// selected destination profile and sent to the plugin's MIDI output. The
+    /// kit, if any, still plays locally.
+    void setMidiThruEnabled(bool enabled);
+    bool isMidiThruEnabled() const noexcept { return midiThruEnabled.load(std::memory_order_relaxed); }
+
+    void setMidiThruDestination(const juce::String &presetName);
+    juce::String getMidiThruDestination() const { return midiThruDestination; }
+
+    /// Unloads the current kit so the plugin can be used as a pure MIDI mapper.
+    void closeKit();
+
     /// Saves the current MIDI map to the user preset folder (defaults to "Custom")
     /// and selects it as the active preset. Returns the saved file path.
     juce::String saveCustomMapPreset(const juce::String &presetName = "Custom");
@@ -159,6 +174,12 @@ class PluginProcessor : public juce::AudioProcessor
     AudioEngine audioEngine;
 
     Settings settings;
+
+    std::atomic<bool> midiThruEnabled {false};
+    std::array<std::atomic<int>, 128> midiThruMap;
+    std::map<int, int> midiThruActive; // (channel << 8) | input note -> output note
+    juce::String midiThruDestination {"Ugritone KVLT (native)"};
+    void rebuildMidiThruMap();
 
     std::vector<KitEntry> kitList;
     juce::String currentKitPath;

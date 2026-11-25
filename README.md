@@ -75,6 +75,14 @@ merged automatically: point the converter at any file in `Multi/*.sfz` and it
 resolves the includes, merges all mic channels and splits stereo mics. The
 `tools/naked_drums_to_glorpkit.py` script remains available for scripting.
 
+Virtuosity Drums uses a dedicated converter because its Sforzando bank splits
+the kit across six per-mic programs:
+
+```bash
+./tools/virtuosity_to_glorpkit.py --source "/path/to/Virtuosity" \
+    --output "$HOME/.config/SuiteDrumsGlorp/kits/Virtuosity Drums.glorpkit"
+```
+
 ## Download
 
 Release bundles are published on GitHub:

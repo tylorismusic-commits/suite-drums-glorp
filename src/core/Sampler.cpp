@@ -2062,7 +2062,7 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
         if (output[c] != nullptr)
             juce::FloatVectorOperations::clear(output[c], numSamples);
 
-    if (!kitLoaded.load() || totalBuses <= 0)
+    if (!kitLoaded.load() || instruments_.empty() || micChannels.empty() || totalBuses <= 0)
     {
         sampleClock += numSamples;
         return;
