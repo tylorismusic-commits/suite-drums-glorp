@@ -1924,13 +1924,29 @@ void Sampler::setHiHatPedal(float pedalValue) noexcept
 
     // Choke open hi-hats when pedal moves from open towards closed
     const bool chokedOpenHat = (prev < 0.50f && clamped >= 0.55f);
+
+    auto isOpenHatInstrument = [&] (int index)
+    {
+        if (index < 0)
+            return false;
+        if (index == hiHat.open || index == hiHat.openEdge)
+            return true;
+        return std::find(hiHat.openArticulations.begin(), hiHat.openArticulations.end(), index)
+               != hiHat.openArticulations.end();
+    };
+
+    bool openHatRinging = false;
+    for (const auto &voice : pool.voices)
+        if (voice->active && isOpenHatInstrument(voice->instrument))
+            openHatRinging = true;
+
     if (chokedOpenHat)
         chokeOpenHiHats(20, sampleClock);
 
-    // Firm downward foot stomp: trigger pedal chick, but not when it would
-    // immediately mask the open-hat choke (the chick on the same pedal movement
-    // made it sound as if the choke had failed on some kits).
-    if (!chokedOpenHat && clamped - prev > 0.22f && clamped >= 0.70f)
+    // Firm downward foot stomp: trigger pedal chick, but not when the same
+    // movement is already choking a ringing open hat. On kits with a loud foot
+    // sample the chick masked the fade, so the choke appeared not to work.
+    if (clamped - prev > 0.22f && clamped >= 0.70f && !(chokedOpenHat && openHatRinging))
     {
         lastPedalDownClock = sampleClock;
         lastPedalDownSpeed = clamped - prev;
