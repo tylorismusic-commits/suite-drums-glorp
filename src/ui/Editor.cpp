@@ -2623,8 +2623,10 @@ void Editor::buildLogicalInstruments()
             li.piece = DrumKitView::pieceForName(p.name);
             if (li.piece == KitPiece::count)
                 li.piece = DrumKitView::pieceForName(p.id);
-            if (li.piece == KitPiece::count)
-                li.piece = DrumKitView::pieceForName(p.graphic);
+            // Do not fall back to the graphic for named pieces. Auxiliary
+            // pieces often reuse a snare/crash graphic (cowbell, stick click,
+            // hand clap), and that made the classic kit view trigger them when
+            // the actual snare was clicked.
             li.outputBus = p.outputBus;
             for (const auto &z : p.zones)
                 li.zones.push_back({z.samplerIndex, juce::String(z.name)});

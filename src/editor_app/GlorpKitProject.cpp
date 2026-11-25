@@ -2384,6 +2384,20 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         int offBy = 0;
         int seqPos = 0;
         int seqLen = 0;
+        int64_t sampleOffset = 0;
+        int64_t sampleEnd = -1;
+    };
+
+    auto parseInt64 = [] (const std::string &s, int64_t fallback)
+    {
+        try
+        {
+            return static_cast<int64_t>(std::stoll(s));
+        }
+        catch (...)
+        {
+            return fallback;
+        }
     };
 
     auto getOp = [] (const std::map<std::string, std::string> &ops, const std::string &key,
@@ -2441,6 +2455,8 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         r.offBy = parseInt(getOp(raw.ops, "off_by", getOp(raw.ops, "offby", "0")), 0);
         r.seqPos = parseInt(getOp(raw.ops, "seq_position", "0"), 0);
         r.seqLen = parseInt(getOp(raw.ops, "seq_length", "0"), 0);
+        r.sampleOffset = std::max<int64_t>(0, parseInt64(getOp(raw.ops, "offset", "0"), 0));
+        r.sampleEnd = parseInt64(getOp(raw.ops, "end", "-1"), -1);
         regions.push_back(std::move(r));
     }
 
@@ -2836,6 +2852,8 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
             ms.fileName = r.fileName;
             ms.sourceDiskPath = r.samplePath;
             ms.fileChannel = 0;
+            ms.sourceOffsetFrames = r.sampleOffset;
+            ms.sourceEndFrame = r.sampleEnd;
             hit.micSamples.push_back(std::move(ms));
             zone.hits.push_back(std::move(hit));
         }
@@ -3400,7 +3418,12 @@ bool isRiffWaveFile(const std::string &path)
     return std::memcmp(header, "RIFF", 4) == 0 && std::memcmp(header + 8, "WAVE", 4) == 0;
 }
 
-bool decodeToWavBytes(const std::string &path, bool mono, std::vector<uint8_t> &out, std::string &error)
+bool decodeToWavBytes(const std::string &path,
+                      bool mono,
+                      int64_t startFrame,
+                      int64_t endFrame,
+                      std::vector<uint8_t> &out,
+                      std::string &error)
 {
     juce::AudioFormatManager formats;
     formats.registerBasicFormats();
@@ -3412,7 +3435,13 @@ bool decodeToWavBytes(const std::string &path, bool mono, std::vector<uint8_t> &
         return false;
     }
 
-    const auto length = static_cast<int>(std::min<int64_t>(reader->lengthInSamples, 0x7fffffff));
+    const int64_t totalFrames = reader->lengthInSamples;
+    const int64_t clippedStart = std::clamp<int64_t>(startFrame, 0, totalFrames);
+    int64_t clippedEnd = (endFrame >= 0) ? std::min<int64_t>(endFrame, totalFrames) : totalFrames;
+    if (clippedEnd <= clippedStart)
+        clippedEnd = totalFrames;
+
+    const auto length = static_cast<int>(std::min<int64_t>(clippedEnd - clippedStart, 0x7fffffff));
     if (length <= 0)
     {
         error = "Audio file has no frames: " + path;
@@ -3421,7 +3450,7 @@ bool decodeToWavBytes(const std::string &path, bool mono, std::vector<uint8_t> &
 
     const int sourceChannels = static_cast<int>(reader->numChannels);
     juce::AudioBuffer<float> source(sourceChannels, length);
-    if (!reader->read(&source, 0, length, 0, true, true))
+    if (!reader->read(&source, 0, length, clippedStart, true, true))
     {
         error = "Could not read audio file: " + path;
         return false;
@@ -3430,15 +3459,24 @@ bool decodeToWavBytes(const std::string &path, bool mono, std::vector<uint8_t> &
     const int outChannels = mono ? 1 : sourceChannels;
     juce::AudioBuffer<float> dst(outChannels, length);
 
+    dst.clear();
+
     if (mono)
     {
-        for (int ch = 0; ch < sourceChannels; ++ch)
-            dst.addFrom(0, 0, source, ch, 0, length, 1.0f / static_cast<float>(sourceChannels));
+        const float gain = 1.0f / static_cast<float>(sourceChannels);
+        for (int i = 0; i < length; ++i)
+        {
+            float sum = 0.0f;
+            for (int ch = 0; ch < sourceChannels; ++ch)
+                sum += source.getSample(ch, i);
+            dst.setSample(0, i, sum * gain);
+        }
     }
     else
     {
         for (int ch = 0; ch < outChannels; ++ch)
-            dst.copyFrom(ch, 0, source, ch, 0, length);
+            for (int i = 0; i < length; ++i)
+                dst.setSample(ch, i, source.getSample(ch, i));
     }
 
     const auto frames = static_cast<uint32_t>(length);
@@ -3682,8 +3720,10 @@ bool GlorpKitProject::exportToGlorpKit(const std::string &outputArchivePath, std
                 {
                     std::string wavName = ms.fileName.empty() ? (hit.name + ".wav") : ms.fileName;
                     const bool sourceIsWav = ms.sourceDiskPath.empty() || isRiffWaveFile(ms.sourceDiskPath);
+                    const bool needsTrim = ms.sourceOffsetFrames > 0
+                                           || (ms.sourceEndFrame >= 0 && ms.sourceEndFrame > ms.sourceOffsetFrames);
                     const bool transcode = !ms.sourceDiskPath.empty() && fs::exists(ms.sourceDiskPath)
-                                           && (exportMonoSamples || !sourceIsWav);
+                                           && (exportMonoSamples || !sourceIsWav || needsTrim);
                     if (transcode)
                         wavName = fs::path(wavName).stem().string() + ".wav";
 
@@ -3706,7 +3746,12 @@ bool GlorpKitProject::exportToGlorpKit(const std::string &outputArchivePath, std
                             {
                                 std::vector<uint8_t> wavBytes;
                                 std::string decodeError;
-                                if (!decodeToWavBytes(ms.sourceDiskPath, exportMonoSamples, wavBytes, decodeError))
+                                if (!decodeToWavBytes(ms.sourceDiskPath,
+                                                      exportMonoSamples,
+                                                      ms.sourceOffsetFrames,
+                                                      ms.sourceEndFrame,
+                                                      wavBytes,
+                                                      decodeError))
                                 {
                                     outError = decodeError;
                                     return false;

@@ -27,6 +27,8 @@ struct EditableMicSample
     std::string sourceArchivePath;
     int64_t archiveOffset = -1;
     int64_t archiveLength = -1;
+    int64_t sourceOffsetFrames = 0; ///< SFZ offset=, frames
+    int64_t sourceEndFrame = -1;    ///< SFZ end=, frames (-1 = to the end)
     int fileChannel = 0; // 0-based
 };
 
