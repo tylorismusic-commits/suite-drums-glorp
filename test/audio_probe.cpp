@@ -7,8 +7,10 @@
 
 #include "PluginProcessor.h"
 
+#include <atomic>
 #include <chrono>
 #include <iostream>
+#include <thread>
 
 int main (int argc, char** argv)
 {
@@ -858,6 +860,55 @@ int main (int argc, char** argv)
         }
 
         std::cout << "bus peak=" << peak << " peakDb=" << juce::Decibels::gainToDecibels (peak) << std::endl;
+        return 0;
+    }
+
+    if (std::getenv ("GLORP_PROBE_LOOPRACE") != nullptr)
+    {
+        proc.prepareToPlay (48000.0, 512);
+        auto &sampler = proc.getSampler();
+        const int numInst = sampler.numInstruments();
+        std::atomic<bool> stop { false };
+
+        std::thread previewThread ([&]
+        {
+            int k = 0;
+            while (! stop.load())
+            {
+                sampler.allNotesOff();
+                for (int j = 0; j < 4 && numInst > 0; ++j)
+                {
+                    const int inst = (k * 7 + j) % numInst;
+                    sampler.noteOn (inst, -1, 1.0f, sampler.currentSamplePosition());
+                }
+                ++k;
+                std::this_thread::sleep_for (std::chrono::milliseconds (8));
+            }
+        });
+
+        juce::AudioBuffer<float> buffer (2, 512);
+        float peak = 0.0f;
+        for (int block = 0; block < 2000; ++block)
+        {
+            juce::MidiBuffer midi;
+            if ((block % 4) == 0)
+                midi.addEvent (juce::MidiMessage::noteOn (1, 38, static_cast<juce::uint8> (100)), 0);
+
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+                peak = juce::jmax (peak, buffer.getMagnitude (ch, 0, buffer.getNumSamples()));
+
+            if ((block % 400) == 399)
+            {
+                std::cout << "looprace " << (block + 1) / 400 << "s peak=" << peak << std::endl;
+                peak = 0.0f;
+            }
+        }
+
+        stop.store (true);
+        previewThread.join();
         return 0;
     }
 

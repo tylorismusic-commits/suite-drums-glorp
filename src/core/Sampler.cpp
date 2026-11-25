@@ -1540,6 +1540,11 @@ void Sampler::noteOn(int instrument, float velocity, int64_t timeInSamples)
 
 void Sampler::noteOn(int instrument, int note, float velocity, int64_t timeInSamples)
 {
+    // UI previews (loop browser, kit view, editor audition) call this from the
+    // message thread while the audio thread renders. Serialise with the render
+    // lock; the audio thread already holds it, and CriticalSection is recursive.
+    const juce::ScopedLock lock(kitLock);
+
     if (!kitLoaded.load())
         return;
 
@@ -1888,6 +1893,8 @@ void Sampler::chokeOpenHiHats(int64_t fadeMs, int64_t timeInSamples, int64_t ski
 
 void Sampler::allNotesOff()
 {
+    const juce::ScopedLock lock(kitLock);
+
     for (auto &voicePtr : pool.voices)
     {
         auto &v = *voicePtr;
@@ -1918,6 +1925,8 @@ void Sampler::allNotesOff()
 
 void Sampler::setHiHatPedal(float pedalValue) noexcept
 {
+    const juce::ScopedLock lock(kitLock);
+
     const float clamped = std::clamp(pedalValue, 0.0f, 1.0f);
     cc4Active.store(true, std::memory_order_relaxed);
     const float prev = hiHatPedal.exchange(clamped, std::memory_order_relaxed);

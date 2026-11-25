@@ -466,20 +466,33 @@ bool SampleCache::parseWavSlice(const std::string &archivePath,
         return false;
     }
 
-    auto mapping =
-        std::make_shared<juce::MemoryMappedFile>(juce::File(archivePath),
-                                                 juce::Range<juce::int64>(byteOffset, byteOffset + byteLength),
-                                                 juce::MemoryMappedFile::readOnly);
+    std::shared_ptr<juce::MemoryMappedFile> mapping;
+    if (const auto it = archiveMappings.find(archivePath); it != archiveMappings.end())
+    {
+        mapping = it->second;
+    }
+    else
+    {
+        mapping = std::make_shared<juce::MemoryMappedFile>(juce::File(archivePath),
+                                                           juce::MemoryMappedFile::readOnly);
+        if (mapping != nullptr && mapping->getData() != nullptr && mapping->getSize() > 0)
+            archiveMappings[archivePath] = mapping;
+    }
 
     if (mapping == nullptr || mapping->getData() == nullptr || mapping->getSize() == 0)
     {
-        error = "could not map slice of '" + archivePath + "'";
+        error = "could not map '" + archivePath + "'";
         return false;
     }
 
-    const auto rangeStart = mapping->getRange().getStart();
-    const auto offsetInside = static_cast<size_t>(byteOffset - rangeStart);
-    const auto *data = static_cast<const std::uint8_t *>(mapping->getData()) + offsetInside;
+    if (byteOffset < 0 || byteLength <= 0 || byteOffset + byteLength > mapping->getSize())
+    {
+        error = "slice range outside archive: " + archivePath;
+        return false;
+    }
+
+    const auto *data = static_cast<const std::uint8_t *>(mapping->getData())
+                       + static_cast<size_t>(byteOffset);
     const auto size = static_cast<size_t>(byteLength);
 
     return parseWavBytes(archivePath + "#slice", mapping, data, size, out, error);

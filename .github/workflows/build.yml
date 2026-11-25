@@ -48,7 +48,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: Package
-        run: tools/package_linux.sh 0.1.0-alpha.53
+        run: tools/package_linux.sh 0.1.0-alpha.54
 
       - name: Upload package
         uses: actions/upload-artifact@v4

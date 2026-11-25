@@ -189,6 +189,10 @@ class SampleCache
 
     mutable std::mutex mutex;
     std::map<std::string, CacheEntry> cache;
+    /// One mapping per archive instead of one per sample slice. Large kits can
+    /// contain thousands of slices; a single lazy mapping keeps the VMA count
+    /// small and lets the page cache read ahead across samples.
+    mutable std::map<std::string, std::shared_ptr<juce::MemoryMappedFile>> archiveMappings;
     juce::AudioFormatManager formatManager;
 };
 
