@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <thread>
 
@@ -860,6 +861,31 @@ int main (int argc, char** argv)
         }
 
         std::cout << "bus peak=" << peak << " peakDb=" << juce::Decibels::gainToDecibels (peak) << std::endl;
+        return 0;
+    }
+
+    if (const auto* outPath = std::getenv ("GLORP_PROBE_WRITE"))
+    {
+        proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        const int note = proc.getMidiMap().noteForInstrument (0);
+        midi.addEvent (juce::MidiMessage::noteOn (1, note >= 0 ? note : 36, static_cast<juce::uint8> (110)), 0);
+
+        std::ofstream out (outPath, std::ios::binary);
+        for (int block = 0; block < 200; ++block)
+        {
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+            midi.clear();
+            for (int i = 0; i < buffer.getNumSamples(); ++i)
+            {
+                const float l = buffer.getSample (0, i);
+                const float r = buffer.getSample (1, i);
+                out.write (reinterpret_cast<const char*> (&l), sizeof (l));
+                out.write (reinterpret_cast<const char*> (&r), sizeof (r));
+            }
+        }
         return 0;
     }
 

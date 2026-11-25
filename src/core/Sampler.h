@@ -285,6 +285,7 @@ class Sampler
         int channel = 0;
         float gainL = 0.0f;
         float gainR = 0.0f;
+        double rateScale = 1.0;          ///< sample rate / kit rate
         int kitChannelIndex = 0;         ///< index into kitChannels_ for per-mic mixing
         bool isBleed = false;            ///< true if this is an off-axis bleed mic channel
         int pieceIdx = 0;                ///< source BleedPiece integer index

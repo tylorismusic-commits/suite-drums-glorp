@@ -219,7 +219,51 @@ bool Sampler::loadKit(DrumKit kit, juce::String &error)
     instruments_ = std::move(resolved);
     kitChannels_ = kit.channels;
     instrumentCount = static_cast<int>(instruments_.size());
-    kitSampleRate = kit.declaredSampleRate > 0 ? static_cast<double>(kit.declaredSampleRate) : currentSampleRate;
+
+    // The declared rate in kit.xml is not always the rate of the audio files
+    // (several DrumGizmo and SFZ conversions declare 48 kHz but ship 44.1 kHz
+    // samples). Use the rate most of the samples actually have, then rebuild
+    // each channel's rate scale and its length in kit frames.
+    {
+        std::map<int, int> votes;
+        for (const auto &inst : instruments_)
+            for (const auto &hit : inst.hits)
+                for (const auto &channelRef : hit.channels)
+                    if (channelRef.handle.sampleRate > 0.0)
+                        ++votes[static_cast<int>(std::llround(channelRef.handle.sampleRate))];
+
+        int chosenRate = kit.declaredSampleRate;
+        int bestVotes = 0;
+        for (const auto &[rate, count] : votes)
+            if (count > bestVotes)
+            {
+                bestVotes = count;
+                chosenRate = rate;
+            }
+
+        if (chosenRate <= 0)
+            chosenRate = static_cast<int>(std::lround(currentSampleRate));
+
+        kitSampleRate = static_cast<double>(chosenRate);
+
+        for (auto &inst : instruments_)
+            for (auto &hit : inst.hits)
+            {
+                hit.numFrames = 0;
+                for (auto &channelRef : hit.channels)
+                {
+                    channelRef.rateScale = channelRef.handle.sampleRate > 0.0
+                                               ? channelRef.handle.sampleRate / kitSampleRate
+                                               : 1.0;
+                    if (channelRef.rateScale <= 0.0)
+                        channelRef.rateScale = 1.0;
+                    hit.numFrames = std::max<int64_t>(
+                        hit.numFrames,
+                        static_cast<int64_t>(std::llround(static_cast<double>(channelRef.handle.numFrames)
+                                                          / channelRef.rateScale)));
+                }
+            }
+    }
 
     // The number of buses in use is bounded by what was built; anything beyond
     // that shares the last bus rather than being dropped.
@@ -874,8 +918,19 @@ void Sampler::resolveInstrumentChannels(const DrumKit &kit, const Instrument &in
                 }
             }
 
+            const double kitRate = kit.declaredSampleRate > 0 ? static_cast<double>(kit.declaredSampleRate)
+                                                              : 48000.0;
+            channelRef.rateScale = channelRef.handle.sampleRate > 0.0
+                                       ? channelRef.handle.sampleRate / kitRate
+                                       : 1.0;
+            if (channelRef.rateScale <= 0.0)
+                channelRef.rateScale = 1.0;
+
             hit.channels.push_back(std::move(channelRef));
-            hit.numFrames = std::max(hit.numFrames, channelRef.handle.numFrames);
+            hit.numFrames = std::max<int64_t>(
+                hit.numFrames,
+                static_cast<int64_t>(std::llround(static_cast<double>(hit.channels.back().handle.numFrames)
+                                                  / hit.channels.back().rateScale)));
         }
 
         if (!hit.channels.empty() && hit.numFrames > 0)
@@ -2184,6 +2239,14 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
             float *const auxDestL = hasAuxBus ? output[instBus * 2] : nullptr;
             float *const auxDestR = hasAuxBus ? output[instBus * 2 + 1] : nullptr;
 
+            bool allUnitRate = true;
+            for (const auto &channelRef : hit.channels)
+                if (std::abs(channelRef.rateScale - 1.0) > 1.0e-9)
+                {
+                    allUnitRate = false;
+                    break;
+                }
+
             // Fast path for rate-only conversion (e.g. 44.1 kHz samples in a
             // 48 kHz host): read one contiguous source block per mic and use
             // linear interpolation. Drums do not need cubic interpolation for
@@ -2194,8 +2257,8 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
             const auto sourceFrames =
                 static_cast<int>(std::ceil(std::max(0, numSamples - 1) * v.pitchRatio)) + 3;
             const bool shaped = std::abs(v.attackShape) > 0.001f;
-            const bool canBlockResample = rateOnly && !fading && v.endsAt == 0 && first == 0 && !hasAuxBus
-                                          && !shaped
+            const bool canBlockResample = rateOnly && allUnitRate && !fading && v.endsAt == 0 && first == 0
+                                          && !hasAuxBus && !shaped
                                           && sourceFrames > 0
                                           && static_cast<size_t>(sourceFrames) <= v.mixL.size();
 
@@ -2267,8 +2330,8 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
             // block per mic and mix with vector operations. This is the common
             // case for every sustained tail and is much cheaper on 16/21-mic kits.
             const bool steadyPosition = std::abs(v.position - std::floor(v.position)) < 1.0e-9;
-            const bool canBlockMix = !shifting && !fading && v.endsAt == 0 && first == 0 && !hasAuxBus
-                                     && !shaped
+            const bool canBlockMix = !shifting && allUnitRate && !fading && v.endsAt == 0 && first == 0
+                                     && !hasAuxBus && !shaped
                                      && steadyPosition
                                      && static_cast<size_t>(numSamples) <= v.mixL.size();
 
@@ -2398,11 +2461,11 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
 
                 if (shifting)
                 {
-                    const int64_t pos = static_cast<int64_t>(v.position);
-                    const float t = static_cast<float>(v.position - static_cast<double>(pos));
-
                     for (const auto &channelRef : hit.channels)
                     {
+                        const double channelPosition = v.position * channelRef.rateScale;
+                        const int64_t pos = static_cast<int64_t>(channelPosition);
+                        const float t = static_cast<float>(channelPosition - static_cast<double>(pos));
                         const int micIdx = std::clamp(channelRef.kitChannelIndex, 0, numMics - 1);
                         float bleedGain = 1.0f;
                         if (channelRef.isBleed)
@@ -2460,10 +2523,9 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
                 }
                 else
                 {
-                    const int64_t pos = static_cast<int64_t>(v.position);
-
                     for (const auto &channelRef : hit.channels)
                     {
+                        const int64_t pos = static_cast<int64_t>(v.position * channelRef.rateScale);
                         const int micIdx = std::clamp(channelRef.kitChannelIndex, 0, numMics - 1);
                         float bleedGain = 1.0f;
                         if (channelRef.isBleed)

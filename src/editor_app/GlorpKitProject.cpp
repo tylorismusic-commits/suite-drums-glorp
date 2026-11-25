@@ -2687,23 +2687,38 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
     }
 
     {
-        SampleCache probe;
-        const auto handle = probe.open(regions.front().samplePath);
-        if (handle.valid && handle.sampleRate > 0.0)
+        // Declare the rate most of the sources actually use. Some libraries mix
+        // 44.1 and 48 kHz files, and the first region is not representative.
+        std::map<int, int> votes;
+        const size_t stride = std::max<size_t>(1, regions.size() / 64);
+        juce::AudioFormatManager fm;
+        fm.registerBasicFormats();
+
+        for (size_t i = 0; i < regions.size(); i += stride)
         {
-            sampleRate = static_cast<int>(std::lround(handle.sampleRate));
+            const auto &path = regions[i].samplePath;
+            SampleCache probe;
+            const auto handle = probe.open(path);
+            double rate = handle.valid ? handle.sampleRate : 0.0;
+            if (rate <= 0.0)
+            {
+                std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(juce::File(path)));
+                if (r != nullptr)
+                    rate = r->sampleRate;
+            }
+            if (rate > 0.0)
+                ++votes[static_cast<int>(std::lround(rate))];
         }
-        else
-        {
-            // FLAC/Ogg sources are decoded on export; read their rate through
-            // JUCE so the kit does not claim the wrong sample rate.
-            juce::AudioFormatManager fm;
-            fm.registerBasicFormats();
-            std::unique_ptr<juce::AudioFormatReader> r(
-                fm.createReaderFor(juce::File(regions.front().samplePath)));
-            if (r != nullptr && r->sampleRate > 0.0)
-                sampleRate = static_cast<int>(std::lround(r->sampleRate));
-        }
+
+        int chosen = sampleRate;
+        int best = 0;
+        for (const auto &[rate, count] : votes)
+            if (count > best)
+            {
+                best = count;
+                chosen = rate;
+            }
+        sampleRate = chosen;
     }
 
     std::map<std::string, size_t> pieceIndexByKey;
@@ -3022,7 +3037,33 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
     license = dk.license.empty() ? "Custom" : dk.license;
     description = dk.description;
     hitGlowColor = dk.hitGlowColor.empty() ? "#ff8200" : dk.hitGlowColor;
-    sampleRate = dk.declaredSampleRate;
+    {
+        std::map<int, int> votes;
+        SampleCache probe;
+        for (const auto &inst : dk.instruments)
+            for (const auto &hit : inst.samples)
+            {
+                for (const auto &ref : hit.audioFiles)
+                {
+                    const auto handle = probe.open(inst.samplePath(ref));
+                    if (handle.valid && handle.sampleRate > 0.0)
+                    {
+                        ++votes[static_cast<int>(std::lround(handle.sampleRate))];
+                        break;
+                    }
+                }
+            }
+
+        int chosen = dk.declaredSampleRate;
+        int best = 0;
+        for (const auto &[rate, count] : votes)
+            if (count > best)
+            {
+                best = count;
+                chosen = rate;
+            }
+        sampleRate = chosen;
+    }
     loadedFilePath = drumkitXmlPath;
 
     auto lowerDrs = [](std::string s)
