@@ -2386,6 +2386,7 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         int seqLen = 0;
         int64_t sampleOffset = 0;
         int64_t sampleEnd = -1;
+        bool hasCcCondition = false;
     };
 
     auto parseInt64 = [] (const std::string &s, int64_t fallback)
@@ -2457,6 +2458,15 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         r.seqLen = parseInt(getOp(raw.ops, "seq_length", "0"), 0);
         r.sampleOffset = std::max<int64_t>(0, parseInt64(getOp(raw.ops, "offset", "0"), 0));
         r.sampleEnd = parseInt64(getOp(raw.ops, "end", "-1"), -1);
+        for (const auto &[opKey, opValue] : raw.ops)
+        {
+            (void) opValue;
+            if (opKey.rfind("locc", 0) == 0 || opKey.rfind("hicc", 0) == 0)
+            {
+                r.hasCcCondition = true;
+                break;
+            }
+        }
         regions.push_back(std::move(r));
     }
 
@@ -2803,6 +2813,14 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         auto &zone = piece.zones[zoneIndexByKey[zoneKey]];
         const auto micIt = micIdByPieceIndex.find(zoneKey.first);
         const std::string micId = micIt != micIdByPieceIndex.end() ? micIt->second : "close";
+
+        // Some SFZ mappings put several hi-hat stages on the same key and switch
+        // them with a CC (Salamander/Monster use CC4 for closed/semi-open). The
+        // kit view has no CC context here, so keep the default (unconditioned)
+        // articulation instead of mixing semi-open samples into the closed zone.
+        if (std::any_of(list.begin(), list.end(), [] (const Region &r) { return !r.hasCcCondition; }))
+            list.erase(std::remove_if(list.begin(), list.end(), [] (const Region &r) { return r.hasCcCondition; }),
+                       list.end());
 
         std::sort(list.begin(), list.end(), [] (const Region &a, const Region &b)
         {
