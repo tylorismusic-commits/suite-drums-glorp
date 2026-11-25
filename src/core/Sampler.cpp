@@ -329,12 +329,21 @@ bool Sampler::loadKit(DrumKit kit, juce::String &error)
             ch->params.level = itM->second;
 
         ch->params.phaseInvert = kitChannels_[k].phaseInvert;
+        ch->params.pan = kitChannels_[k].pan;
+
+        auto itPan = kit.factoryMicPans.find(ch->name.toStdString());
+        if (itPan == kit.factoryMicPans.end())
+            itPan = kit.factoryMicPans.find(ch->title.toStdString());
+        if (itPan != kit.factoryMicPans.end())
+            ch->params.pan = itPan->second;
 
         auto itPhase = kit.factoryMicPhaseInvert.find(ch->name.toStdString());
         if (itPhase == kit.factoryMicPhaseInvert.end())
             itPhase = kit.factoryMicPhaseInvert.find(ch->title.toStdString());
         if (itPhase != kit.factoryMicPhaseInvert.end())
             ch->params.phaseInvert = itPhase->second;
+
+        ch->kitPhaseInvert = ch->params.phaseInvert;
 
         micChannels.push_back(std::move(ch));
     }
@@ -513,8 +522,60 @@ MasterStripParams Sampler::getMasterStripParams() const
 void Sampler::applyMixerPreset(const MixerPreset &preset)
 {
     masterStripParams = preset.master;
-    for (size_t i = 0; i < preset.micStrips.size() && i < micChannels.size(); ++i)
-        micChannels[i]->params = preset.micStrips[i];
+
+    bool hasMicNames = false;
+    for (const auto &name : preset.micNames)
+    {
+        if (name.isNotEmpty())
+        {
+            hasMicNames = true;
+            break;
+        }
+    }
+
+    // Named presets and project states must be matched by mic name. Applying
+    // them by index makes a preset saved on one kit pan/level the wrong mics
+    // after switching to a kit with a different channel order.
+    if (!hasMicNames)
+    {
+        for (size_t i = 0; i < preset.micStrips.size() && i < micChannels.size(); ++i)
+            micChannels[i]->params = preset.micStrips[i];
+
+        for (auto &channel : micChannels)
+            if (channel->kitPhaseInvert)
+                channel->params.phaseInvert = true;
+
+        return;
+    }
+
+    std::vector<bool> used(preset.micStrips.size(), false);
+
+    for (auto &channel : micChannels)
+    {
+        for (size_t i = 0; i < preset.micStrips.size(); ++i)
+        {
+            if (used[i])
+                continue;
+
+            const auto presetName = i < preset.micNames.size() ? preset.micNames[i] : juce::String();
+            if (presetName.isEmpty())
+                continue;
+
+            if (presetName.equalsIgnoreCase(channel->name) || presetName.equalsIgnoreCase(channel->title))
+            {
+                channel->params = preset.micStrips[i];
+                used[i] = true;
+                break;
+            }
+        }
+    }
+
+    // Polarity corrections that come from the recording setup (for example
+    // DRSKit's kick-back mic) are not a mix preference; keep them applied when
+    // a factory or saved mixer preset is switched in.
+    for (auto &channel : micChannels)
+        if (channel->kitPhaseInvert)
+            channel->params.phaseInvert = true;
 }
 
 MixerPreset Sampler::getCurrentMixerPreset(const juce::String &name) const

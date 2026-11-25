@@ -367,6 +367,7 @@ DrumKit DrumKit::loadNativeGlorpKit(GlorpKitReader &reader, const std::string &a
         kc.name = m.name;
         kc.title = m.title;
         kc.source = m.name;
+        kc.pan = m.pan;
         kc.phaseInvert = m.phaseInvert;
         kit.channels.push_back(std::move(kc));
     }
@@ -383,6 +384,7 @@ DrumKit DrumKit::loadNativeGlorpKit(GlorpKitReader &reader, const std::string &a
     if (reader.readFactoryMixer(mixerSetting))
     {
         kit.factoryMicLevels = mixerSetting.micLevels;
+        kit.factoryMicPans = mixerSetting.micPans;
         kit.factoryMicPhaseInvert = mixerSetting.micPhaseInvert;
         kit.factoryInstrumentLevels = mixerSetting.instrumentLevels;
         kit.factoryInstrumentPans = mixerSetting.instrumentPans;

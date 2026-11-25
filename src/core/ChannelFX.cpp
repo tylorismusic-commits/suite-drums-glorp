@@ -71,6 +71,13 @@ inline MicRoleFlags classifyMic(const juce::String &name)
     return r;
 }
 
+inline void applyFactoryMicPolarity(MicStripParams &s, const juce::String &name)
+{
+    const auto n = name.toLowerCase();
+    if (n.contains("kdrum_back") || n.contains("kick back") || n.contains("kickback"))
+        s.phaseInvert = true;
+}
+
 inline void applyFactoryMicFilters(MicStripParams &s, const MicRoleFlags &r)
 {
     if (r.trigger) { s.hpfHz = 20.0f; s.lpfHz = 20000.0f; }
@@ -727,6 +734,7 @@ MixerPreset MixerPreset::createDefaultClean(int numMics, const std::vector<juce:
             s.pan = role.left ? -0.65f : (role.right ? 0.65f : 0.0f);
         }
         applyFactoryMicFilters(s, role);
+        applyFactoryMicPolarity(s, i < names.size() ? names[i] : juce::String());
     }
     return p;
 }
@@ -863,6 +871,7 @@ MixerPreset MixerPreset::createMassiveRock(int numMics, const std::vector<juce::
             s.reverbSend = 0.25f;
         }
         applyFactoryMicFilters(s, role);
+        applyFactoryMicPolarity(s, i < names.size() ? names[i] : juce::String());
     }
     return p;
 }
@@ -954,6 +963,7 @@ MixerPreset MixerPreset::createVintageWarmth(int numMics, const std::vector<juce
             s.pan = role.left ? -0.65f : (role.right ? 0.65f : 0.0f);
         }
         applyFactoryMicFilters(s, role);
+        applyFactoryMicPolarity(s, i < names.size() ? names[i] : juce::String());
         if (role.overhead) { s.hpfHz = 150.0f; s.lpfHz = 13000.0f; }
         else if (role.room) { s.hpfHz = 120.0f; s.lpfHz = 9000.0f; }
     }
@@ -1127,6 +1137,7 @@ MixerPreset MixerPreset::createPunchyStudio(int numMics, const std::vector<juce:
             s.pan = left ? -0.65f : (right ? 0.65f : 0.0f);
         }
         applyFactoryMicFilters(s, role);
+        applyFactoryMicPolarity(s, i < names.size() ? names[i] : juce::String());
     }
 
     return p;
@@ -1217,6 +1228,7 @@ MixerPreset MixerPreset::createDryTight(int numMics, const std::vector<juce::Str
             s.pan = role.left ? -0.65f : (role.right ? 0.65f : 0.0f);
         }
         applyFactoryMicFilters(s, role);
+        applyFactoryMicPolarity(s, i < names.size() ? names[i] : juce::String());
         if (role.kick) { s.hpfHz = 30.0f; s.lpfHz = 18000.0f; }
         else if (role.snare) { s.hpfHz = 80.0f; s.lpfHz = 18000.0f; }
         else if (role.tom) { s.hpfHz = 40.0f; s.lpfHz = 18000.0f; }
@@ -1480,6 +1492,7 @@ MixerPreset MixerPreset::createMixReady(int numMics, const std::vector<juce::Str
             s.compMakeupDb = 8.24f;
         }
         applyFactoryMicFilters(s, role);
+        applyFactoryMicPolarity(s, i < names.size() ? names[i] : juce::String());
     }
 
     return p;

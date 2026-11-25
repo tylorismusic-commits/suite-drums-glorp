@@ -499,6 +499,7 @@ class Sampler
         juce::String title;
         MicStripParams params;
         ChannelStripFX fx;
+        bool kitPhaseInvert = false; ///< polarity correction that belongs to the recording
         std::atomic<float> peakL {0.0f};
         std::atomic<float> peakR {0.0f};
         std::atomic<float> rmsL {0.0f};

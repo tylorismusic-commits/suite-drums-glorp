@@ -522,6 +522,7 @@ bool GlorpKitReader::readNativeKitManifest(GlorpKitManifest &manifest, std::vect
             mic.name = m->attribute("name");
             mic.title = m->attribute("title");
             mic.defaultLevel = m->attributeFloat("default", 1.0f);
+            mic.pan = m->attributeFloat("pan", 0.0f);
             mic.phaseInvert = m->attributeBool("phase", false);
             manifest.mics.push_back(std::move(mic));
         }
@@ -665,10 +666,12 @@ bool GlorpKitReader::readFactoryMixer(GlorpMixerSetting &mixer) const
     {
         const auto name = mn->attribute("name");
         const auto level = mn->attributeFloat("level", 1.0f);
+        const float pan = mn->attributeFloat("pan", 0.0f);
         const bool phase = mn->attributeBool("phase", false);
         if (!name.empty())
         {
             mixer.micLevels[name] = level;
+            mixer.micPans[name] = pan;
             mixer.micPhaseInvert[name] = phase;
         }
     }

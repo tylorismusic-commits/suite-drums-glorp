@@ -39,6 +39,7 @@ struct GlorpMic
     std::string name;
     std::string title;
     float defaultLevel = 1.0f;
+    float pan = 0.0f;
     bool phaseInvert = false;
 };
 
@@ -99,6 +100,7 @@ struct GlorpInstrumentSpec
 struct GlorpMixerSetting
 {
     std::map<std::string, float> micLevels;
+    std::map<std::string, float> micPans;
     std::map<std::string, bool> micPhaseInvert;
     std::map<std::string, float> instrumentLevels;
     std::map<std::string, float> instrumentPans;

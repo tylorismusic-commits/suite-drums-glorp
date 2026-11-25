@@ -1105,6 +1105,8 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
                             || lowerStem.find("big rusty") != std::string::npos;
     const bool isGogodze = lowerStem.find("gogodze") != std::string::npos
                            || lowerStem.find("phu") != std::string::npos;
+    const bool isSalamander = lowerStem.find("salamander") != std::string::npos;
+    const bool isMonster = lowerStem.find("monster") != std::string::npos;
 
     struct PartInfo
     {
@@ -1228,11 +1230,54 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         {46, "Hihat", "open", "hihat", "hihat", "hihat"},
     };
 
+    static const PartInfo salamanderParts[] = {
+        {35, "Kick", "kick 1", "kick", "kick", "none"},
+        {36, "Kick", "kick 2", "kick", "kick", "none"},
+        {37, "Snare", "snare 2 off", "snare", "snare", "none"},
+        {38, "Snare", "snare 2 center", "snare", "snare", "none"},
+        {39, "Snare", "snare off", "snare", "snare", "none"},
+        {40, "Snare", "snare center", "snare", "snare", "none"},
+        {41, "Snare", "stick", "snare", "snare", "none"},
+        {42, "Hihat", "closed", "hihat", "hihat", "hihat"},
+        {44, "Hihat", "foot", "hihat", "hihat", "hihat"},
+        {46, "Hihat", "open", "hihat", "hihat", "hihat"},
+        {43, "Low Tom", "head", "ftom", "ftom", "none"},
+        {45, "High Tom", "head", "tom1", "tom1", "none"},
+        {47, "Cowbell", "head", "cowbell", "snare", "none"},
+        {48, "Ride 2", "bow", "ride2", "ride", "none"},
+        {49, "Ride 2", "bell", "ride2", "ride", "none"},
+        {50, "Ride 2", "crash", "ride2", "ride", "none"},
+        {51, "Ride 2", "crash choke", "ride2", "ride", "none"},
+        {52, "Ride 1", "bow", "ride1", "ride", "none"},
+        {53, "Ride 1", "bell", "ride1", "ride", "none"},
+        {54, "Crash 1", "choke", "crash1", "crash1", "none"},
+        {55, "Crash 1", "hit", "crash1", "crash1", "none"},
+        {56, "Crash 2", "choke", "crash2", "crash2", "none"},
+        {57, "Crash 2", "hit", "crash2", "crash2", "none"},
+        {58, "China 1", "choke", "china1", "crash2", "none"},
+        {59, "China 1", "hit", "china1", "crash2", "none"},
+        {60, "China 2", "hit", "china2", "crash2", "none"},
+        {61, "China 2", "choke", "china2", "crash2", "none"},
+        {62, "Crash 3", "hit", "crash3", "crash1", "none"},
+        {63, "Splash", "hit", "splash", "crash2", "none"},
+        {64, "Bell Chime", "hit", "bellchime", "snare", "none"},
+    };
+
     auto findAvlPart = [&](int note) -> const PartInfo *
     {
         if (!isAvlKit)
             return nullptr;
         for (const auto &part : avlParts)
+            if (part.note == note)
+                return &part;
+        return nullptr;
+    };
+
+    auto findSalamanderPart = [&](int note) -> const PartInfo *
+    {
+        if (!isSalamander && !isMonster)
+            return nullptr;
+        for (const auto &part : salamanderParts)
             if (part.note == note)
                 return &part;
         return nullptr;
@@ -1605,6 +1650,11 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
             return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
         }
 
+        if (const auto *known = findSalamanderPart(r.key))
+        {
+            return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
+        }
+
         if (const auto *known = findBigRustyPart(r.key))
         {
             return PartChoice {known->id, known->piece, known->zone, known->id, known->graphic, known->chokeGroup};
@@ -1677,6 +1727,24 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         author = "Karoryfer Samples";
         license = "CC0 1.0";
         description = "Gogodze Phu Vol II by Karoryfer Samples, 47 mix close-mic conversion from the SFZ library.";
+    }
+
+    if (isSalamander)
+    {
+        title = "Salamander Drumkit";
+        author = "Alexander Holm";
+        version = "1.0";
+        license = "CC BY-SA 3.0";
+        description = "Salamander Drumkit by Alexander Holm, converted from the original SFZ library.";
+    }
+
+    if (isMonster)
+    {
+        title = "Monster Drumkit";
+        author = "Alexander Holm / Monster Drumkit";
+        version = "1.0";
+        license = "CC BY-SA 3.0";
+        description = "Monster Drumkit, a processed Salamander drum library. Mono downmix conversion.";
     }
 
     {
@@ -1852,6 +1920,50 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
     if (mics.empty())
         mics.push_back({"close", "Close Mic", 1.0f});
 
+    if (isSalamander || isMonster)
+    {
+        auto place = [&](const std::string &id, float x, float y, float w, int z)
+        {
+            for (auto &p : pieces)
+                if (p.id == id)
+                {
+                    p.normX = x;
+                    p.normY = y;
+                    p.normW = w;
+                    p.zOrder = z;
+                }
+        };
+        place("ftom", 105.0f, -270.0f, 195.0f, 2);
+        place("tom1", -120.0f, -420.0f, 140.0f, 4);
+        place("crash1", -235.0f, -503.0f, 190.0f, 9);
+        place("crash2", 187.0f, -421.0f, 205.0f, 8);
+        place("ride1", 77.0f, -507.0f, 210.0f, 7);
+        place("ride2", 235.0f, -500.0f, 190.0f, 11);
+        place("crash3", 260.0f, -360.0f, 170.0f, 10);
+        place("china1", -330.0f, -330.0f, 145.0f, 12);
+        place("china2", 320.0f, -300.0f, 145.0f, 13);
+        place("splash", -300.0f, -450.0f, 130.0f, 14);
+        place("cowbell", -340.0f, -240.0f, 120.0f, 15);
+        place("bellchime", 300.0f, -240.0f, 120.0f, 16);
+
+        // These libraries have one overhead mic per piece rather than a
+        // combined stereo pair, so give each piece a position in the image.
+        static const struct
+        {
+            const char *name;
+            float pan;
+        } panMap[] = {
+            {"kick", 0.0f},        {"snare", 0.0f},      {"hightom", -0.25f}, {"lowtom", 0.3f},
+            {"hihat", -0.35f},     {"ride1", 0.3f},      {"ride2", 0.45f},    {"crash1", -0.5f},
+            {"crash2", 0.35f},     {"crash3", 0.5f},     {"china1", -0.45f},  {"china2", 0.5f},
+            {"splash", -0.55f},    {"bellchime", 0.6f},  {"cowbell", -0.15f},
+        };
+        for (auto &m : mics)
+            for (const auto &pm : panMap)
+                if (m.name == pm.name)
+                    m.pan = pm.pan;
+    }
+
     if (isSmDrums || isBigRusty)
     {
         auto place = [&](const std::string &id, float x, float y, float w, int z)
@@ -1921,8 +2033,11 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
             c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         return s;
     };
-    const bool isDrsKit = lowerDrs(drumkitXmlPath + " " + dk.title + " " + dk.displayName())
-                              .find("drskit") != std::string::npos;
+    const auto drumKitIdentity = lowerDrs(drumkitXmlPath + " " + dk.title + " " + dk.displayName());
+    const bool isDrsKit = drumKitIdentity.find("drskit") != std::string::npos;
+    const bool isMuldjordKit = drumKitIdentity.find("muldjord") != std::string::npos;
+    const bool isAasimonsterKit = drumKitIdentity.find("aasimonster") != std::string::npos;
+    const bool isCrocellKit = drumKitIdentity.find("crocell") != std::string::npos;
 
     if (isDrsKit)
     {
@@ -1932,6 +2047,100 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
         license = "CC BY 4.0";
         description = "DRSKit by DRSDrums and the DrumGizmo team, converted from the DrumGizmo kit. The kick back mic is polarity-inverted by default.";
     }
+    else if (isMuldjordKit)
+    {
+        title = "MuldjordKit";
+        author = "Lars Muldjord / DrumGizmo Team";
+        version = "3.0";
+        license = "CC BY 4.0";
+        description = "MuldjordKit by Lars Muldjord and the DrumGizmo team, converted from the DrumGizmo kit. Snare bottom is polarity-inverted by default.";
+    }
+    else if (isAasimonsterKit)
+    {
+        title = "Aasimonster";
+        author = "DrumGizmo Team / DIE";
+        version = "2.1";
+        license = "CC BY 4.0";
+        description = "The Aasimonster by the DrumGizmo team, recorded for DIE. Converted from the DrumGizmo kit.";
+    }
+    else if (isCrocellKit)
+    {
+        title = "CrocellKit";
+        author = "DrumGizmo Team / Crocell";
+        version = "2.0";
+        license = "CC BY 4.0";
+        description = "CrocellKit by the DrumGizmo team, recorded for the Danish metal band Crocell.";
+    }
+
+    auto defaultMicPan = [&](const std::string &rawName)
+    {
+        auto n = lowerDrs(rawName);
+        std::replace(n.begin(), n.end(), '_', ' ');
+        const bool centre = n.find("center") != std::string::npos
+                            || n.find("centre") != std::string::npos;
+        const bool left = !centre
+                          && (n.find("left") != std::string::npos
+                              || (!n.empty() && n.back() == 'l' && n.find("bell") == std::string::npos));
+        const bool right = !centre
+                           && (n.find("right") != std::string::npos
+                               || (!n.empty() && n.back() == 'r' && n.find("trigger") == std::string::npos));
+
+        if (n.find("amb") != std::string::npos)
+            return left ? -0.85f : (right ? 0.85f : 0.0f);
+        if (n.find("oh") != std::string::npos || n.find("overhead") != std::string::npos)
+            return left ? -0.55f : (right ? 0.55f : 0.0f);
+        if (n.find("ride") != std::string::npos)
+        {
+            if (left)
+                return -0.45f;
+            if (right)
+                return 0.45f;
+            return 0.0f;
+        }
+        if (n.find("crash") != std::string::npos || n.find("china") != std::string::npos)
+        {
+            if (left)
+                return -0.3f;
+            if (right)
+                return 0.3f;
+            return 0.0f;
+        }
+        if (n.find("tom") != std::string::npos)
+        {
+            if (n.find("ftom1") != std::string::npos)
+                return 0.3f;
+            if (n.find("ftom2") != std::string::npos)
+                return 0.5f;
+            if (n.find("toml") != std::string::npos)
+                return -0.3f;
+            if (n.find("tomm") != std::string::npos)
+                return 0.1f;
+            if (n.find("tomh") != std::string::npos)
+                return -0.5f;
+            if (n.find("tom1") != std::string::npos)
+                return -0.35f;
+            if (n.find("tom2") != std::string::npos)
+                return -0.1f;
+            if (n.find("tom3") != std::string::npos)
+                return 0.15f;
+            if (n.find("tom4") != std::string::npos)
+                return 0.4f;
+            return 0.0f;
+        }
+        if (n.find("hihat") != std::string::npos || n.find("hh") != std::string::npos)
+            return right ? 0.3f : -0.3f;
+        if (n.find("kdrum") != std::string::npos || n.find("kick") != std::string::npos)
+        {
+            if (left)
+                return -0.2f;
+            if (right)
+                return 0.2f;
+            return 0.0f;
+        }
+        if (centre)
+            return 0.0f;
+        return 0.0f;
+    };
 
     mics.clear();
     for (const auto &ch : dk.channels)
@@ -1939,7 +2148,19 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
         GlorpMic mic;
         mic.name = ch.name;
         mic.title = ch.title.empty() ? ch.name : ch.title;
-        mic.phaseInvert = isDrsKit && lowerDrs(ch.name) == "kdrum_back";
+        mic.pan = defaultMicPan(ch.name);
+
+        const auto lowerName = lowerDrs(ch.name);
+        if (lowerName.find("trigger") != std::string::npos
+            || lowerName.find("dm5") != std::string::npos
+            || lowerName.find("alesis") != std::string::npos)
+            mic.defaultLevel = 0.0f;
+
+        if (isDrsKit && lowerName == "kdrum_back")
+            mic.phaseInvert = true;
+        if (isMuldjordKit && (lowerName == "snare_bottom" || lowerName == "snare bottom"))
+            mic.phaseInvert = true;
+
         mics.push_back(std::move(mic));
     }
     if (mics.empty())
@@ -2096,6 +2317,15 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
             }
         }
 
+        // DrumGizmo kits may rename channels through <channelmap> (for example
+        // Aasimonster's "Alesis" trigger feed maps to the "Trigger" channel).
+        // The kit's mic list uses the destination names, so resolve each
+        // sample channel through the instrument's channelmap before storing it.
+        std::map<std::string, std::string> channelRemap;
+        for (const auto &cm : inst.channelMaps)
+            if (!cm.in.empty() && !cm.out.empty())
+                channelRemap[cm.in] = cm.out;
+
         for (const auto &sh : inst.samples)
         {
             EditableHit eh;
@@ -2106,6 +2336,8 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
             {
                 EditableMicSample ms;
                 ms.mic = af.channel;
+                if (const auto remapIt = channelRemap.find(ms.mic); remapIt != channelRemap.end())
+                    ms.mic = remapIt->second;
                 ms.fileName = fs::path(af.file).filename().string();
                 ms.fileChannel = af.fileChannel;
                 if (af.archiveOffset >= 0 && !inst.archivePath.empty())
@@ -2233,6 +2465,7 @@ bool GlorpKitProject::exportToGlorpKit(const std::string &outputArchivePath, std
         {
             ss << "    <mic name=\"" << escapeXml(m.name) << "\" " << "title=\"" << escapeXml(m.title) << "\" "
                << "default=\"" << std::fixed << std::setprecision(2) << m.defaultLevel << "\" "
+               << "pan=\"" << std::fixed << std::setprecision(3) << m.pan << "\" "
                << "phase=\"" << (m.phaseInvert ? "true" : "false") << "\"/>\n";
         }
         ss << "  </mics>\n";
@@ -2312,7 +2545,8 @@ bool GlorpKitProject::exportToGlorpKit(const std::string &outputArchivePath, std
         ms << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<glorp-mixer>\n";
         for (const auto &m : mics)
             ms << "  <mic name=\"" << escapeXml(m.name) << "\" level=\"" << std::fixed << std::setprecision(2)
-               << m.defaultLevel << "\" phase=\"" << (m.phaseInvert ? "true" : "false") << "\"/>\n";
+               << m.defaultLevel << "\" pan=\"" << std::fixed << std::setprecision(3) << m.pan
+               << "\" phase=\"" << (m.phaseInvert ? "true" : "false") << "\"/>\n";
 
         for (const auto &p : pieces)
             for (const auto &z : p.zones)
