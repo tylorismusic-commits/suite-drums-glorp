@@ -153,6 +153,59 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_HHCC4") != nullptr)
+    {
+        proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+
+        auto renderTail = [&] (bool closePedal)
+        {
+            auto &sampler = proc.getSampler();
+            sampler.allNotesOff();
+            sampler.setHiHatPedal (0.0f);
+
+            double tailSum = 0.0;
+            int tailCount = 0;
+            bool opened = false;
+
+            for (int block = 0; block < 80; ++block)
+            {
+                juce::MidiBuffer midi;
+                if (block == 0)
+                    midi.addEvent (juce::MidiMessage::noteOn (1, 46, static_cast<juce::uint8> (110)), 0);
+                if (closePedal && block == 12)
+                    sampler.setHiHatPedal (std::getenv ("GLORP_HHCC4_SOFT") != nullptr ? 0.6f : 1.0f);
+
+                buffer.clear();
+                proc.processBlock (buffer, midi);
+
+                const auto startSample = block * 512;
+                if (startSample >= 14400 && startSample < 28800)
+                {
+                    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+                    {
+                        const auto *d = buffer.getReadPointer (ch);
+                        for (int i = 0; i < buffer.getNumSamples(); ++i)
+                        {
+                            tailSum += static_cast<double> (d[i]) * d[i];
+                            ++tailCount;
+                        }
+                    }
+                }
+                opened = opened || block == 0;
+            }
+
+            const auto rms = std::sqrt (tailSum / std::max (1, tailCount));
+            return juce::Decibels::gainToDecibels (static_cast<float> (rms));
+        };
+
+        const auto openDb = renderTail (false);
+        const auto closedDb = renderTail (true);
+        std::cout << "CC4 open tail=" << openDb << " dB, pedal closed=" << closedDb
+                  << " dB, reduction=" << (openDb - closedDb) << " dB" << std::endl;
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_HHCHOKE") != nullptr)
     {
         int openIdx = -1;

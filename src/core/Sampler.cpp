@@ -1923,11 +1923,14 @@ void Sampler::setHiHatPedal(float pedalValue) noexcept
     const float prev = hiHatPedal.exchange(clamped, std::memory_order_relaxed);
 
     // Choke open hi-hats when pedal moves from open towards closed
-    if (prev < 0.50f && clamped >= 0.55f)
+    const bool chokedOpenHat = (prev < 0.50f && clamped >= 0.55f);
+    if (chokedOpenHat)
         chokeOpenHiHats(20, sampleClock);
 
-    // Firm downward foot stomp: trigger pedal chick
-    if (clamped - prev > 0.22f && clamped >= 0.70f)
+    // Firm downward foot stomp: trigger pedal chick, but not when it would
+    // immediately mask the open-hat choke (the chick on the same pedal movement
+    // made it sound as if the choke had failed on some kits).
+    if (!chokedOpenHat && clamped - prev > 0.22f && clamped >= 0.70f)
     {
         lastPedalDownClock = sampleClock;
         lastPedalDownSpeed = clamped - prev;
