@@ -2,6 +2,12 @@
 
 #include <cstring>
 #include <fstream>
+#include <set>
+
+#if defined(__linux__) || defined(__unix__)
+#    include <sys/mman.h>
+#    include <unistd.h>
+#endif
 
 #if defined(__linux__) || defined(__unix__)
 #    include <sys/mman.h>
@@ -216,6 +222,52 @@ SampleCache::Handle SampleCache::openFromArchive(const std::string &archivePath,
     handle.sampleRate = detail != nullptr ? detail->sampleRate : 44100.0;
 
     return handle;
+}
+
+void SampleCache::prefetch(const std::vector<Handle> &handles, double seconds)
+{
+#if defined(__linux__) || defined(__unix__)
+    const long pageSize = ::sysconf(_SC_PAGESIZE);
+    if (pageSize <= 0 || seconds <= 0.0)
+        return;
+
+    std::set<const Detail *> seen;
+
+    for (const auto &handle : handles)
+    {
+        if (!handle.valid || handle.detail == nullptr)
+            continue;
+
+        if (!seen.insert(handle.detail.get()).second)
+            continue;
+
+        const auto &d = *handle.detail;
+        const std::size_t frameBytes =
+            static_cast<std::size_t>(d.bytesPerSample) * static_cast<std::size_t>(d.numChannels);
+        if (frameBytes == 0 || d.numFrames <= 0)
+            continue;
+
+        const auto frames = static_cast<std::size_t>(
+            std::min<int64_t>(d.numFrames, static_cast<int64_t>(seconds * d.sampleRate)));
+        if (frames == 0)
+            continue;
+
+        const std::uint8_t *audio = d.interleaved != nullptr
+                                        ? reinterpret_cast<const std::uint8_t *>(d.interleaved)
+                                        : d.raw;
+        if (audio == nullptr)
+            continue;
+
+        const auto addr = reinterpret_cast<std::uintptr_t>(audio);
+        const auto aligned = addr & ~static_cast<std::uintptr_t>(pageSize - 1);
+        const std::size_t length = static_cast<std::size_t>(addr - aligned) + frames * frameBytes;
+
+        ::madvise(reinterpret_cast<void *>(aligned), length, MADV_WILLNEED);
+    }
+#else
+    (void) handles;
+    (void) seconds;
+#endif
 }
 
 void SampleCache::trim()

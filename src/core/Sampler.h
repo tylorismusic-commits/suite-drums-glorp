@@ -129,6 +129,9 @@ class Sampler
     */
     bool loadKit(DrumKit kit, juce::String &error);
 
+    /// True once the background sample readahead after a kit load has finished.
+    bool prefetchIdle() const { return prefetchPool.getNumJobs() == 0; }
+
     void unloadKit();
 
     bool isKitLoaded() const noexcept { return kitLoaded.load(); }
@@ -537,6 +540,17 @@ class Sampler
     juce::String kitTitle;
 
     SampleCache sampleCache;
+
+    /// Background readahead for freshly loaded kits. Declared after the sample
+    /// cache so it is destroyed (and its jobs joined) first.
+    juce::ThreadPool prefetchPool {
+        juce::ThreadPoolOptions {}
+            .withNumberOfThreads (1)
+            .withThreadName ("glorp-prefetch")
+            .withDesiredThreadPriority (juce::Thread::Priority::low)
+    };
+
+    void startPrefetch(std::vector<SampleCache::Handle> handles);
 
   public:
     /// Kit-level read-only information for the UI. Safe to call from the message

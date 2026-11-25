@@ -147,11 +147,9 @@ void Sampler::setSampleRateAndBlock(double rate, int blockSize)
 //==============================================================================
 bool Sampler::loadKit(DrumKit kit, juce::String &error)
 {
-    const juce::ScopedLock lock(kitLock);
-
-    kitLoaded.store(false);
-    allNotesOff();
-
+    // Resolving every sample handle maps hundreds of archive slices and can
+    // take seconds on multi-GB kits. Build that outside the render lock so the
+    // audio thread keeps playing the previous kit instead of falling silent.
     if (kit.instruments.empty())
     {
         error = kit.error.empty() ? juce::String("the kit has no playable instruments") : juce::String(kit.error);
@@ -209,6 +207,14 @@ bool Sampler::loadKit(DrumKit kit, juce::String &error)
         error = "None of this kit's sample files could be read. Check the kit directory is still in place.";
         return false;
     }
+
+    std::vector<SampleCache::Handle> warmHandles;
+
+    {
+    const juce::ScopedLock lock(kitLock);
+
+    kitLoaded.store(false);
+    allNotesOff();
 
     instruments_ = std::move(resolved);
     kitChannels_ = kit.channels;
@@ -385,8 +391,33 @@ bool Sampler::loadKit(DrumKit kit, juce::String &error)
     recomputeSoloFlags();
     sampleCache.trim();
 
+    // Keep the handles alive for the background readahead job; they hold the
+    // memory mappings so the samples cannot be unmapped while warming up.
+    for (const auto &inst : instruments_)
+        for (const auto &hit : inst.hits)
+            for (const auto &channelRef : hit.channels)
+                warmHandles.push_back(channelRef.handle);
+
     kitLoaded.store(true);
+    }
+
+    startPrefetch(std::move(warmHandles));
     return true;
+}
+
+void Sampler::startPrefetch(std::vector<SampleCache::Handle> handles)
+{
+    if (handles.empty())
+        return;
+
+    // One low-priority worker: reads the first ~2 s of each sample so the
+    // audio thread does not page-fault from disk on the first hit.
+    prefetchPool.addJob(
+        [handles = std::move(handles)]() mutable
+        {
+            SampleCache::prefetch(handles, 2.0);
+            handles.clear();
+        });
 }
 
 void Sampler::unloadKit()
@@ -2795,6 +2826,18 @@ void Sampler::render(float *const *output, int numOutputChannels, int numSamples
                 destR[i] += v.mixR[index] * gain * gainR;
             }
         }
+    }
+
+    // A single non-finite value (a malformed float sample or a blown filter
+    // state) can poison the host's whole mix. Keep every output finite.
+    for (int c = 0; c < numOutputChannels; ++c)
+    {
+        if (output[c] == nullptr)
+            continue;
+
+        for (int i = 0; i < numSamples; ++i)
+            if (! std::isfinite (output[c][i]))
+                output[c][i] = 0.0f;
     }
 
     sampleClock = endOfBlock;

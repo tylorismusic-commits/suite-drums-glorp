@@ -163,6 +163,13 @@ class SampleCache
     /// Drops mapped files that nothing holds a handle to.
     void trim();
 
+    /** Asynchronously asks the OS to read ahead the first `seconds` of each
+        distinct sample. Runs on the calling thread, so call it from a worker.
+        This keeps the audio thread from taking disk page faults on the first
+        hit after a large kit is loaded.
+    */
+    static void prefetch(const std::vector<Handle> &handles, double seconds);
+
     /// Number of distinct files currently mapped. Used by tests and diagnostics.
     int mappedFileCount() const;
 
