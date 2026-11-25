@@ -10,6 +10,7 @@
 #include <cctype>
 #include <iostream>
 #include <string>
+#include <vector>
 
 static bool hasExtensionCI (const std::string& path, const std::string& ext)
 {
@@ -21,16 +22,33 @@ static bool hasExtensionCI (const std::string& path, const std::string& ext)
 
 int main (int argc, char** argv)
 {
-    if (argc != 3)
+    bool useProfiles = true;
+    std::vector<std::string> positional;
+
+    for (int i = 1; i < argc; ++i)
     {
-        std::cerr << "Usage: " << argv[0] << " <input.xml|input.sfz> <output.glorpkit>" << std::endl;
+        const std::string arg (argv[i]);
+        if (arg == "--no-profiles")
+            useProfiles = false;
+        else if (arg == "--profiles")
+            useProfiles = true;
+        else
+            positional.push_back (arg);
+    }
+
+    if (positional.size() != 2)
+    {
+        std::cerr << "Usage: " << argv[0]
+                  << " [--no-profiles] <input.xml|input.sfz> <output.glorpkit>" << std::endl
+                  << "  --no-profiles  do a plain import instead of matching a known share kit" << std::endl;
         return 2;
     }
 
-    const std::string inputPath = argv[1];
-    const std::string outputPath = argv[2];
+    const std::string inputPath = positional[0];
+    const std::string outputPath = positional[1];
 
     glorp::GlorpKitProject project;
+    project.useShareKitProfiles = useProfiles;
     std::string error;
 
     bool ok = false;
@@ -61,5 +79,7 @@ int main (int argc, char** argv)
     std::cout << "  Title: " << project.title << std::endl;
     std::cout << "  Pieces: " << project.pieces.size() << ", mics: " << project.mics.size()
               << ", samples: " << sampleCount << ", rate: " << project.sampleRate << " Hz" << std::endl;
+    std::cout << "  Share kit profiles: " << (project.useShareKitProfiles ? "on" : "off")
+              << ", mono export: " << (project.exportMonoSamples ? "yes" : "no") << std::endl;
     return 0;
 }

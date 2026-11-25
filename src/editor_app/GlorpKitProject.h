@@ -118,6 +118,21 @@ class GlorpKitProject
     int sampleRate = 48000;
     std::string loadedFilePath;
 
+    /** When true, recognised free/share kits are converted with the same
+        grouping, metadata, default pans and sample format as the published
+        .glorpkit files. Turn it off for a plain, generic import. */
+    bool useShareKitProfiles = true;
+
+    /** Set by the detected share-kit profile: stereo sources are downmixed to
+        mono WAV on export, matching the published kits. */
+    bool exportMonoSamples = false;
+
+    /** Profiles for kits published without a factory mixer can omit it. */
+    bool writeFactoryMixer = true;
+
+    /** Older published kits have no pan/phase attributes on their mics. */
+    bool writeMicPanPhase = true;
+
     std::vector<GlorpMic> mics;
     std::vector<EditablePiece> pieces;
 
@@ -209,6 +224,10 @@ class GlorpKitProject
     bool openGlorpKitArchive(const std::string &archivePath, std::string &outError);
     bool importDrumGizmoXml(const std::string &drumkitXmlPath, std::string &outError);
     bool importSfzKit(const std::string &sfzFilePath, std::string &outError);
+
+    /** Naked Drums ships as 16 per-mic SFZ files under Multi/. Imports the whole
+        set and merges each hit across mics, matching the published kit. */
+    bool importNakedMultiMic(const std::string &sfzFilePath, std::string &outError);
     bool exportToGlorpKit(const std::string &outputArchivePath, std::string &outError) const;
     bool relinkSamplesFromDirectory(const std::string &directoryPath);
 

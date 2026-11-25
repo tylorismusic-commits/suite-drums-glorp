@@ -53,23 +53,27 @@ No practice view, setlists, song database, backing tracks, tempo detection, metr
 
 ![Suite Kit Studio](docs/kit_editor.png)
 
-### Converting a multi-mic SFZ library
+### Reproducing the share kits
 
-Suite Kit Studio imports flat SFZ instruments directly. Libraries that use
-`#include`, macro definitions and a separate SFZ file per mic need the batch
-converter. The Naked Drums converter is included as an example:
+Suite Kit Studio and `SuiteKitConverter` have share-kit profiles, on by
+default. Importing a recognised original source reproduces the published
+`.glorpkit` file: grouping, MIDI notes, default pans, polarity, mono downmix
+and FLAC-to-WAV conversion. Toggle the profiles in **Import Kit... > Apply
+share-kit profiles**, or pass `--no-profiles` to the command-line converter for
+a plain import.
 
 ```bash
-./tools/naked_drums_to_glorpkit.py \
-    --source "/path/to/Wilkinson Audio/Naked Drums" \
-    --output "$HOME/.config/SuiteDrumsGlorp/kits/Naked Drums.glorpkit"
+# Recognised source -> same kit as the public share
+SuiteKitConverter DRSKit.xml DRSKit.glorpkit
+
+# Plain, generic import
+SuiteKitConverter --no-profiles DRSKit.xml DRSKitPlain.glorpkit
 ```
 
-It resolves the SFZ includes/macros, merges the 16 mic channels, transcodes
-FLAC to 24-bit WAV (via `sox`), and writes a multi-mic `.glorpkit`. The source
-samples are CC-BY 4.0 by Wilkinson Audio; the converted kit keeps that
-attribution and license in `kit.xml`. A full Naked Drums conversion is about
-2.7 GB.
+Sources that use `#include`, macros and one SFZ file per mic (Naked Drums) are
+merged automatically: point the converter at any file in `Multi/*.sfz` and it
+resolves the includes, merges all mic channels and splits stereo mics. The
+`tools/naked_drums_to_glorpkit.py` script remains available for scripting.
 
 ## Download
 

@@ -43,11 +43,11 @@ cp "${SCRIPT_DIR}/assets/suite_drums_icon.png" \
 cp "${SCRIPT_DIR}/assets/suite_kit_studio_icon.png" \
    "$HOME/.local/share/icons/hicolor/256x256/apps/suite_kit_studio_icon.png" 2>/dev/null || true
 
-cat > "$HOME/.local/share/applications/suite-kit-studio.desktop" <<'EOF'
+cat > "$HOME/.local/share/applications/suite-kit-studio.desktop" <<EOF
 [Desktop Entry]
 Name=Suite Kit Studio
 Comment=.glorpkit Drum Kit Creator & Editor
-Exec=SuiteKitStudio
+Exec=$HOME/.local/bin/SuiteKitStudio
 Icon=suite_kit_studio_icon
 Terminal=false
 Type=Application

@@ -3334,14 +3334,38 @@ void GlorpKitEditorComponent::promptOpenKit()
 
 void GlorpKitEditorComponent::promptImportKit()
 {
-    auto chooser = std::make_shared<juce::FileChooser>("Import DrumGizmo XML or SFZ Kit", juce::File(), "*.xml;*.sfz");
-    chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                         [this, chooser](const juce::FileChooser &fc)
-                         {
-                             auto f = fc.getResult();
-                             if (f.existsAsFile())
-                                 openKitFile(f);
-                         });
+    juce::PopupMenu menu;
+    menu.addItem (1, "Import DrumGizmo XML / SFZ...");
+    menu.addSeparator();
+    menu.addItem (2, "Apply share-kit profiles", true, project.useShareKitProfiles);
+
+    menu.showMenuAsync (
+        juce::PopupMenu::Options().withTargetScreenArea (localAreaToGlobal (btnImportKit.toNearestInt())),
+        [this] (int result)
+        {
+            if (result == 2)
+            {
+                project.useShareKitProfiles = ! project.useShareKitProfiles;
+                showStatusToast (project.useShareKitProfiles
+                                     ? "Share-kit profiles ON: known kits are converted exactly"
+                                     : "Share-kit profiles OFF: generic import");
+                return;
+            }
+
+            if (result != 1)
+                return;
+
+            auto chooser = std::make_shared<juce::FileChooser> (
+                "Import DrumGizmo XML or SFZ Kit", juce::File(), "*.xml;*.sfz");
+            chooser->launchAsync (
+                juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                [this, chooser] (const juce::FileChooser &fc)
+                {
+                    auto f = fc.getResult();
+                    if (f.existsAsFile())
+                        openKitFile (f);
+                });
+        });
 }
 
 void GlorpKitEditorComponent::promptSaveGlorpKit()

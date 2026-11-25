@@ -394,9 +394,51 @@ void DrumKitView::setHitGlowColour(juce::Colour colour)
     repaint();
 }
 
+juce::Image DrumKitView::getCowbellImage()
+{
+    if (cowbellImage.isValid())
+        return cowbellImage;
+
+    const int size = 256;
+    juce::Image image(juce::Image::ARGB, size, size, true);
+    juce::Graphics g(image);
+
+    const auto ink = theme.ink;
+    const float s = static_cast<float>(size);
+
+    juce::Path body;
+    body.startNewSubPath(0.32f * s, 0.30f * s);
+    body.lineTo(0.68f * s, 0.30f * s);
+    body.lineTo(0.76f * s, 0.66f * s);
+    body.quadraticTo(0.50f * s, 0.75f * s, 0.24f * s, 0.66f * s);
+    body.closeSubPath();
+
+    g.setColour(juce::Colour(0xffb9b1a3));
+    g.fillPath(body);
+    g.setColour(ink);
+    g.strokePath(body, juce::PathStrokeType(7.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    g.drawLine(0.25f * s, 0.655f * s, 0.75f * s, 0.655f * s, 6.0f);
+
+    juce::Path handle;
+    handle.addRoundedRectangle(0.42f * s, 0.15f * s, 0.16f * s, 0.17f * s, 0.07f * s);
+    g.setColour(juce::Colour(0xff8e8779));
+    g.fillPath(handle);
+    g.setColour(ink);
+    g.strokePath(handle, juce::PathStrokeType(6.0f));
+
+    g.setColour(juce::Colours::white.withAlpha(0.30f));
+    g.drawLine(0.42f * s, 0.36f * s, 0.38f * s, 0.60f * s, 4.0f);
+
+    cowbellImage = image;
+    return cowbellImage;
+}
+
 juce::Image DrumKitView::getDefaultImageForGraphic(const std::string &graphic, KitPiece fallbackPiece)
 {
     const auto raw = juce::String(graphic).toLowerCase().removeCharacters(" _-");
+    if (raw == "cowbell")
+        return getCowbellImage();
     if (raw == "kick" || raw == "bd" || raw == "bassdrum")
         return pieces[static_cast<size_t>(KitPiece::kick)].image;
     if (raw == "snare" || raw == "sd")
@@ -802,22 +844,38 @@ int DrumKitView::dynamicPieceAt(juce::Point<float> pos) const
                   return dynamicPieces[a].zOrder > dynamicPieces[b].zOrder; // Front to back
               });
 
+    int best = -1;
+    float bestDistance = 1.0e9f;
+
     for (auto idx : hitOrder)
     {
         const auto &dp = dynamicPieces[idx];
-        if (dp.bounds.contains(pos) && dp.image.isValid())
-        {
-            const float u = (pos.x - dp.bounds.getX()) / dp.bounds.getWidth();
-            const float v = (pos.y - dp.bounds.getY()) / dp.bounds.getHeight();
-            const int px = juce::jlimit(0, dp.image.getWidth() - 1, static_cast<int>(u * dp.image.getWidth()));
-            const int py = juce::jlimit(0, dp.image.getHeight() - 1, static_cast<int>(v * dp.image.getHeight()));
+        if (!dp.bounds.contains(pos) || !dp.image.isValid())
+            continue;
 
-            if (dp.image.getPixelAt(px, py).getAlpha() > 25)
-                return static_cast<int>(idx);
+        const float u = (pos.x - dp.bounds.getX()) / dp.bounds.getWidth();
+        const float v = (pos.y - dp.bounds.getY()) / dp.bounds.getHeight();
+        const int px = juce::jlimit(0, dp.image.getWidth() - 1, static_cast<int>(u * dp.image.getWidth()));
+        const int py = juce::jlimit(0, dp.image.getHeight() - 1, static_cast<int>(v * dp.image.getHeight()));
+
+        if (dp.image.getPixelAt(px, py).getAlpha() <= 25)
+            continue;
+
+        // Overlapping sprites (for example a small cowbell drawn over the
+        // snare) should not steal a click aimed at the larger piece. Pick the
+        // piece whose centre is nearest the click; z-order breaks ties.
+        const auto centre = dp.bounds.getCentre();
+        const float scale = std::max(1.0f, std::max(dp.bounds.getWidth(), dp.bounds.getHeight()));
+        const float distance = pos.getDistanceFrom(centre) / scale;
+
+        if (best < 0 || distance < bestDistance - 0.01f)
+        {
+            best = static_cast<int>(idx);
+            bestDistance = distance;
         }
     }
 
-    return -1;
+    return best;
 }
 
 KitPiece DrumKitView::pieceAt(juce::Point<float> pos) const

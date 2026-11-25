@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <iomanip>
 #include <map>
@@ -63,6 +64,8 @@ constexpr DefaultPieceLayout kDefaultPieces[] = {
     {"ride", "Ride Cymbal 20\"", "ride", 5, "none", 77.7f, -507.0f, 210.0f, 7, 51},
     {"crash2", "Crash 2 (Right)", "crash2", 4, "crash2", 187.3f, -420.8f, 205.0f, 8, 57},
     {"crash1", "Crash 1 (Left)", "crash1", 4, "crash1", -235.0f, -502.9f, 190.0f, 9, 49},
+    {"cowbell", "Cowbell", "cowbell", 0, "none", -345.0f, -150.0f, 110.0f, 12, 56},
+    {"china", "China", "crash2", 4, "none", 330.0f, -380.0f, 140.0f, 15, 52},
 };
 } // namespace
 
@@ -1077,8 +1080,712 @@ bool GlorpKitProject::openGlorpKitArchive(const std::string &archivePath, std::s
 }
 
 //==============================================================================
+namespace
+{
+std::string nakedSanitize(const std::string &value)
+{
+    std::string out;
+    for (char raw : value)
+    {
+        const auto c = static_cast<unsigned char>(raw);
+        if (std::isalnum(c))
+            out += static_cast<char>(std::tolower(c));
+        else if (raw == '-' || raw == '_')
+            out += raw;
+        else if (std::isspace(c))
+            out += '_';
+    }
+    while (!out.empty() && out.front() == '_')
+        out.erase(out.begin());
+    while (!out.empty() && out.back() == '_')
+        out.pop_back();
+    return out.empty() ? "piece" : out;
+}
+
+std::string nakedExpandMacros(const std::string &text,
+                              const std::map<std::string, std::string> &macros,
+                              int depth)
+{
+    if (depth > 12 || text.find('$') == std::string::npos)
+        return text;
+
+    std::string out;
+    size_t i = 0;
+    while (i < text.size())
+    {
+        if (text[i] != '$')
+        {
+            out += text[i++];
+            continue;
+        }
+
+        size_t j = i + 1;
+        while (j < text.size()
+               && (std::isalnum(static_cast<unsigned char>(text[j])) || text[j] == '_'))
+            ++j;
+
+        const std::string token = text.substr(i, j - i);
+        bool replaced = false;
+        for (size_t k = token.size(); k > 1; --k)
+        {
+            const auto it = macros.find(token.substr(0, k));
+            if (it != macros.end())
+            {
+                out += nakedExpandMacros(it->second, macros, depth + 1);
+                out += token.substr(k);
+                i = j;
+                replaced = true;
+                break;
+            }
+        }
+
+        if (!replaced)
+        {
+            out += token;
+            i = j;
+        }
+    }
+    return out;
+}
+
+bool nakedLoadSfzLines(const fs::path &file,
+                       const fs::path &root,
+                       std::map<std::string, std::string> &macros,
+                       std::vector<std::string> &out,
+                       int depth)
+{
+    if (depth > 16)
+        return false;
+
+    std::ifstream input(file);
+    if (!input.is_open())
+        return false;
+
+    std::string line;
+    while (std::getline(input, line))
+    {
+        const auto comment = line.find("//");
+        if (comment != std::string::npos)
+            line.erase(comment);
+
+        auto trimCopy = [](std::string s)
+        {
+            while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front())))
+                s.erase(s.begin());
+            while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
+                s.pop_back();
+            return s;
+        };
+        line = trimCopy(line);
+        if (line.empty())
+            continue;
+
+        if (line.rfind("#include", 0) == 0)
+        {
+            const auto q1 = line.find('"');
+            const auto q2 = q1 == std::string::npos ? std::string::npos : line.find('"', q1 + 1);
+            std::string includeName = (q1 != std::string::npos && q2 != std::string::npos)
+                                          ? line.substr(q1 + 1, q2 - q1 - 1)
+                                          : trimCopy(line.substr(8));
+            fs::path includePath(includeName);
+            fs::path resolved = includePath.is_absolute() ? includePath : (root / includePath);
+            if (!fs::exists(resolved))
+                resolved = file.parent_path() / includePath;
+            nakedLoadSfzLines(resolved, root, macros, out, depth + 1);
+            continue;
+        }
+
+        if (line.find("#define") != std::string::npos)
+        {
+            auto pos = line.find("#define") + 7;
+            while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos])))
+                ++pos;
+            const auto nameStart = pos;
+            while (pos < line.size() && !std::isspace(static_cast<unsigned char>(line[pos])))
+                ++pos;
+            const std::string name = line.substr(nameStart, pos - nameStart);
+            while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos])))
+                ++pos;
+            const std::string value = trimCopy(line.substr(pos));
+            if (!name.empty() && !value.empty())
+                macros[name] = nakedExpandMacros(value, macros, depth);
+            continue;
+        }
+
+        out.push_back(nakedExpandMacros(line, macros, depth));
+    }
+    return true;
+}
+
+std::string nakedMapMaster(const std::string &label)
+{
+    std::string low = label;
+    for (auto &c : low)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    low.erase(std::remove_if(low.begin(), low.end(), [](char c) { return c == ' '; }), low.end());
+    const auto stripLab = low.rfind("$lab_", 0) == 0 ? low.substr(5) : low;
+
+    if (stripLab.rfind("snr", 0) == 0 || stripLab.rfind("snare", 0) == 0)
+    {
+        if (!stripLab.empty() && stripLab.back() == '1')
+            return "Snare 1";
+        if (!stripLab.empty() && stripLab.back() == '2')
+            return "Snare 2";
+        return "Snare";
+    }
+
+    static const std::map<std::string, std::string> table = {
+        {"kick", "Kick"},          {"snare", "Snare"},        {"tom1", "Tom 1"},
+        {"tom2", "Tom 2"},         {"tom3", "Tom 3"},         {"tom4", "Tom 4"},
+        {"tom5", "Tom 5"},         {"hats", "Hihat"},         {"hh", "Hihat"},
+        {"ride", "Ride"},          {"rd", "Ride"},            {"crash1", "Crash 1"},
+        {"crash2", "Crash 2"},     {"crs1", "Crash 1"},       {"crs2", "Crash 2"},
+        {"splash1", "Splash 1"},   {"splash2", "Splash 2"},   {"spl1", "Splash 1"},
+        {"spl2", "Splash 2"},      {"china1", "China 1"},     {"china2", "China 2"},
+        {"chn1", "China 1"},       {"chn2", "China 2"},
+    };
+
+    const auto it = table.find(stripLab);
+    if (it != table.end())
+        return it->second;
+
+    if (stripLab.empty())
+        return "Percussion";
+
+    std::string pretty = stripLab;
+    pretty[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(pretty[0])));
+    return pretty;
+}
+
+std::string nakedMapZone(const std::string &label)
+{
+    std::string low = label;
+    for (auto &c : low)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    while (!low.empty() && std::isspace(static_cast<unsigned char>(low.front())))
+        low.erase(low.begin());
+    while (!low.empty() && std::isspace(static_cast<unsigned char>(low.back())))
+        low.pop_back();
+
+    static const std::map<std::string, std::string> table = {
+        {"half", "semi"},   {"center", "center"}, {"sidestick", "sidestick"},
+        {"tight", "tight"}, {"closed", "closed"}, {"pedal", "pedal"},
+        {"open", "open"},   {"bow", "bow"},       {"bell", "bell"},
+        {"edge", "edge"},   {"choke", "choke"},
+    };
+    const auto it = table.find(low);
+    return it != table.end() ? it->second : (low.empty() ? "center" : low);
+}
+
+std::string nakedGraphicFor(const std::string &piece, const std::string &zone)
+{
+    std::string p = piece;
+    for (auto &c : p)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    if (p.find("kick") != std::string::npos)
+        return "kick";
+    if (p.find("snare") != std::string::npos)
+        return "snare";
+    if (p.find("hihat") != std::string::npos || p.find("hat") != std::string::npos)
+        return "hihat";
+    if (p.find("floor") != std::string::npos || p == "tom4" || p == "tom5" || p == "tom 4" || p == "tom 5")
+        return "ftom";
+    if (p.find("tom") != std::string::npos)
+        return "tom2";
+    if (p.find("ride") != std::string::npos)
+        return "ride";
+    if (p.find("crash2") != std::string::npos || p.find("crash 2") != std::string::npos)
+        return "crash2";
+    if (p.find("crash") != std::string::npos || p.find("splash") != std::string::npos
+        || p.find("china") != std::string::npos)
+        return "crash1";
+    (void) zone;
+    return "snare";
+}
+} // namespace
+
+bool GlorpKitProject::importNakedMultiMic(const std::string &sfzFilePath, std::string &outError)
+{
+    const fs::path sfzPath = fs::absolute(sfzFilePath);
+    const fs::path multiDir = sfzPath.parent_path();
+    const fs::path root = multiDir.parent_path();
+    const fs::path samplesDir = root / "Samples";
+
+    if (!fs::is_directory(multiDir) || !fs::is_directory(samplesDir))
+    {
+        outError = "Naked Drums: expected Multi/ and Samples/ next to the SFZ file";
+        return false;
+    }
+
+    std::vector<fs::path> sfzFiles;
+    for (const auto &entry : fs::directory_iterator(multiDir))
+        if (entry.path().extension() == ".sfz")
+            sfzFiles.push_back(entry.path());
+    std::sort(sfzFiles.begin(), sfzFiles.end());
+
+    if (sfzFiles.empty())
+    {
+        outError = "Naked Drums: no Multi/*.sfz files found";
+        return false;
+    }
+
+    auto parseOps = [] (const std::string &text, std::map<std::string, std::string> &ops)
+    {
+        size_t i = 0;
+        while (i < text.size())
+        {
+            while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
+                ++i;
+            if (i >= text.size())
+                break;
+
+            const size_t keyStart = i;
+            while (i < text.size() && text[i] != '=' && !std::isspace(static_cast<unsigned char>(text[i])))
+                ++i;
+            std::string key = text.substr(keyStart, i - keyStart);
+            for (auto &c : key)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+            while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
+                ++i;
+            if (i >= text.size() || text[i] != '=')
+                continue;
+            ++i;
+            while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
+                ++i;
+
+            std::string value;
+            if (i < text.size() && (text[i] == '"' || text[i] == '\''))
+            {
+                const char quote = text[i++];
+                while (i < text.size() && text[i] != quote)
+                    value += text[i++];
+                if (i < text.size())
+                    ++i;
+            }
+            else
+            {
+                const size_t valueStart = i;
+                while (i < text.size() && !std::isspace(static_cast<unsigned char>(text[i])))
+                    ++i;
+                value = text.substr(valueStart, i - valueStart);
+            }
+
+            if (!key.empty())
+                ops[key] = value;
+        }
+    };
+
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    std::map<std::string, int> channelCache;
+    auto channelCountFor = [&] (const fs::path &path) -> int
+    {
+        const auto key = path.string();
+        const auto it = channelCache.find(key);
+        if (it != channelCache.end())
+            return it->second;
+
+        int channels = 1;
+        std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(juce::File(path.string())));
+        if (reader != nullptr)
+            channels = static_cast<int>(reader->numChannels);
+        channelCache[key] = channels;
+        return channels;
+    };
+
+    struct MicDef
+    {
+        std::string name;
+        std::string title;
+    };
+
+    struct ZoneBuild
+    {
+        std::string name;
+        std::string graphic;
+        int note = 60;
+        std::vector<std::pair<int, int>> tiers;
+        std::vector<EditableHit> hits;
+        std::vector<std::tuple<int, int, int>> hitOrder;
+        std::map<std::tuple<int, int, int>, size_t> hitIndex;
+    };
+
+    struct PieceBuild
+    {
+        std::string id;
+        std::string name;
+        std::string graphic;
+        std::string choke;
+        std::vector<ZoneBuild> zones;
+        std::map<std::string, size_t> zoneIndex;
+    };
+
+    std::vector<PieceBuild> builds;
+    std::map<std::string, size_t> pieceIndex;
+    std::vector<MicDef> micDefs;
+    std::set<std::string> micSeen;
+
+    auto addMic = [&] (const std::string &name, const std::string &title)
+    {
+        if (micSeen.insert(name).second)
+            micDefs.push_back({name, title});
+    };
+
+    for (const auto &sfz : sfzFiles)
+    {
+        const std::string base = sfz.stem().string();
+        std::map<std::string, std::string> macros;
+        std::vector<std::string> lines;
+        nakedLoadSfzLines(sfz, multiDir, macros, lines, 0);
+
+        std::map<std::string, std::string> globalOps;
+        std::map<std::string, std::string> groupOps;
+        std::string masterLabel;
+        std::string defaultPath;
+
+        auto captureMeta = [&] (const std::map<std::string, std::string> &ops)
+        {
+            const auto ml = ops.find("master_label");
+            if (ml != ops.end() && !ml->second.empty())
+                masterLabel = ml->second;
+            const auto dp = ops.find("default_path");
+            if (dp != ops.end() && !dp->second.empty())
+                defaultPath = dp->second;
+        };
+
+        for (const auto &line : lines)
+        {
+            if (!line.empty() && line[0] == '<')
+            {
+                const auto close = line.find('>');
+                if (close == std::string::npos)
+                    continue;
+                std::string tag = line.substr(1, close - 1);
+                for (auto &c : tag)
+                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                const auto rest = line.substr(close + 1);
+
+                if (tag == "region")
+                {
+                    std::map<std::string, std::string> ops = groupOps;
+                    parseOps(rest, ops);
+                    if (!masterLabel.empty())
+                        ops["master_label"] = masterLabel;
+
+                    auto sample = ops["sample"];
+                    if (sample.empty() || sample[0] == '*')
+                        continue;
+
+                    if (ops["sw_last"] == "13")
+                        continue;
+
+                    int key = 0;
+                    try
+                    {
+                        key = static_cast<int>(std::lround(std::stof(ops["key"].empty() ? "0" : ops["key"])));
+                    }
+                    catch (...)
+                    {
+                        continue;
+                    }
+                    if (key <= 13 || key >= 60)
+                        continue;
+
+                    std::replace(sample.begin(), sample.end(), '\\', '/');
+                    fs::path samplePath(sample);
+                    if (samplePath.is_relative())
+                    {
+                        std::string defPath = defaultPath;
+                        std::replace(defPath.begin(), defPath.end(), '\\', '/');
+                        samplePath = defPath.empty() ? (sfz.parent_path() / samplePath)
+                                                     : (sfz.parent_path() / defPath / samplePath);
+                    }
+                    samplePath = samplePath.lexically_normal();
+                    if (!fs::is_regular_file(samplePath))
+                        continue;
+
+                    auto parseInt = [] (const std::string &s, int fallback)
+                    {
+                        try
+                        {
+                            return static_cast<int>(std::lround(std::stof(s.empty() ? std::to_string(fallback) : s)));
+                        }
+                        catch (...)
+                        {
+                            return fallback;
+                        }
+                    };
+
+                    const int lovel = parseInt(ops["lovel"], 0);
+                    const int hivel = parseInt(ops["hivel"], 127);
+                    const int seq = parseInt(ops["seq_position"], 1);
+
+                    const std::string pieceName = nakedMapMaster(ops["master_label"]);
+                    const std::string zoneName = nakedMapZone(ops["group_label"]);
+                    if (zoneName == "choke")
+                        continue;
+
+                    const std::string pieceId = nakedSanitize(pieceName);
+                    auto pIt = pieceIndex.find(pieceId);
+                    if (pIt == pieceIndex.end())
+                    {
+                        PieceBuild piece;
+                        piece.id = pieceId;
+                        piece.name = pieceName;
+                        piece.graphic = nakedGraphicFor(pieceName, zoneName);
+                        piece.choke = pieceName.find("ihat") != std::string::npos ? "hihat" : "none";
+                        pieceIndex[pieceId] = builds.size();
+                        builds.push_back(std::move(piece));
+                        pIt = pieceIndex.find(pieceId);
+                    }
+                    auto &piece = builds[pIt->second];
+
+                    auto zIt = piece.zoneIndex.find(zoneName);
+                    if (zIt == piece.zoneIndex.end())
+                    {
+                        ZoneBuild zone;
+                        zone.name = zoneName;
+                        zone.graphic = nakedGraphicFor(pieceName, zoneName);
+                        zone.note = key;
+                        piece.zoneIndex[zoneName] = piece.zones.size();
+                        piece.zones.push_back(std::move(zone));
+                        zIt = piece.zoneIndex.find(zoneName);
+                    }
+                    auto &zone = piece.zones[zIt->second];
+
+                    const auto tierPair = std::make_pair(lovel, hivel);
+                    auto tierIt = std::find(zone.tiers.begin(), zone.tiers.end(), tierPair);
+                    if (tierIt == zone.tiers.end())
+                    {
+                        zone.tiers.push_back(tierPair);
+                        tierIt = zone.tiers.end() - 1;
+                    }
+                    const int tier = static_cast<int>(tierIt - zone.tiers.begin());
+                    const int rr = std::max(0, seq - 1);
+
+                    const auto hitKey = std::make_tuple(key, tier, rr);
+                    auto hIt = zone.hitIndex.find(hitKey);
+                    if (hIt == zone.hitIndex.end())
+                    {
+                        EditableHit hit;
+                        hit.name = zoneName + "_v" + std::to_string(tier + 1) + "_rr" + std::to_string(rr + 1);
+                        hit.velocityLayerIndex = tier;
+                        hit.roundRobinIndex = rr;
+                        zone.hitIndex[hitKey] = zone.hits.size();
+                        zone.hitOrder.push_back(hitKey);
+                        zone.hits.push_back(std::move(hit));
+                        hIt = zone.hitIndex.find(hitKey);
+                    }
+                    auto &hit = zone.hits[hIt->second];
+
+                    std::vector<std::tuple<std::string, std::string, int>> micSamples;
+                    const auto sampleName = samplePath.filename().string();
+                    if (base == "Snare Tops" && sampleName.find("TopOne") != std::string::npos)
+                    {
+                        addMic("snare_top_1", "Snare Top 1");
+                        micSamples.emplace_back("snare_top_1", "Snare Top 1", 0);
+                    }
+                    else if (base == "Snare Tops" && sampleName.find("TopTwo") != std::string::npos)
+                    {
+                        addMic("snare_top_2", "Snare Top 2");
+                        micSamples.emplace_back("snare_top_2", "Snare Top 2", 0);
+                    }
+                    else
+                    {
+                        const int channels = channelCountFor(samplePath);
+                        if (channels >= 2)
+                        {
+                            const std::string leftId = nakedSanitize(base) + "_l";
+                            const std::string rightId = nakedSanitize(base) + "_r";
+                            addMic(leftId, base + " L");
+                            addMic(rightId, base + " R");
+                            micSamples.emplace_back(leftId, base + " L", 0);
+                            micSamples.emplace_back(rightId, base + " R", 1);
+                        }
+                        else
+                        {
+                            const std::string micId = nakedSanitize(base);
+                            addMic(micId, base);
+                            micSamples.emplace_back(micId, base, 0);
+                        }
+                    }
+
+                    for (const auto &[micName, micTitle, channel] : micSamples)
+                    {
+                        bool duplicate = false;
+                        for (const auto &existing : hit.micSamples)
+                            if (existing.mic == micName && existing.sourceDiskPath == samplePath.string())
+                                duplicate = true;
+                        if (duplicate)
+                            continue;
+
+                        EditableMicSample ms;
+                        ms.mic = micName;
+                        ms.fileName = samplePath.filename().string();
+                        ms.sourceDiskPath = samplePath.string();
+                        ms.fileChannel = channel;
+                        hit.micSamples.push_back(std::move(ms));
+                    }
+                }
+                else if (tag == "global")
+                {
+                    globalOps.clear();
+                    parseOps(rest, globalOps);
+                    groupOps = globalOps;
+                    captureMeta(groupOps);
+                }
+                else if (tag == "master")
+                {
+                    groupOps = globalOps;
+                    parseOps(rest, groupOps);
+                    captureMeta(groupOps);
+                }
+                else
+                {
+                    groupOps = globalOps;
+                    parseOps(rest, groupOps);
+                    captureMeta(groupOps);
+                }
+            }
+            else
+            {
+                parseOps(line, groupOps);
+                captureMeta(groupOps);
+            }
+        }
+    }
+
+    if (builds.empty() || micDefs.empty())
+    {
+        outError = "Naked Drums: no usable regions found in Multi/*.sfz";
+        return false;
+    }
+
+    // Finalize hit powers and zone layer counts, and sort hits by key/tier/rr.
+    for (auto &piece : builds)
+    {
+        for (auto &zone : piece.zones)
+        {
+            const int tiers = std::max(1, static_cast<int>(zone.tiers.size()));
+            int maxRr = 0;
+            for (auto &hit : zone.hits)
+                maxRr = std::max(maxRr, hit.roundRobinIndex + 1);
+
+            for (auto &hit : zone.hits)
+                hit.power = tiers > 1 ? 0.12f + 0.88f * static_cast<float>(hit.velocityLayerIndex)
+                                                  / static_cast<float>(tiers - 1)
+                                      : 1.0f;
+
+            std::sort(zone.hitOrder.begin(), zone.hitOrder.end());
+            std::vector<EditableHit> sorted;
+            sorted.reserve(zone.hits.size());
+            for (const auto &key : zone.hitOrder)
+                sorted.push_back(zone.hits[zone.hitIndex[key]]);
+            zone.hits = std::move(sorted);
+
+            zone.hitOrder.clear();
+            zone.hitIndex.clear();
+            (void) maxRr;
+        }
+    }
+
+    // Build the public project model.
+    pieces.clear();
+    mics.clear();
+    for (const auto &md : micDefs)
+        mics.push_back({md.name, md.title, 1.0f});
+
+    title = "Naked Drums";
+    author = "Wilkinson Audio / SFZ conversion by kinwie";
+    version = "2.0";
+    license = "CC-BY 4.0";
+    description = "Multi-mic Naked Drums converted from the Wilkinson Audio SFZ library. "
+                  "16 mic channels, 5 velocity layers and 10 round robins.";
+    hitGlowColor = "#ff8200";
+    sampleRate = 44100;
+    loadedFilePath = sfzPath.string();
+    writeFactoryMixer = false;
+    writeMicPanPhase = false;
+
+    struct LayoutDef
+    {
+        const char *id;
+        float x, y, w;
+        int z;
+    };
+    static const LayoutDef layout[] = {
+        {"kick", -155.2f, -329.7f, 345.0f, 1}, {"ftom", 107.2f, -272.1f, 195.0f, 2},
+        {"tom2", 15.9f, -408.0f, 155.0f, 3},   {"tom1", -122.6f, -420.7f, 138.0f, 4},
+        {"snare", -212.7f, -259.5f, 180.0f, 5}, {"hihat", -299.6f, -404.7f, 160.0f, 6},
+        {"ride", 77.7f, -507.0f, 210.0f, 7},    {"crash2", 187.3f, -420.8f, 205.0f, 8},
+        {"crash1", -235.0f, -502.9f, 190.0f, 9},
+    };
+
+    std::map<std::string, int> layoutUse;
+    int fallback = 0;
+    for (size_t i = 0; i < builds.size(); ++i)
+    {
+        const auto &build = builds[i];
+        EditablePiece piece;
+        piece.id = build.id;
+        piece.name = build.name;
+        piece.graphicId = build.graphic;
+        piece.chokeGroup = build.choke;
+        piece.outputBus = 0;
+
+        int use = layoutUse[build.graphic];
+        layoutUse[build.graphic] = use + 1;
+
+        const LayoutDef *def = nullptr;
+        for (const auto &l : layout)
+            if (build.graphic == l.id)
+                def = &l;
+
+        if (def != nullptr)
+        {
+            piece.normX = def->x + static_cast<float>(use * 34);
+            piece.normY = def->y + static_cast<float>(use * 24);
+            piece.normW = def->w;
+            piece.zOrder = def->z + use;
+        }
+        else
+        {
+            piece.normX = -190.0f + static_cast<float>(fallback % 6) * 62.0f;
+            piece.normY = -255.0f - static_cast<float>(fallback / 6) * 52.0f;
+            piece.normW = 125.0f;
+            piece.zOrder = 20 + static_cast<int>(i);
+            ++fallback;
+        }
+
+        for (const auto &zb : build.zones)
+        {
+            EditableZone zone;
+            zone.name = zb.name;
+            zone.graphicId = zb.graphic;
+            zone.note = zb.note;
+            zone.altNote = -1;
+            zone.numVelocityLayers = std::max(1, static_cast<int>(zb.tiers.size()));
+            zone.numRoundRobins = 1;
+            zone.hits = zb.hits;
+            for (const auto &hit : zb.hits)
+                zone.numRoundRobins = std::max(zone.numRoundRobins, hit.roundRobinIndex + 1);
+            piece.zones.push_back(std::move(zone));
+        }
+
+        pieces.push_back(std::move(piece));
+    }
+
+    return true;
+}
+
 bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &outError)
 {
+    exportMonoSamples = false;
+    writeFactoryMixer = true;
+    writeMicPanPhase = true;
+
     std::ifstream input(sfzFilePath);
     if (!input.is_open())
     {
@@ -1093,24 +1800,67 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
     for (auto &c : lowerStem)
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
-    const bool isAvlKit = lowerStem.find("black_pearl") != std::string::npos
-                          || lowerStem.find("red_zeppelin") != std::string::npos
-                          || lowerStem.find("blonde_bop") != std::string::npos;
-    const bool isAvlPercussion = lowerStem.find("buskman") != std::string::npos;
+    // Identify known libraries from the file contents as well as the filename.
+    // Downloads are often renamed, but the SFZ header, macro names and sample
+    // names stay recognisable.
+    std::string sniff;
+    if (useShareKitProfiles)
+    {
+        std::ifstream sniffer(sfzFilePath, std::ios::binary);
+        if (sniffer.is_open())
+        {
+            std::vector<char> buf(131072);
+            sniffer.read(buf.data(), static_cast<std::streamsize>(buf.size()));
+            sniff.assign(buf.data(), static_cast<size_t>(sniffer.gcount()));
+        }
+    }
+    std::string lowerSniff = sniff;
+    for (auto &c : lowerSniff)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    const auto identity = lowerSniff + " " + lowerStem;
+    auto identityHas = [&](const char *needle) { return identity.find(needle) != std::string::npos; };
+
+    const bool profiles = useShareKitProfiles;
+    // Only the Monster archive's header identifies it; its samples reuse the
+    // Salamander names. Keep the filename as the second signal.
+    const bool isMonster = profiles
+                           && (identityHas("ze salamander drum library")
+                               || lowerStem.find("monster") != std::string::npos);
+    const bool isSamsSonor = profiles
+                             && (identityHas("key_kick") || identityHas("samsonor")
+                                 || identityHas("sonor force") || lowerStem.find("sonor") != std::string::npos);
+    const bool isOpenSourceKit = profiles
+                                 && (identityHas("the open source drum kit")
+                                     || identityHas("real music media")
+                                     || lowerStem.find("opensource") != std::string::npos
+                                     || lowerStem.find("open-source") != std::string::npos);
+    const bool isSalamander = profiles && !isMonster
+                              && (identityHas("the salamander drumkit") || identityHas("salamander"));
+    const bool isAvlKit = profiles
+                          && (identityHas("avl drumkits") || identityHas("avldrumkits")
+                              || identityHas("glen macarthur") || lowerStem.find("black_pearl") != std::string::npos
+                              || lowerStem.find("red_zeppelin") != std::string::npos
+                              || lowerStem.find("blonde_bop") != std::string::npos);
+    const bool isAvlPercussion = profiles
+                                 && (identityHas("buskman") || lowerStem.find("buskman") != std::string::npos);
     const bool isAvl = isAvlKit || isAvlPercussion;
-    const bool isSmDrums = lowerStem.find("sm_drums") != std::string::npos
-                           || lowerStem.find("smdrums") != std::string::npos
-                           || lowerStem.find("sm drums") != std::string::npos;
-    const bool isBigRusty = lowerStem.find("big_rusty") != std::string::npos
-                            || lowerStem.find("big rusty") != std::string::npos;
-    const bool isGogodze = lowerStem.find("gogodze") != std::string::npos
-                           || lowerStem.find("phu") != std::string::npos;
-    const bool isSalamander = lowerStem.find("salamander") != std::string::npos;
-    const bool isMonster = lowerStem.find("monster") != std::string::npos;
-    const bool isSamsSonor = lowerStem.find("samsonor") != std::string::npos
-                             || lowerStem.find("sonor") != std::string::npos;
-    const bool isOpenSourceKit = lowerStem.find("opensource") != std::string::npos
-                                 || lowerStem.find("open-source") != std::string::npos;
+    const bool isSmDrums = profiles
+                           && (identityHas("sm drums") || identityHas("smdrums")
+                               || identityHas("scott mclean") || lowerStem.find("sm_drums") != std::string::npos
+                               || lowerStem.find("sm drums") != std::string::npos);
+    const bool isBigRusty = profiles
+                            && (identityHas("big rusty") || lowerStem.find("big_rusty") != std::string::npos
+                                || lowerStem.find("big rusty") != std::string::npos);
+    const bool isGogodze = profiles
+                           && (identityHas("gogodze") || lowerStem.find("gogodze") != std::string::npos
+                               || (identityHas("phu") && identityHas("karoryfer")));
+
+    const bool isNakedDrums = profiles && identityHas("naked drums");
+
+    exportMonoSamples = isSmDrums || isSalamander || isMonster || isSamsSonor || isOpenSourceKit;
+
+    if (isNakedDrums && fs::path(sfzFilePath).parent_path().filename() == "Multi")
+        return importNakedMultiMic(sfzFilePath, outError);
 
     struct PartInfo
     {
@@ -1146,7 +1896,7 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         {53, "Ride", "bell", "ride", "ride", "ride"},
         {54, "Tambourine", "head", "tambourine", "hihat", "none"},
         {55, "Splash", "hit", "splash", "crash2", "splash"},
-        {56, "Cowbell", "head", "cowbell", "snare", "none"},
+        {56, "Cowbell", "head", "cowbell", "cowbell", "none"},
         {57, "Crash 2", "hit", "crash2", "crash2", "crash2"},
         {58, "Crash 2", "choke", "crash2", "crash2", "crash2"},
         {59, "Ride", "shank", "ride", "ride", "ride"},
@@ -1247,7 +1997,7 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         {46, "Hihat", "open", "hihat", "hihat", "hihat"},
         {43, "Low Tom", "head", "ftom", "ftom", "none"},
         {45, "High Tom", "head", "tom1", "tom1", "none"},
-        {47, "Cowbell", "head", "cowbell", "snare", "none"},
+        {47, "Cowbell", "head", "cowbell", "cowbell", "none"},
         {48, "Ride 2", "bow", "ride2", "ride", "none"},
         {49, "Ride 2", "bell", "ride2", "ride", "none"},
         {50, "Ride 2", "crash", "ride2", "ride", "none"},
@@ -1499,9 +2249,18 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
 
     std::vector<RawRegion> rawRegions;
     std::map<std::string, std::string> globalOps;
+    std::map<std::string, std::string> masterOps;
     std::map<std::string, std::string> groupOps;
+    std::string defaultPath;
     RawRegion currentRegion;
     bool inRegion = false;
+
+    auto captureDefaultPath = [&](const std::map<std::string, std::string> &ops)
+    {
+        const auto it = ops.find("default_path");
+        if (it != ops.end())
+            defaultPath = it->second;
+    };
 
     // Some SFZ mappings define symbolic keys/macros (for example SamsSonor's
     // "$KEY_KICK 36") and then use them in key= or sample= values. Resolve the
@@ -1572,13 +2331,25 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
                 {
                     globalOps.clear();
                     parseOps(rest, globalOps);
+                    masterOps = globalOps;
                     groupOps = globalOps;
+                }
+                else if (tag == "master")
+                {
+                    // <master> sets the key/velocity range for the groups that
+                    // follow, so keep it separate from <global>. Regions under a
+                    // <group> must inherit both.
+                    masterOps = globalOps;
+                    parseOps(rest, masterOps);
+                    groupOps = masterOps;
                 }
                 else
                 {
-                    groupOps = globalOps;
+                    groupOps = masterOps;
                     parseOps(rest, groupOps);
                 }
+
+                captureDefaultPath(groupOps);
             }
         }
         else if (inRegion)
@@ -1588,6 +2359,7 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         else
         {
             parseOps(line, groupOps);
+            captureDefaultPath(groupOps);
         }
     }
 
@@ -1626,13 +2398,29 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
 
     for (const auto &raw : rawRegions)
     {
-        const auto sample = trim(getOp(raw.ops, "sample"));
-        if (sample.empty())
-            continue;
+        auto sample = trim(getOp(raw.ops, "sample"));
+        if (sample.empty() || (!sample.empty() && sample[0] == '*'))
+            continue; // *silence and other SFZ pseudo-samples
+
+        // Some Windows-authored SFZ files use backslashes even on Linux.
+        std::replace(sample.begin(), sample.end(), '\\', '/');
 
         fs::path samplePath(sample);
         if (samplePath.is_relative())
-            samplePath = sfzDir / samplePath;
+        {
+            const fs::path direct = sfzDir / samplePath;
+            if (!defaultPath.empty())
+            {
+                auto defPath = defaultPath;
+                std::replace(defPath.begin(), defPath.end(), '\\', '/');
+                const fs::path viaDefault = sfzDir / defPath / samplePath;
+                samplePath = fs::exists(viaDefault) ? viaDefault : direct;
+            }
+            else
+            {
+                samplePath = direct;
+            }
+        }
 
         if (!fs::exists(samplePath) || !fs::is_regular_file(samplePath))
         {
@@ -1876,7 +2664,20 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         SampleCache probe;
         const auto handle = probe.open(regions.front().samplePath);
         if (handle.valid && handle.sampleRate > 0.0)
+        {
             sampleRate = static_cast<int>(std::lround(handle.sampleRate));
+        }
+        else
+        {
+            // FLAC/Ogg sources are decoded on export; read their rate through
+            // JUCE so the kit does not claim the wrong sample rate.
+            juce::AudioFormatManager fm;
+            fm.registerBasicFormats();
+            std::unique_ptr<juce::AudioFormatReader> r(
+                fm.createReaderFor(juce::File(regions.front().samplePath)));
+            if (r != nullptr && r->sampleRate > 0.0)
+                sampleRate = static_cast<int>(std::lround(r->sampleRate));
+        }
     }
 
     std::map<std::string, size_t> pieceIndexByKey;
@@ -2068,7 +2869,6 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
         place("china1", -330.0f, -330.0f, 145.0f, 12);
         place("china2", 320.0f, -300.0f, 145.0f, 13);
         place("splash", -300.0f, -450.0f, 130.0f, 14);
-        place("cowbell", -340.0f, -240.0f, 120.0f, 15);
         place("bellchime", 300.0f, -240.0f, 120.0f, 16);
 
         // These libraries have one overhead mic per piece rather than a
@@ -2169,6 +2969,10 @@ bool GlorpKitProject::importSfzKit(const std::string &sfzFilePath, std::string &
 //==============================================================================
 bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std::string &outError)
 {
+    exportMonoSamples = false;
+    writeFactoryMixer = true;
+    writeMicPanPhase = true;
+
     DrumKit dk = DrumKit::load(drumkitXmlPath);
     if (!dk.error.empty() || dk.instruments.empty())
     {
@@ -2192,10 +2996,10 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
         return s;
     };
     const auto drumKitIdentity = lowerDrs(drumkitXmlPath + " " + dk.title + " " + dk.displayName());
-    const bool isDrsKit = drumKitIdentity.find("drskit") != std::string::npos;
-    const bool isMuldjordKit = drumKitIdentity.find("muldjord") != std::string::npos;
-    const bool isAasimonsterKit = drumKitIdentity.find("aasimonster") != std::string::npos;
-    const bool isCrocellKit = drumKitIdentity.find("crocell") != std::string::npos;
+    const bool isDrsKit = useShareKitProfiles && drumKitIdentity.find("drskit") != std::string::npos;
+    const bool isMuldjordKit = useShareKitProfiles && drumKitIdentity.find("muldjord") != std::string::npos;
+    const bool isAasimonsterKit = useShareKitProfiles && drumKitIdentity.find("aasimonster") != std::string::npos;
+    const bool isCrocellKit = useShareKitProfiles && drumKitIdentity.find("crocell") != std::string::npos;
 
     if (isDrsKit)
     {
@@ -2585,6 +3389,98 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
 }
 
 //==============================================================================
+namespace
+{
+bool isRiffWaveFile(const std::string &path)
+{
+    std::ifstream f(path, std::ios::binary);
+    char header[12] {};
+    if (!f.read(header, 12))
+        return false;
+    return std::memcmp(header, "RIFF", 4) == 0 && std::memcmp(header + 8, "WAVE", 4) == 0;
+}
+
+bool decodeToWavBytes(const std::string &path, bool mono, std::vector<uint8_t> &out, std::string &error)
+{
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+
+    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(juce::File(path)));
+    if (reader == nullptr || reader->sampleRate <= 0.0 || reader->numChannels == 0)
+    {
+        error = "Could not decode audio file: " + path;
+        return false;
+    }
+
+    const auto length = static_cast<int>(std::min<int64_t>(reader->lengthInSamples, 0x7fffffff));
+    if (length <= 0)
+    {
+        error = "Audio file has no frames: " + path;
+        return false;
+    }
+
+    const int sourceChannels = static_cast<int>(reader->numChannels);
+    juce::AudioBuffer<float> source(sourceChannels, length);
+    if (!reader->read(&source, 0, length, 0, true, true))
+    {
+        error = "Could not read audio file: " + path;
+        return false;
+    }
+
+    const int outChannels = mono ? 1 : sourceChannels;
+    juce::AudioBuffer<float> dst(outChannels, length);
+
+    if (mono)
+    {
+        for (int ch = 0; ch < sourceChannels; ++ch)
+            dst.addFrom(0, 0, source, ch, 0, length, 1.0f / static_cast<float>(sourceChannels));
+    }
+    else
+    {
+        for (int ch = 0; ch < outChannels; ++ch)
+            dst.copyFrom(ch, 0, source, ch, 0, length);
+    }
+
+    const auto frames = static_cast<uint32_t>(length);
+    const uint32_t dataBytes = frames * static_cast<uint32_t>(outChannels) * 3u;
+    const uint32_t byteRate = static_cast<uint32_t>(reader->sampleRate) * static_cast<uint32_t>(outChannels) * 3u;
+
+    out.resize(44u + dataBytes);
+    auto *p = out.data();
+    auto put32 = [&](uint32_t v) { p[0] = uint8_t(v); p[1] = uint8_t(v >> 8); p[2] = uint8_t(v >> 16); p[3] = uint8_t(v >> 24); p += 4; };
+    auto put16 = [&](uint16_t v) { p[0] = uint8_t(v); p[1] = uint8_t(v >> 8); p += 2; };
+
+    auto putTag = [&](const char *tag) { std::memcpy(p, tag, 4); p += 4; };
+    putTag("RIFF");
+    put32(36u + dataBytes);
+    putTag("WAVE");
+    putTag("fmt ");
+    put32(16);
+    put16(1); // PCM
+    put16(static_cast<uint16_t>(outChannels));
+    put32(static_cast<uint32_t>(reader->sampleRate));
+    put32(byteRate);
+    put16(static_cast<uint16_t>(outChannels * 3));
+    put16(24);
+    putTag("data");
+    put32(dataBytes);
+
+    for (int i = 0; i < length; ++i)
+    {
+        for (int ch = 0; ch < outChannels; ++ch)
+        {
+            const float v = std::clamp(dst.getSample(ch, i), -1.0f, 1.0f);
+            const int32_t s = static_cast<int32_t>(std::lround(v * 8388607.0f));
+            *p++ = static_cast<uint8_t>(s & 0xff);
+            *p++ = static_cast<uint8_t>((s >> 8) & 0xff);
+            *p++ = static_cast<uint8_t>((s >> 16) & 0xff);
+        }
+    }
+
+    return true;
+}
+} // namespace
+
 bool GlorpKitProject::exportToGlorpKit(const std::string &outputArchivePath, std::string &outError) const
 {
     // If exporting over the same archive file that is currently open as a slice source,
@@ -2622,9 +3518,11 @@ bool GlorpKitProject::exportToGlorpKit(const std::string &outputArchivePath, std
         for (const auto &m : mics)
         {
             ss << "    <mic name=\"" << escapeXml(m.name) << "\" " << "title=\"" << escapeXml(m.title) << "\" "
-               << "default=\"" << std::fixed << std::setprecision(2) << m.defaultLevel << "\" "
-               << "pan=\"" << std::fixed << std::setprecision(3) << m.pan << "\" "
-               << "phase=\"" << (m.phaseInvert ? "true" : "false") << "\"/>\n";
+               << "default=\"" << std::fixed << std::setprecision(2) << m.defaultLevel << "\"";
+            if (writeMicPanPhase)
+                ss << " pan=\"" << std::fixed << std::setprecision(3) << m.pan << "\" "
+                   << "phase=\"" << (m.phaseInvert ? "true" : "false") << "\"";
+            ss << "/>\n";
         }
         ss << "  </mics>\n";
 
@@ -2698,6 +3596,7 @@ bool GlorpKitProject::exportToGlorpKit(const std::string &outputArchivePath, std
     }
 
     // 3. Write presets/factory-mixer.xml
+    if (writeFactoryMixer)
     {
         std::ostringstream ms;
         ms << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<glorp-mixer>\n";
@@ -2781,7 +3680,13 @@ bool GlorpKitProject::exportToGlorpKit(const std::string &outputArchivePath, std
             {
                 for (const auto &ms : hit.micSamples)
                 {
-                    const std::string wavName = ms.fileName.empty() ? (hit.name + ".wav") : ms.fileName;
+                    std::string wavName = ms.fileName.empty() ? (hit.name + ".wav") : ms.fileName;
+                    const bool sourceIsWav = ms.sourceDiskPath.empty() || isRiffWaveFile(ms.sourceDiskPath);
+                    const bool transcode = !ms.sourceDiskPath.empty() && fs::exists(ms.sourceDiskPath)
+                                           && (exportMonoSamples || !sourceIsWav);
+                    if (transcode)
+                        wavName = fs::path(wavName).stem().string() + ".wav";
+
                     const std::string relWav = "samples/" + wavName;
                     const std::string fullArcWav = zoneDir + "/" + relWav;
 
@@ -2797,7 +3702,26 @@ bool GlorpKitProject::exportToGlorpKit(const std::string &outputArchivePath, std
                     {
                         if (!ms.sourceDiskPath.empty() && fs::exists(ms.sourceDiskPath))
                         {
-                            writer.addFileFromDisk(fullArcWav, ms.sourceDiskPath);
+                            if (transcode)
+                            {
+                                std::vector<uint8_t> wavBytes;
+                                std::string decodeError;
+                                if (!decodeToWavBytes(ms.sourceDiskPath, exportMonoSamples, wavBytes, decodeError))
+                                {
+                                    outError = decodeError;
+                                    return false;
+                                }
+
+                                if (!writer.addMemoryBytes(fullArcWav, wavBytes.data(), wavBytes.size()))
+                                {
+                                    outError = "Failed to write " + fullArcWav;
+                                    return false;
+                                }
+                            }
+                            else
+                            {
+                                writer.addFileFromDisk(fullArcWav, ms.sourceDiskPath);
+                            }
                         }
                         else if (!ms.sourceArchivePath.empty() && ms.archiveOffset >= 0 && ms.archiveLength > 0)
                         {

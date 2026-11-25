@@ -128,7 +128,7 @@ if(NOT GLORP_IS_WINDOWS)
 \"[Desktop Entry]
 Name=Suite Kit Studio
 Comment=.glorpkit Drum Kit Creator & Editor
-Exec=${GLORP_KIT_STUDIO_NAME}
+Exec=$ENV{HOME}/.local/bin/${GLORP_KIT_STUDIO_NAME}
 Icon=suite_kit_studio_icon
 Terminal=false
 Type=Application

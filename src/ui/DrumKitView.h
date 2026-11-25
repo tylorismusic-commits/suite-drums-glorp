@@ -153,6 +153,7 @@ class DrumKitView
     };
 
     void loadPieceImages();
+    juce::Image getCowbellImage();
     void layout();
     void rebuildStaticKitCache();
 
@@ -186,6 +187,7 @@ class DrumKitView
     std::array<int, static_cast<size_t>(KitPiece::count)> pieceZOrder {{1, 4, 5, 6, 9, 3, 7, 2, 8}};
     bool hasLayout = false;
 
+    juce::Image cowbellImage;
     juce::Image unifiedKitOutlineImage;
     juce::Image staticKitImage;
     juce::Image singleKitImage;

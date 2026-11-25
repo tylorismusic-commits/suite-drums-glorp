@@ -6,12 +6,12 @@
 #   tools/package_linux.sh [version]
 #
 # The build must already exist (see README). The version defaults to the
-# project version plus the alpha suffix, e.g. 0.1.0-alpha.47.
+# project version plus the alpha suffix, e.g. 0.1.0-alpha.48.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="${1:-0.1.0-alpha.47}"
+VERSION="${1:-0.1.0-alpha.48}"
 NAME="suite-drums-glorp-${VERSION}-linux-x86_64"
 BUILD="${ROOT}/build"
 ARTEFACTS="${BUILD}/GlorpDrums_artefacts/Release"
@@ -97,11 +97,11 @@ if [ -d "$HERE/icons" ]; then
     cp "$HERE/icons/"*.png "$HOME/.local/share/icons/hicolor/256x256/apps/"
 fi
 
-cat > "$HOME/.local/share/applications/suite-kit-studio.desktop" <<'DESKTOP'
+cat > "$HOME/.local/share/applications/suite-kit-studio.desktop" <<DESKTOP
 [Desktop Entry]
 Name=Suite Kit Studio
 Comment=.glorpkit Drum Kit Creator & Editor
-Exec=SuiteKitStudio
+Exec=$HOME/.local/bin/SuiteKitStudio
 Icon=suite_kit_studio_icon
 Terminal=false
 Type=Application
