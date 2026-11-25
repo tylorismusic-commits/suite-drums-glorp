@@ -704,6 +704,73 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    if (std::getenv ("GLORP_PROBE_VELOCITY") != nullptr)
+    {
+        int snareIndex = -1;
+        for (int i = 0; i < proc.getSampler().numInstruments(); ++i)
+        {
+            const auto n = proc.getSampler().instrumentName (i).toLowerCase();
+            if (n.contains ("snare") && !n.contains ("rim") && !n.contains ("rest")
+                && !n.contains ("stick"))
+            {
+                snareIndex = i;
+                break;
+            }
+        }
+
+        if (snareIndex < 0)
+        {
+            std::cout << "velocity probe: no snare instrument" << std::endl;
+            return 0;
+        }
+
+        proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+        std::cout << "velocity snare=" << proc.getSampler().instrumentName (snareIndex).toStdString() << std::endl;
+
+        for (float vel : {0.1f, 0.2f, 0.5f, 0.8f, 1.0f})
+        {
+            proc.getSampler().allNotesOff();
+            float peak = 0.0f;
+            double sum = 0.0;
+            int count = 0;
+
+            for (int block = 0; block < 30; ++block)
+            {
+                buffer.clear();
+                juce::MidiBuffer midi;
+                if (block == 0)
+                    proc.getSampler().noteOn (snareIndex, 38, vel, proc.getSampler().currentSamplePosition());
+                proc.processBlock (buffer, midi);
+                const auto* d = buffer.getReadPointer (0);
+                for (int i = 0; i < buffer.getNumSamples(); ++i)
+                {
+                    peak = std::max (peak, std::abs (d[i]));
+                    sum += static_cast<double> (d[i]) * d[i];
+                    ++count;
+                }
+            }
+
+            const double rms = count > 0 ? std::sqrt (sum / count) : 0.0;
+            std::cout << "vel=" << vel << " peak=" << peak << " rms=" << rms << std::endl;
+        }
+        return 0;
+    }
+
+    if (std::getenv ("GLORP_PROBE_MICPARAMS") != nullptr)
+    {
+        for (int i = 0; i < proc.getSampler().numMicStrips(); ++i)
+        {
+            const auto p = proc.getSampler().getMicStripParams (i);
+            std::cout << i << " " << proc.getSampler().micStripName (i).toStdString()
+                      << " | " << proc.getSampler().micStripTitle (i).toStdString()
+                      << " level=" << p.level
+                      << " pan=" << p.pan
+                      << " phase=" << (p.phaseInvert ? 1 : 0) << std::endl;
+        }
+        return 0;
+    }
+
     if (std::getenv ("GLORP_PROBE_BUS") != nullptr)
     {
         auto params = proc.getSampler().getMasterStripParams();

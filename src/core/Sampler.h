@@ -311,10 +311,11 @@ class Sampler
         BleedPiece piece = BleedPiece::snare;
         std::vector<ChokeTarget> chokeTargets;
         /// DrumGizmo `power` values are absolute recordings, not 0..1, and
-        /// vary wildly between kits. Normalise against this range so MIDI
-        /// velocity maps to the full sample set instead of only the ghost notes.
-        float minPower = 0.0f;
-        float maxPower = 1.0f;
+        /// vary wildly between kits. Hits are grouped into power tiers so MIDI
+        /// velocity can select a dynamic level directly; round-robin cycling
+        /// then stays inside one tier instead of jumping across loudness layers.
+        std::vector<int> sortedHits;   ///< hit indices sorted softest to hardest
+        std::vector<int> tierStart;    ///< tierStart[t]..tierStart[t+1] in sortedHits
     };
 
     /// Audio-thread-visible copy of InstrumentParams.

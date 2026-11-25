@@ -69,8 +69,32 @@ std::string Instrument::samplePath(const AudioFileRef &ref) const
 
 int DrumKit::indexOfInstrument(const std::string &n) const noexcept
 {
+    auto normalise = [](std::string s)
+    {
+        std::string out;
+        bool lastSpace = false;
+        for (char c : s)
+        {
+            if (c == '_' || std::isspace(static_cast<unsigned char>(c)))
+            {
+                if (!out.empty() && !lastSpace)
+                    out += ' ';
+                lastSpace = true;
+            }
+            else
+            {
+                out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                lastSpace = false;
+            }
+        }
+        while (!out.empty() && out.back() == ' ')
+            out.pop_back();
+        return out;
+    };
+
+    const auto wanted = normalise(n);
     for (size_t i = 0; i < instruments.size(); ++i)
-        if (instruments[i].name == n)
+        if (normalise(instruments[i].name) == wanted)
             return static_cast<int>(i);
 
     return -1;
@@ -343,6 +367,7 @@ DrumKit DrumKit::loadNativeGlorpKit(GlorpKitReader &reader, const std::string &a
         kc.name = m.name;
         kc.title = m.title;
         kc.source = m.name;
+        kc.phaseInvert = m.phaseInvert;
         kit.channels.push_back(std::move(kc));
     }
 
@@ -358,6 +383,7 @@ DrumKit DrumKit::loadNativeGlorpKit(GlorpKitReader &reader, const std::string &a
     if (reader.readFactoryMixer(mixerSetting))
     {
         kit.factoryMicLevels = mixerSetting.micLevels;
+        kit.factoryMicPhaseInvert = mixerSetting.micPhaseInvert;
         kit.factoryInstrumentLevels = mixerSetting.instrumentLevels;
         kit.factoryInstrumentPans = mixerSetting.instrumentPans;
     }
@@ -914,12 +940,20 @@ DrumKit DrumKit::load(const std::string &drumkitXmlPath)
         const char *name;
     };
     const auto stem = fs::path(drumkitXmlPath).stem().string();
+    const auto firstSep = stem.find_first_of("_-");
     const auto lastSep = stem.find_last_of("_-");
+    const auto variant =
+        (firstSep != std::string::npos && firstSep + 1 < stem.size()) ? stem.substr(firstSep + 1) : std::string();
     const auto suffix =
         (lastSep != std::string::npos && lastSep + 1 < stem.size()) ? stem.substr(lastSep + 1) : std::string();
     const auto prefix = (lastSep != std::string::npos) ? stem.substr(0, lastSep) : std::string();
 
     std::vector<std::string> midimapCandidates;
+
+    // Full variant candidates (e.g. DRSKit_no_whiskers.xml -> Midimap_no_whiskers.xml)
+    if (!variant.empty())
+        for (const auto *pfx : {"Midimap_", "midimap_", "Midimap-", "midimap-"})
+            midimapCandidates.push_back(joinPath(kitDir, std::string(pfx) + variant + ".xml"));
 
     // Suffix candidates (e.g. CrocellKit_full.xml -> Midimap_full.xml)
     if (!suffix.empty())

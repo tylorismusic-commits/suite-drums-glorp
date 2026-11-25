@@ -328,6 +328,14 @@ bool Sampler::loadKit(DrumKit kit, juce::String &error)
         if (itM != kit.factoryMicLevels.end())
             ch->params.level = itM->second;
 
+        ch->params.phaseInvert = kitChannels_[k].phaseInvert;
+
+        auto itPhase = kit.factoryMicPhaseInvert.find(ch->name.toStdString());
+        if (itPhase == kit.factoryMicPhaseInvert.end())
+            itPhase = kit.factoryMicPhaseInvert.find(ch->title.toStdString());
+        if (itPhase != kit.factoryMicPhaseInvert.end())
+            ch->params.phaseInvert = itPhase->second;
+
         micChannels.push_back(std::move(ch));
     }
 
@@ -782,24 +790,37 @@ void Sampler::resolveInstrumentChannels(const DrumKit &kit, const Instrument &in
             out.hits.push_back(std::move(hit));
     }
 
-    // DrumGizmo kit builders store raw recorded power, not a 0..1 value.
-    // Cache the instrument's range so velocity selection can use the whole kit.
+    // Build dynamic-level tiers from the recorded power values. Hits within
+    // 2.5% of each other are normally the round-robin takes for one velocity
+    // layer; MIDI velocity then selects a tier and the RR cursor cycles inside
+    // it. This avoids the old behaviour where a low velocity could select a
+    // hard layer simply because the kit's power range was exponential.
+    out.sortedHits.clear();
+    out.tierStart.clear();
+
     if (!out.hits.empty())
     {
-        out.minPower = out.hits.front().power;
-        out.maxPower = out.hits.front().power;
+        out.sortedHits.resize(out.hits.size());
+        for (size_t i = 0; i < out.hits.size(); ++i)
+            out.sortedHits[i] = static_cast<int>(i);
 
-        for (const auto &hit : out.hits)
+        std::stable_sort(out.sortedHits.begin(), out.sortedHits.end(), [&](int a, int b)
         {
-            out.minPower = std::min(out.minPower, hit.power);
-            out.maxPower = std::max(out.maxPower, hit.power);
+            return out.hits[static_cast<size_t>(a)].power < out.hits[static_cast<size_t>(b)].power;
+        });
+
+        out.tierStart.push_back(0);
+        for (size_t i = 1; i < out.sortedHits.size(); ++i)
+        {
+            const float previous = out.hits[static_cast<size_t>(out.sortedHits[i - 1])].power;
+            const float current = out.hits[static_cast<size_t>(out.sortedHits[i])].power;
+            const float tolerance = std::max(1.0e-6f, std::abs(previous) * 0.025f);
+
+            if (current - previous > tolerance)
+                out.tierStart.push_back(static_cast<int>(i));
         }
 
-        if (!(out.maxPower > out.minPower))
-        {
-            out.minPower = 0.0f;
-            out.maxPower = 1.0f;
-        }
+        out.tierStart.push_back(static_cast<int>(out.sortedHits.size()));
     }
 }
 
@@ -1372,8 +1393,8 @@ int Sampler::chooseHit(int instrumentIndex, float velocity)
     if (instrumentIndex < 0 || instrumentIndex >= instrumentCount)
         return 0;
 
-    const auto &hits = instruments_[static_cast<size_t>(instrumentIndex)].hits;
-    const auto numHits = static_cast<int>(hits.size());
+    const auto &runtime = instruments_[static_cast<size_t>(instrumentIndex)];
+    const auto numHits = static_cast<int>(runtime.hits.size());
 
     if (numHits <= 0)
         return 0;
@@ -1381,59 +1402,39 @@ int Sampler::chooseHit(int instrumentIndex, float velocity)
     if (numHits == 1)
         return 0;
 
-    const float vel = std::clamp(velocity, 0.05f, 1.0f);
+    const int tierCount = static_cast<int>(runtime.tierStart.size()) - 1;
+    if (tierCount <= 0)
+        return 0;
 
-    // Kits store raw recorded power (Muldjord snare: 0.3..46.6, Crocell:
-    // 0.01..3.3), not a 0..1 value. Map velocity onto the instrument's own
-    // power range and pick a hit near that target. Comparing raw power to
-    // the 0..1 velocity used to land almost every normal hit on a ghost-note
-    // sample, which is what makes a snare randomly sound like a dud.
-    const auto &runtime = instruments_[static_cast<size_t>(instrumentIndex)];
-    const float powerRange = std::max(1.0e-6f, runtime.maxPower - runtime.minPower);
-    const float targetPower = runtime.minPower + vel * powerRange;
+    const float vel = std::clamp(velocity, 0.0f, 1.0f);
+    const float minPower = runtime.hits[static_cast<size_t>(runtime.sortedHits.front())].power;
+    const float maxPower = runtime.hits[static_cast<size_t>(runtime.sortedHits.back())].power;
+    const float powerRange = std::max(1.0e-6f, maxPower - minPower);
+    const float targetPower = minPower + vel * powerRange;
 
-    float minDiff = std::numeric_limits<float>::max();
-    int closestIdx = 0;
-
-    for (int i = 0; i < numHits; ++i)
+    int tier = 0;
+    float tierDistance = std::numeric_limits<float>::max();
+    for (int t = 0; t < tierCount; ++t)
     {
-        const float diff = std::abs(hits[static_cast<size_t>(i)].power - targetPower);
-        if (diff < minDiff)
+        const float tierPower =
+            runtime.hits[static_cast<size_t>(runtime.sortedHits[static_cast<size_t>(runtime.tierStart[static_cast<size_t>(t)])])].power;
+        const float distance = std::abs(tierPower - targetPower);
+        if (distance < tierDistance)
         {
-            minDiff = diff;
-            closestIdx = i;
+            tierDistance = distance;
+            tier = t;
         }
     }
 
-    // Keep the round-robin pool close to the target so neighbouring hits vary
-    // in sample choice without jumping to ghost notes or dropping loudness.
-    std::vector<int> candidates;
-    const float margin = powerRange * 0.08f;
-    for (int i = 0; i < numHits; ++i)
-    {
-        if (std::abs(hits[static_cast<size_t>(i)].power - targetPower) <= margin)
-            candidates.push_back(i);
-    }
+    const int begin = runtime.tierStart[static_cast<size_t>(tier)];
+    const int end = runtime.tierStart[static_cast<size_t>(tier) + 1];
+    const int count = end - begin;
 
-    if (candidates.empty())
-    {
-        // Kits without meaningful power values (all hits share the same
-        // power) still need to round-robin instead of sticking on hit 0.
-        const float closestPower = hits[static_cast<size_t>(closestIdx)].power;
-        const float epsilon = 1.0e-4f * std::max(1.0f, std::abs(closestPower));
-
-        for (int i = 0; i < numHits; ++i)
-        {
-            if (std::abs(hits[static_cast<size_t>(i)].power - closestPower) <= epsilon)
-                candidates.push_back(i);
-        }
-
-        if (candidates.empty())
-            candidates.push_back(closestIdx);
-    }
+    if (count <= 0)
+        return 0;
 
     auto &cursor = roundRobinCursor[static_cast<size_t>(instrumentIndex)];
-    const auto chosen = candidates[static_cast<size_t>(cursor % static_cast<int>(candidates.size()))];
+    const auto chosen = runtime.sortedHits[static_cast<size_t>(begin + (cursor % count))];
     cursor = (cursor + 1) % 10000;
 
     return chosen;

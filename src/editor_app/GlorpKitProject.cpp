@@ -1915,19 +1915,128 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
     sampleRate = dk.declaredSampleRate;
     loadedFilePath = drumkitXmlPath;
 
+    auto lowerDrs = [](std::string s)
+    {
+        for (auto &c : s)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return s;
+    };
+    const bool isDrsKit = lowerDrs(drumkitXmlPath + " " + dk.title + " " + dk.displayName())
+                              .find("drskit") != std::string::npos;
+
+    if (isDrsKit)
+    {
+        title = "DRSKit";
+        author = "DRSDrums / DrumGizmo Team";
+        version = "2.1";
+        license = "CC BY 4.0";
+        description = "DRSKit by DRSDrums and the DrumGizmo team, converted from the DrumGizmo kit. The kick back mic is polarity-inverted by default.";
+    }
+
     mics.clear();
     for (const auto &ch : dk.channels)
-        mics.push_back({ch.name, ch.title.empty() ? ch.name : ch.title, 1.0f});
+    {
+        GlorpMic mic;
+        mic.name = ch.name;
+        mic.title = ch.title.empty() ? ch.name : ch.title;
+        mic.phaseInvert = isDrsKit && lowerDrs(ch.name) == "kdrum_back";
+        mics.push_back(std::move(mic));
+    }
     if (mics.empty())
         mics.push_back({"close", "Close Mic", 1.0f});
 
     pieces.clear();
     std::map<std::string, size_t> pieceMap;
 
+    struct DrsPart
+    {
+        const char *match;
+        const char *piece;
+        const char *zone;
+        const char *id;
+        const char *graphic;
+        const char *choke;
+    };
+
+    static const DrsPart drsParts[] = {
+        {"kdrum with contact", "Kick", "with contact", "kick", "kick", "none"},
+        {"kdrum without contact", "Kick", "without contact", "kick", "kick", "none"},
+        {"snare", "Snare", "center", "snare", "snare", "none"},
+        {"snare rim", "Snare", "rim", "snare", "snare", "none"},
+        {"snare rest", "Snare", "rest", "snare", "snare", "none"},
+        {"hihat closed", "Hihat", "closed", "hihat", "hihat", "hihat"},
+        {"hihat closed shank", "Hihat", "closed shank", "hihat", "hihat", "hihat"},
+        {"hihat foot", "Hihat", "foot", "hihat", "hihat", "hihat"},
+        {"hihat open", "Hihat", "open", "hihat", "hihat", "hihat"},
+        {"hihat open tip", "Hihat", "open tip", "hihat", "hihat", "hihat"},
+        {"hihat semi open", "Hihat", "semi open", "hihat", "hihat", "hihat"},
+        {"tom1", "Tom 1", "head", "tom1", "tom1", "none"},
+        {"tom2", "Tom 2", "head", "ftom", "ftom", "none"},
+        {"tom3", "Tom 3", "head", "ftom2", "ftom", "none"},
+        {"crash left shank", "Crash Left", "shank", "crash1", "crash1", "none"},
+        {"crash left tip", "Crash Left", "tip", "crash1", "crash1", "none"},
+        {"crash right shank", "Crash Right", "shank", "crash2", "crash2", "none"},
+        {"crash right tip", "Crash Right", "tip", "crash2", "crash2", "none"},
+        {"ride rest", "Ride", "rest", "ride", "ride", "none"},
+        {"ride shank", "Ride", "shank", "ride", "ride", "none"},
+        {"ride shank bell", "Ride", "shank bell", "ride", "ride", "none"},
+        {"ride tip", "Ride", "tip", "ride", "ride", "none"},
+        {"ride tip bell", "Ride", "tip bell", "ride", "ride", "none"},
+        {"ride tip bell chain", "Ride", "tip bell chain", "ride", "ride", "none"},
+        {"ride tip chain", "Ride", "tip chain", "ride", "ride", "none"},
+    };
+
+    auto normalizeDrsName = [&](std::string s)
+    {
+        for (auto &c : s)
+        {
+            if (c == '_')
+                c = ' ';
+            else
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        std::string out;
+        bool lastSpace = false;
+        for (char c : s)
+        {
+            if (c == ' ')
+            {
+                if (!out.empty() && !lastSpace)
+                    out += c;
+                lastSpace = true;
+            }
+            else
+            {
+                out += c;
+                lastSpace = false;
+            }
+        }
+        while (!out.empty() && out.back() == ' ')
+            out.pop_back();
+        return out;
+    };
+
+    auto findDrsPart = [&](const Instrument &inst) -> const DrsPart *
+    {
+        if (!isDrsKit)
+            return nullptr;
+        const auto a = normalizeDrsName(inst.displayName);
+        const auto b = normalizeDrsName(inst.name);
+        for (const auto &part : drsParts)
+        {
+            if (a == part.match || b == part.match)
+                return &part;
+        }
+        return nullptr;
+    };
+
     for (const auto &inst : dk.instruments)
     {
-        const std::string pName = inst.logicalName.empty() ? inst.displayName : inst.logicalName;
-        const std::string pId = sanitizeId(pName);
+        const auto *drsPart = findDrsPart(inst);
+        const std::string pName = drsPart != nullptr
+                                      ? std::string(drsPart->piece)
+                                      : (inst.logicalName.empty() ? inst.displayName : inst.logicalName);
+        const std::string pId = drsPart != nullptr ? std::string(drsPart->id) : sanitizeId(pName);
 
         size_t pIdx = 0;
         auto it = pieceMap.find(pId);
@@ -1941,7 +2050,8 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
             ep.id = pId;
             ep.graphicId = pId;
             ep.outputBus = inst.outputBus;
-            ep.chokeGroup = inst.group.empty() ? "none" : inst.group;
+            ep.chokeGroup = drsPart != nullptr ? std::string(drsPart->choke)
+                                               : (inst.group.empty() ? "none" : inst.group);
 
             if (const auto *def = findDefaultPieceLayout(pId))
             {
@@ -1958,6 +2068,10 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
                 ep.normW = 165.0f;
                 ep.zOrder = static_cast<int>(pIdx) + 1;
             }
+
+            if (drsPart != nullptr && std::string(drsPart->graphic) != "none")
+                ep.graphicId = drsPart->graphic;
+
             pieces.push_back(std::move(ep));
         }
         else
@@ -1966,12 +2080,16 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
         }
 
         EditableZone ez;
-        ez.name = inst.zoneName.empty() ? "head" : inst.zoneName;
+        ez.name = drsPart != nullptr ? std::string(drsPart->zone)
+                                     : (inst.zoneName.empty() ? "head" : inst.zoneName);
         ez.graphicId = pieces[pIdx].graphicId;
         ez.note = 36;
+        const auto instNameA = normalizeDrsName(inst.name);
+        const auto instNameB = normalizeDrsName(inst.displayName);
         for (const auto &[noteNum, mappedName] : dk.suggestedMap)
         {
-            if (mappedName == inst.name || mappedName == inst.displayName)
+            const auto mapped = normalizeDrsName(mappedName);
+            if (mapped == instNameA || mapped == instNameB)
             {
                 ez.note = noteNum;
                 break;
@@ -2007,7 +2125,69 @@ bool GlorpKitProject::importDrumGizmoXml(const std::string &drumkitXmlPath, std:
         }
 
         rebuildZoneLayerGrid(ez, 3);
+
+        if (isDrsKit && ez.hits.size() > 1)
+        {
+            // DRSKit is a dynamic-layer kit with (mostly) one sample per
+            // power tier. Give its hit powers an even 0..1 spacing so the
+            // sampler's velocity curve reaches the soft layers instead of
+            // jumping straight to the loud ones. Hits inside the same
+            // near-identical power group keep the same value, preserving
+            // the few genuine round-robin pairs.
+            std::vector<size_t> order(ez.hits.size());
+            for (size_t i = 0; i < order.size(); ++i)
+                order[i] = i;
+            std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b)
+            {
+                return ez.hits[a].power < ez.hits[b].power;
+            });
+
+            std::vector<int> starts {0};
+            for (size_t i = 1; i < order.size(); ++i)
+            {
+                const float previous = ez.hits[order[i - 1]].power;
+                const float current = ez.hits[order[i]].power;
+                const float tolerance = std::max(1.0e-6f, std::abs(previous) * 0.025f);
+                if (current - previous > tolerance)
+                    starts.push_back(static_cast<int>(i));
+            }
+            starts.push_back(static_cast<int>(order.size()));
+
+            const int tierCount = static_cast<int>(starts.size()) - 1;
+            for (int tier = 0; tier < tierCount; ++tier)
+            {
+                const float normalized = tierCount > 1
+                                             ? static_cast<float>(tier) / static_cast<float>(tierCount - 1)
+                                             : 1.0f;
+                for (int i = starts[static_cast<size_t>(tier)];
+                     i < starts[static_cast<size_t>(tier) + 1];
+                     ++i)
+                    ez.hits[order[static_cast<size_t>(i)]].power = normalized;
+            }
+        }
+
         pieces[pIdx].zones.push_back(std::move(ez));
+    }
+
+    if (isDrsKit)
+    {
+        auto place = [&](const std::string &id, float x, float y, float w, int z)
+        {
+            for (auto &p : pieces)
+            {
+                if (p.id == id)
+                {
+                    p.normX = x;
+                    p.normY = y;
+                    p.normW = w;
+                    p.zOrder = z;
+                }
+            }
+        };
+
+        place("tom1", -120.0f, -420.0f, 140.0f, 4);
+        place("ftom", 105.0f, -270.0f, 195.0f, 2);
+        place("ftom2", 235.0f, -330.0f, 180.0f, 3);
     }
 
     normalizeZOrders();
@@ -2052,7 +2232,8 @@ bool GlorpKitProject::exportToGlorpKit(const std::string &outputArchivePath, std
         for (const auto &m : mics)
         {
             ss << "    <mic name=\"" << escapeXml(m.name) << "\" " << "title=\"" << escapeXml(m.title) << "\" "
-               << "default=\"" << std::fixed << std::setprecision(2) << m.defaultLevel << "\"/>\n";
+               << "default=\"" << std::fixed << std::setprecision(2) << m.defaultLevel << "\" "
+               << "phase=\"" << (m.phaseInvert ? "true" : "false") << "\"/>\n";
         }
         ss << "  </mics>\n";
 
@@ -2131,7 +2312,7 @@ bool GlorpKitProject::exportToGlorpKit(const std::string &outputArchivePath, std
         ms << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<glorp-mixer>\n";
         for (const auto &m : mics)
             ms << "  <mic name=\"" << escapeXml(m.name) << "\" level=\"" << std::fixed << std::setprecision(2)
-               << m.defaultLevel << "\"/>\n";
+               << m.defaultLevel << "\" phase=\"" << (m.phaseInvert ? "true" : "false") << "\"/>\n";
 
         for (const auto &p : pieces)
             for (const auto &z : p.zones)

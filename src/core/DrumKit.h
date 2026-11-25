@@ -59,6 +59,7 @@ struct KitChannel
     std::string name;
     std::string title;
     std::string source; ///< older kits call the microphone attribute "microphone"
+    bool phaseInvert = false;
 };
 
 /** Ties one instrument-side channel to one kit channel.
@@ -180,6 +181,7 @@ struct DrumKit
     bool isNativeGlorpKit = false;
     std::vector<LogicalPiece> logicalPieces;
     std::map<std::string, float> factoryMicLevels;
+    std::map<std::string, bool> factoryMicPhaseInvert;
     std::map<std::string, float> factoryInstrumentLevels;
     std::map<std::string, float> factoryInstrumentPans;
 
