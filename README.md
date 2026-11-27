@@ -7,6 +7,8 @@
 > [!NOTE]
 > Suite Drums Glorp is an early alpha. It is a fork of [GlorpDrums](https://github.com/asuka-glorp/GlorpDrums) with the practice, recording and streaming features removed. The drum engine, kit view, mixer, FX, e-drum input, bleed matrix and kit editor remain.
 
+Kit packs: **[GlorpKits on Gumroad](https://tylorhythm.gumroad.com/l/xocyhd)** — multi-mic `.glorpkit` collections, pay what you want.
+
 ## What is included
 
 - **VST3 and LV2** instrument plugins for Linux x86_64.
@@ -101,6 +103,18 @@ README.md
 LICENSE
 NOTICE.md
 ```
+
+## GlorpKits
+
+The multi-mic `.glorpkit` packs — AVL Drumkits, Naked Drums, DRSKit, SM Drums,
+Big Rusty Drums, CrocellKit, MuldjordKit, Monster Drumkit, Salamander Drumkit
+and more — are available on Gumroad, pay what you want:
+
+**https://tylorhythm.gumroad.com/l/xocyhd**
+
+Unzip a pack and copy the `.glorpkit` files to
+`~/.config/SuiteDrumsGlorp/kits/`, or add the folder from the FILE menu. Each
+kit ships with its licence and attribution files.
 
 ## Build from source
 
