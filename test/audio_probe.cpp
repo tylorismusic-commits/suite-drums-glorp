@@ -1024,6 +1024,14 @@ int main (int argc, char** argv)
 
         proc.processBlock (buffer, midi);
 
+        std::cout << "MIDI thru virtual instruments=" << proc.getMidiMapInstrumentCount();
+        for (int i = 0; i < proc.getMidiMapInstrumentCount(); ++i)
+            std::cout << " [" << proc.getMidiMapInstrumentName (i).toStdString() << "]";
+        std::cout << " 36->" << proc.getMidiThruMappedNote (36)
+                  << " 38->" << proc.getMidiThruMappedNote (38)
+                  << " name36=" << proc.getNameForMidiNoteNumber (36, 1).value_or ("<none>").toStdString()
+                  << std::endl;
+
         std::cout << "MIDI thru out:";
         for (const auto metadata : midi)
         {
@@ -1043,6 +1051,34 @@ int main (int argc, char** argv)
             const auto message = metadata.getMessage();
             if (message.isNoteOff())
                 std::cout << " " << message.getNoteNumber();
+        }
+        std::cout << std::endl;
+
+        // Loop-browser audition path: notes queued from the message thread
+        // must emerge from the plugin's MIDI output.
+        proc.queueMidiThruNote (38, 0.9f, true);
+        proc.queueMidiThruNote (42, 0.7f, true);
+
+        juce::MidiBuffer queued;
+        proc.processBlock (buffer, queued);
+        std::cout << "MIDI thru queued:";
+        for (const auto metadata : queued)
+        {
+            const auto message = metadata.getMessage();
+            if (message.isNoteOn())
+                std::cout << " " << message.getNoteNumber() << "@" << message.getFloatVelocity();
+        }
+        std::cout << std::endl;
+
+        proc.queueMidiThruAllNotesOff();
+        juce::MidiBuffer queuedOffs;
+        proc.processBlock (buffer, queuedOffs);
+        std::cout << "MIDI thru queued offs:";
+        for (const auto metadata : queuedOffs)
+        {
+            const auto message = metadata.getMessage();
+            if (message.isAllNotesOff())
+                std::cout << " " << message.getChannel();
         }
         std::cout << std::endl;
         return 0;

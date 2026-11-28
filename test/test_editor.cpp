@@ -102,6 +102,13 @@ int main (int argc, char** argv)
             if (const auto* library = std::getenv ("GLORP_MIDI_LIBRARY"))
                 proc.getSettings().midiLibraryPath = juce::String (library);
 
+            if (std::getenv ("GLORP_MIDI_THRU") != nullptr)
+            {
+                proc.setMidiThruDestination ("Ugritone KVLT (native)");
+                proc.setMidiThruEnabled (true);
+                proc.closeKit();
+            }
+
             if (const auto* speed = std::getenv ("GLORP_MIDI_SPEED"))
                 proc.getSettings().midiPreviewSpeed = juce::String (speed).getDoubleValue();
 
@@ -118,6 +125,9 @@ int main (int argc, char** argv)
                     {
                         if (auto* browser = dynamic_cast<glorp::MidiBrowser*> (edChild))
                         {
+                            if (const auto* loopFile = std::getenv ("GLORP_MIDI_LOOP"))
+                                browser->selectLoopFile (juce::File (loopFile));
+
                             const auto file = browser->exportSelectedLoop();
                             std::cout << "Exported MIDI: " << file.getFullPathName().toStdString() << std::endl;
                         }

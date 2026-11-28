@@ -8,6 +8,8 @@
 #include "KitScanner.h"
 #include "PluginEditor.h"
 
+#include <set>
+
 namespace glorp
 {
 
@@ -21,10 +23,10 @@ std::optional<juce::String> PluginProcessor::getNameForMidiNoteNumber(int note, 
 
     const int instrument = getMidiMap().instrumentForNote(note);
 
-    if (instrument < 0 || instrument >= audioEngine.getSampler().numInstruments())
+    if (instrument < 0 || instrument >= getMidiMapInstrumentCount())
         return std::nullopt;
 
-    auto name = audioEngine.getSampler().instrumentName(instrument);
+    auto name = getMidiMapInstrumentName(instrument);
 
     if (name.isEmpty())
         return std::nullopt;
@@ -174,6 +176,8 @@ PluginProcessor::~PluginProcessor()
 void PluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     audioEngine.prepareToPlay(sampleRate, samplesPerBlock);
+    midiThruSampleRate.store(sampleRate, std::memory_order_relaxed);
+    midiThruCollector.reset(sampleRate);
 }
 
 void PluginProcessor::releaseResources()
@@ -326,6 +330,10 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float> &buffer, juce::MidiB
     if (!midiThruEnabled.load(std::memory_order_relaxed))
         return;
 
+    // Notes queued by the loop browser (or any message-thread MIDI source)
+    // join the same output stream as the host's input remap.
+    midiThruCollector.removeNextBlockOfMessages(midi, numSamples);
+
     for (const auto metadata : inputMidi)
     {
         const auto message = metadata.getMessage();
@@ -466,6 +474,9 @@ void PluginProcessor::loadKitImpl(const juce::String &drumkitPath)
             }
         }
     }
+
+    // A kit is present again, so the virtual MIDI Thru map no longer applies.
+    rebuildMidiThruMap();
 
     // Reset per-instrument controls for the new kit.
     audioEngine.getSampler().resetInstrumentParams();
@@ -646,8 +657,23 @@ void PluginProcessor::rebuildMidiThruMap()
     if (source == nullptr || destination == nullptr)
         return;
 
+    const auto resolvePreset = [](const MapPreset &preset, MapPreset &out)
+    {
+        out = preset;
+        if (preset.fileName.isEmpty())
+            return true;
+
+        juce::String error;
+        return MidiMap::loadPresetFile(juce::File(preset.fileName), out, error);
+    };
+
+    MapPreset sourceData;
+    MapPreset destinationData;
+    if (!resolvePreset(*source, sourceData) || !resolvePreset(*destination, destinationData))
+        return;
+
     std::map<juce::String, int> destinationNotes;
-    for (const auto &[note, name] : destination->noteToInstrumentName)
+    for (const auto &[note, name] : destinationData.noteToInstrumentName)
     {
         const auto key = canonicalNoteName(name);
         const auto it = destinationNotes.find(key);
@@ -655,7 +681,7 @@ void PluginProcessor::rebuildMidiThruMap()
             destinationNotes[key] = note;
     }
 
-    for (const auto &[note, name] : source->noteToInstrumentName)
+    for (const auto &[note, name] : sourceData.noteToInstrumentName)
     {
         if (note < 0 || note > 127)
             continue;
@@ -664,6 +690,94 @@ void PluginProcessor::rebuildMidiThruMap()
         midiThruMap[static_cast<size_t>(note)].store(destNote >= 0 ? destNote + 1 : 0,
                                                      std::memory_order_relaxed);
     }
+
+    // With no sample kit, give the MIDI editor a real map to display: the
+    // destination profile is what the downstream instrument expects. Without
+    // this the page has zero rows and the host receives no note names.
+    if (midiThruEnabled.load(std::memory_order_relaxed)
+        && audioEngine.getSampler().numInstruments() == 0)
+    {
+        std::vector<juce::String> names;
+        std::set<juce::String> seen;
+        for (const auto &[note, name] : destinationData.noteToInstrumentName)
+        {
+            juce::ignoreUnused(note);
+            if (seen.insert(name).second)
+                names.push_back(name);
+        }
+
+        midiThruVirtualInstrumentNames = names;
+        if (!names.empty())
+            getMidiMap().applyPreset(destinationData, names);
+    }
+    else
+    {
+        midiThruVirtualInstrumentNames.clear();
+    }
+}
+
+int PluginProcessor::getMidiMapInstrumentCount() const noexcept
+{
+    const int kitCount = audioEngine.getSampler().numInstruments();
+    if (kitCount > 0)
+        return kitCount;
+    return static_cast<int>(midiThruVirtualInstrumentNames.size());
+}
+
+juce::String PluginProcessor::getMidiMapInstrumentName(int index) const
+{
+    const int kitCount = audioEngine.getSampler().numInstruments();
+    if (index >= 0 && index < kitCount)
+        return audioEngine.getSampler().instrumentName(index);
+    if (index >= 0 && index < static_cast<int>(midiThruVirtualInstrumentNames.size()))
+        return midiThruVirtualInstrumentNames[static_cast<size_t>(index)];
+    return {};
+}
+
+std::vector<juce::String> PluginProcessor::getMidiMapInstrumentNames() const
+{
+    std::vector<juce::String> names;
+    const int kitCount = audioEngine.getSampler().numInstruments();
+    if (kitCount > 0)
+    {
+        names.reserve(static_cast<size_t>(kitCount));
+        for (int i = 0; i < kitCount; ++i)
+            names.push_back(audioEngine.getSampler().instrumentName(i));
+        return names;
+    }
+
+    return midiThruVirtualInstrumentNames;
+}
+
+int PluginProcessor::getMidiThruMappedNote(int sourceNote) const noexcept
+{
+    if (sourceNote < 0 || sourceNote > 127)
+        return -1;
+
+    const int mapped = midiThruMap[static_cast<size_t>(sourceNote)].load(std::memory_order_relaxed);
+    return mapped > 0 ? mapped - 1 : -1;
+}
+
+void PluginProcessor::queueMidiThruNote(int note, float velocity, bool noteOn)
+{
+    if (note < 0 || note > 127
+        || midiThruSampleRate.load(std::memory_order_relaxed) <= 0.0)
+        return;
+
+    auto message = noteOn ? juce::MidiMessage::noteOn(1, note, juce::jlimit(0.0f, 1.0f, velocity))
+                          : juce::MidiMessage::noteOff(1, note);
+    message.setTimeStamp(juce::Time::getMillisecondCounterHiRes() * 0.001);
+    midiThruCollector.addMessageToQueue(message);
+}
+
+void PluginProcessor::queueMidiThruAllNotesOff()
+{
+    if (midiThruSampleRate.load(std::memory_order_relaxed) <= 0.0)
+        return;
+
+    auto message = juce::MidiMessage::allNotesOff(1);
+    message.setTimeStamp(juce::Time::getMillisecondCounterHiRes() * 0.001);
+    midiThruCollector.addMessageToQueue(message);
 }
 
 void PluginProcessor::setMidiThruEnabled(bool enabled)
@@ -672,6 +786,15 @@ void PluginProcessor::setMidiThruEnabled(bool enabled)
     settings.midiThruEnabled = enabled;
     settings.markDirty();
     settings.saveIfChanged();
+
+    if (!enabled)
+    {
+        midiThruVirtualInstrumentNames.clear();
+        if (midiThruSampleRate.load(std::memory_order_relaxed) > 0.0)
+            midiThruCollector.reset(midiThruSampleRate.load(std::memory_order_relaxed));
+    }
+
+    rebuildMidiThruMap();
     notifyParametersChanged();
 }
 
@@ -689,6 +812,7 @@ void PluginProcessor::closeKit()
     audioEngine.getSampler().unloadKit();
     currentKit = {};
     currentKitPath.clear();
+    rebuildMidiThruMap();
     notifyParametersChanged();
 }
 
@@ -700,11 +824,7 @@ juce::String PluginProcessor::saveCustomMapPreset(const juce::String &presetName
 
     const juce::String canonicalName = trimmed.equalsIgnoreCase("Custom") ? juce::String("Custom") : trimmed;
 
-    std::vector<juce::String> names;
-    const int numInst = audioEngine.getSampler().numInstruments();
-    names.reserve(static_cast<size_t>(numInst));
-    for (int i = 0; i < numInst; ++i)
-        names.push_back(audioEngine.getSampler().instrumentName(i));
+    const auto names = getMidiMapInstrumentNames();
 
     juce::File savedFile;
     if (!getMidiMap().saveUserPreset(canonicalName, names, &savedFile))

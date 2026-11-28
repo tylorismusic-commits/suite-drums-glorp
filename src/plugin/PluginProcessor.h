@@ -21,6 +21,7 @@
 #include "Settings.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_devices/juce_audio_devices.h>
 
 #include "Config.h"
 
@@ -116,6 +117,32 @@ class PluginProcessor : public juce::AudioProcessor
     void setMidiThruDestination(const juce::String &presetName);
     juce::String getMidiThruDestination() const { return midiThruDestination; }
 
+    /// True when there is no sample kit and MIDI Thru is driving another instrument.
+    bool isMidiThruNoKit() const noexcept
+    {
+        return midiThruEnabled.load(std::memory_order_relaxed)
+               && audioEngine.getSampler().numInstruments() == 0;
+    }
+
+    /// Instrument names the MIDI editor should show. With no kit loaded this is
+    /// the active MIDI Thru destination profile rather than an empty list.
+    int getMidiMapInstrumentCount() const noexcept;
+    juce::String getMidiMapInstrumentName(int index) const;
+    std::vector<juce::String> getMidiMapInstrumentNames() const;
+
+    /// Destination note for a source-map note, or -1 when no matching
+    /// destination instrument exists.
+    int getMidiThruMappedNote(int sourceNote) const noexcept;
+
+    /// Recomputes the source -> destination note map. Call after changing the
+    /// source or destination profile.
+    void rebuildMidiThruMap();
+
+    /// Queues a note for the MIDI output. Used by the loop browser when the
+    /// plugin is acting as a no-kit MIDI mapper.
+    void queueMidiThruNote(int note, float velocity, bool noteOn);
+    void queueMidiThruAllNotesOff();
+
     /// Unloads the current kit so the plugin can be used as a pure MIDI mapper.
     void closeKit();
 
@@ -179,7 +206,9 @@ class PluginProcessor : public juce::AudioProcessor
     std::array<std::atomic<int>, 128> midiThruMap;
     std::map<int, int> midiThruActive; // (channel << 8) | input note -> output note
     juce::String midiThruDestination {"Ugritone KVLT (native)"};
-    void rebuildMidiThruMap();
+    std::vector<juce::String> midiThruVirtualInstrumentNames;
+    juce::MidiMessageCollector midiThruCollector;
+    std::atomic<double> midiThruSampleRate {0.0};
 
     std::vector<KitEntry> kitList;
     juce::String currentKitPath;

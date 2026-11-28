@@ -55,6 +55,7 @@ class MidiPage : public juce::Component, private juce::Timer
     int learningInstrument = -1;
     int learningSlot = -1;
     int lastAssignmentCount = -1;
+    int lastInstrumentCount = -1;
     bool lastLearningState = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MidiPage)

@@ -15,6 +15,7 @@
 #include <array>
 #include <functional>
 #include <memory>
+#include <set>
 #include <vector>
 
 namespace glorp
@@ -36,6 +37,10 @@ class MidiBrowser : public juce::Component, private juce::Timer
 
     /// Writes the current loop as a remapped MIDI file and returns its path.
     juce::File exportSelectedLoop() { return exportSelected(); }
+
+    /// Selects a loop file directly, without going through the library columns.
+    /// Used by automated preview/export tests.
+    void selectLoopFile(const juce::File &file);
 
     std::function<void()> onCloseRequested;
     std::function<void(juce::Component *, const juce::File &)> onExportDrag;
@@ -147,6 +152,7 @@ class MidiBrowser : public juce::Component, private juce::Timer
         int instrument = -1;
         int note = -1;
         float velocity = 0.8f;
+        bool noteOff = false;
     };
 
     std::vector<AuditionEvent> auditionEvents;
@@ -158,6 +164,7 @@ class MidiBrowser : public juce::Component, private juce::Timer
     double auditionLoopSeconds = 0.0;
     double pausedAtSeconds = 0.0;
     double playbackSpeed = 1.0;
+    std::set<int> midiThruHeldNotes;
 
     juce::String statusText;
     bool statusIsWarning = false;

@@ -333,6 +333,7 @@ class MidiPage::HitRow : public juce::Component
 
         const auto params = owner.processor.getSampler().getInstrumentParams(instrument);
         curve->setPoints(curveForParams(params), instrument);
+        curve->setVisible(instrument < owner.processor.getSampler().numInstruments());
 
         for (int i = 0; i < 3; ++i)
             slots[static_cast<size_t>(i)]->setLearning(owner.learningInstrument == instrument
@@ -356,7 +357,7 @@ class MidiPage::HitRow : public juce::Component
 
         g.setColour(theme.ink);
         g.setFont(displayFont(17.0f));
-        g.drawFittedText(owner.processor.getSampler().instrumentName(instrument),
+        g.drawFittedText(owner.processor.getMidiMapInstrumentName(instrument),
                          juce::Rectangle<int>(46, 8, 170, 22),
                          juce::Justification::centredLeft,
                          1,
@@ -448,7 +449,7 @@ void MidiPage::refresh()
 
 void MidiPage::rebuildRows()
 {
-    const int count = processor.getSampler().numInstruments();
+    const int count = processor.getMidiMapInstrumentCount();
 
     if (static_cast<int>(rows.size()) == count)
         return;
@@ -545,12 +546,15 @@ void MidiPage::timerCallback()
 {
     const auto count = static_cast<int>(processor.getMidiMap().noteAssignments().size());
     const bool learning = processor.getMidiMap().isLearning();
+    const int instrumentCount = processor.getMidiMapInstrumentCount();
 
-    if (count != lastAssignmentCount || learning != lastLearningState)
+    if (count != lastAssignmentCount || learning != lastLearningState
+        || instrumentCount != lastInstrumentCount)
     {
         lastAssignmentCount = count;
         lastLearningState = learning;
-        refreshRows();
+        lastInstrumentCount = instrumentCount;
+        refresh();
     }
 }
 

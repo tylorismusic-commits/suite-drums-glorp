@@ -238,6 +238,7 @@ MidiBrowser::MidiBrowser(PluginProcessor &processorIn) : processor(processorIn)
         processor.getSettings().midiSourceProfile = sourceBox.getText();
         processor.getSettings().markDirty();
         processor.getSettings().saveIfChanged();
+        processor.rebuildMidiThruMap();
         setStatus("Source map: " + sourceBox.getText());
     };
 
@@ -591,6 +592,15 @@ void MidiBrowser::selectSong(int index)
     loopColumn->setItems(loops);
 }
 
+void MidiBrowser::selectLoopFile(const juce::File &file)
+{
+    if (!file.existsAsFile())
+        return;
+
+    selectedLoopFile = file;
+    setStatus("Selected: " + file.getFileName());
+}
+
 void MidiBrowser::selectLoop(int index)
 {
     selectedLoop = index;
@@ -655,27 +665,62 @@ bool MidiBrowser::buildRemap(const juce::File &source, Remap &remap) const
     if (sourcePreset == nullptr)
         return false;
 
-    MidiMap sourceMap;
-    sourceMap.applyPreset(*sourcePreset, kitNames);
-
-    for (int note = 0; note < 128; ++note)
+    MapPreset sourceData = *sourcePreset;
+    if (!sourcePreset->fileName.isEmpty())
     {
-        const int instrument = sourceMap.instrumentForNote(note);
+        juce::String error;
+        if (!MidiMap::loadPresetFile(juce::File(sourcePreset->fileName), sourceData, error))
+            return false;
+    }
 
-        if (instrument < 0 || instrument >= processor.getSampler().numInstruments())
-            continue;
-
-        const int target = processor.getMidiMap().noteForInstrument(instrument);
-
-        if (target >= 0)
+    if (processor.isMidiThruNoKit())
+    {
+        // No kit has been loaded. Use the source profile's note names and the
+        // MIDI Thru destination map directly; there is no sampler instrument
+        // index to resolve against.
+        for (const auto &[note, name] : sourceData.noteToInstrumentName)
         {
-            remap.instrument[static_cast<size_t>(note)] = instrument;
-            remap.targetNote[static_cast<size_t>(note)] = target;
-            ++remap.mappedNotes;
+            juce::ignoreUnused(name);
+            if (note < 0 || note > 127)
+                continue;
+
+            const int target = processor.getMidiThruMappedNote(note);
+            if (target >= 0)
+            {
+                remap.instrument[static_cast<size_t>(note)] = 0;
+                remap.targetNote[static_cast<size_t>(note)] = target;
+                ++remap.mappedNotes;
+            }
+            else
+            {
+                ++remap.unmappedNotes;
+            }
         }
-        else
+    }
+    else
+    {
+        MidiMap sourceMap;
+        sourceMap.applyPreset(sourceData, kitNames);
+
+        for (int note = 0; note < 128; ++note)
         {
-            ++remap.unmappedNotes;
+            const int instrument = sourceMap.instrumentForNote(note);
+
+            if (instrument < 0 || instrument >= processor.getSampler().numInstruments())
+                continue;
+
+            const int target = processor.getMidiMap().noteForInstrument(instrument);
+
+            if (target >= 0)
+            {
+                remap.instrument[static_cast<size_t>(note)] = instrument;
+                remap.targetNote[static_cast<size_t>(note)] = target;
+                ++remap.mappedNotes;
+            }
+            else
+            {
+                ++remap.unmappedNotes;
+            }
         }
     }
 
@@ -756,8 +801,11 @@ void MidiBrowser::auditionSelected()
         for (int event = 0; event < sequence->getNumEvents(); ++event)
         {
             const auto &message = sequence->getEventPointer(event)->message;
+            const bool isNoteOff = message.isNoteOff()
+                                   || (message.isNoteOn() && message.getVelocity() <= 0);
+            const bool isNoteOn = message.isNoteOn() && message.getVelocity() > 0;
 
-            if (!message.isNoteOn() || message.getVelocity() <= 0)
+            if (!isNoteOn && !isNoteOff)
                 continue;
 
             if (remap.useChannel10 && message.getChannel() != 10)
@@ -776,14 +824,24 @@ void MidiBrowser::auditionSelected()
             audition.instrument = instrument;
             audition.note = target;
             audition.velocity = message.getFloatVelocity();
+            audition.noteOff = isNoteOff;
             auditionEvents.push_back(audition);
-            auditionLengthSeconds = std::max(auditionLengthSeconds, audition.timeSeconds);
+
+            if (isNoteOn)
+                auditionLengthSeconds = std::max(auditionLengthSeconds, audition.timeSeconds);
         }
     }
 
     std::sort(auditionEvents.begin(),
               auditionEvents.end(),
-              [](const AuditionEvent &a, const AuditionEvent &b) { return a.timeSeconds < b.timeSeconds; });
+              [](const AuditionEvent &a, const AuditionEvent &b)
+              {
+                  if (a.timeSeconds != b.timeSeconds)
+                      return a.timeSeconds < b.timeSeconds;
+
+                  // At a loop boundary, release the old note before retriggering.
+                  return a.noteOff && !b.noteOff;
+              });
 
     if (auditionEvents.empty())
     {
@@ -816,7 +874,8 @@ void MidiBrowser::auditionSelected()
     startTimerHz(120);
     updateTransportButtons();
     setStatus("Playing " + selectedLoopFile.getFileName() + " at " + juce::String(hostBpm, 1)
-              + " BPM, " + juce::String(speed, 1) + "x (source " + sourceBox.getText() + ")");
+              + " BPM, " + juce::String(speed, 1) + "x (source " + sourceBox.getText() + ")"
+              + (processor.isMidiThruNoKit() ? " -> MIDI Thru" : ""));
 }
 
 void MidiBrowser::pauseAudition()
@@ -828,6 +887,11 @@ void MidiBrowser::pauseAudition()
     auditionPaused = true;
     stopTimer();
     processor.getSampler().allNotesOff();
+    if (processor.isMidiThruNoKit())
+    {
+        processor.queueMidiThruAllNotesOff();
+        midiThruHeldNotes.clear();
+    }
     updateTransportButtons();
     setStatus("Paused.");
 }
@@ -852,6 +916,11 @@ void MidiBrowser::stopAudition()
     nextAuditionEvent = 0;
     pausedAtSeconds = 0.0;
     processor.getSampler().allNotesOff();
+    if (processor.isMidiThruNoKit())
+    {
+        processor.queueMidiThruAllNotesOff();
+        midiThruHeldNotes.clear();
+    }
     updateTransportButtons();
     setStatus("Stopped.");
 }
@@ -873,6 +942,12 @@ void MidiBrowser::timerCallback()
 
     if (loopButton.getToggleState() && elapsed >= auditionLoopSeconds)
     {
+        if (processor.isMidiThruNoKit())
+        {
+            processor.queueMidiThruAllNotesOff();
+            midiThruHeldNotes.clear();
+        }
+
         auditionStartMs += auditionLoopSeconds * 1000.0;
         elapsed -= auditionLoopSeconds;
         nextAuditionEvent = 0;
@@ -882,10 +957,26 @@ void MidiBrowser::timerCallback()
            && auditionEvents[static_cast<size_t>(nextAuditionEvent)].timeSeconds <= elapsed)
     {
         const auto &event = auditionEvents[static_cast<size_t>(nextAuditionEvent)];
-        processor.getSampler().noteOn(event.instrument,
-                                      event.note,
-                                      event.velocity,
-                                      processor.getSampler().currentSamplePosition());
+        if (processor.isMidiThruNoKit())
+        {
+            if (event.noteOff)
+            {
+                if (midiThruHeldNotes.erase(event.note) > 0)
+                    processor.queueMidiThruNote(event.note, 0.0f, false);
+            }
+            else
+            {
+                processor.queueMidiThruNote(event.note, event.velocity, true);
+                midiThruHeldNotes.insert(event.note);
+            }
+        }
+        else if (!event.noteOff)
+        {
+            processor.getSampler().noteOn(event.instrument,
+                                          event.note,
+                                          event.velocity,
+                                          processor.getSampler().currentSamplePosition());
+        }
         ++nextAuditionEvent;
     }
 
