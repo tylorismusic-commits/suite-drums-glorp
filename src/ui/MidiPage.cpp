@@ -366,9 +366,10 @@ class MidiPage::HitRow : public juce::Component
         g.setColour(theme.inkSoft);
         g.setFont(uiFont(9.0f));
         g.drawText("MIDI NOTES", juce::Rectangle<int>(16, 40, 220, 12), juce::Justification::centredLeft, false);
-        g.drawText("VELOCITY RESPONSE", juce::Rectangle<int>(getWidth() - 300, 8, 280, 12),
-                   juce::Justification::centredRight,
-                   false);
+        if (instrument < owner.processor.getSampler().numInstruments())
+            g.drawText("VELOCITY RESPONSE", juce::Rectangle<int>(getWidth() - 300, 8, 280, 12),
+                       juce::Justification::centredRight,
+                       false);
 
         for (int i = 0; i < 3; ++i)
         {

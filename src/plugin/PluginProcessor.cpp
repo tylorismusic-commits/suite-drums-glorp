@@ -758,14 +758,15 @@ int PluginProcessor::getMidiThruMappedNote(int sourceNote) const noexcept
     return mapped > 0 ? mapped - 1 : -1;
 }
 
-void PluginProcessor::queueMidiThruNote(int note, float velocity, bool noteOn)
+void PluginProcessor::queueMidiThruNote(int note, float velocity, bool noteOn, int channel)
 {
     if (note < 0 || note > 127
         || midiThruSampleRate.load(std::memory_order_relaxed) <= 0.0)
         return;
 
-    auto message = noteOn ? juce::MidiMessage::noteOn(1, note, juce::jlimit(0.0f, 1.0f, velocity))
-                          : juce::MidiMessage::noteOff(1, note);
+    const int midiChannel = juce::jlimit(1, 16, channel);
+    auto message = noteOn ? juce::MidiMessage::noteOn(midiChannel, note, juce::jlimit(0.0f, 1.0f, velocity))
+                          : juce::MidiMessage::noteOff(midiChannel, note);
     message.setTimeStamp(juce::Time::getMillisecondCounterHiRes() * 0.001);
     midiThruCollector.addMessageToQueue(message);
 }
@@ -775,9 +776,14 @@ void PluginProcessor::queueMidiThruAllNotesOff()
     if (midiThruSampleRate.load(std::memory_order_relaxed) <= 0.0)
         return;
 
-    auto message = juce::MidiMessage::allNotesOff(1);
-    message.setTimeStamp(juce::Time::getMillisecondCounterHiRes() * 0.001);
-    midiThruCollector.addMessageToQueue(message);
+    const double now = juce::Time::getMillisecondCounterHiRes() * 0.001;
+
+    for (int channel = 1; channel <= 16; ++channel)
+    {
+        auto message = juce::MidiMessage::allNotesOff(channel);
+        message.setTimeStamp(now);
+        midiThruCollector.addMessageToQueue(message);
+    }
 }
 
 void PluginProcessor::setMidiThruEnabled(bool enabled)

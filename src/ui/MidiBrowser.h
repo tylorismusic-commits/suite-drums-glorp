@@ -152,6 +152,7 @@ class MidiBrowser : public juce::Component, private juce::Timer
         int instrument = -1;
         int note = -1;
         float velocity = 0.8f;
+        int channel = 1;
         bool noteOff = false;
     };
 

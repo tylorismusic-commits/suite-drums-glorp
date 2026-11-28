@@ -824,6 +824,7 @@ void MidiBrowser::auditionSelected()
             audition.instrument = instrument;
             audition.note = target;
             audition.velocity = message.getFloatVelocity();
+            audition.channel = message.getChannel();
             audition.noteOff = isNoteOff;
             auditionEvents.push_back(audition);
 
@@ -836,8 +837,10 @@ void MidiBrowser::auditionSelected()
               auditionEvents.end(),
               [](const AuditionEvent &a, const AuditionEvent &b)
               {
-                  if (a.timeSeconds != b.timeSeconds)
-                      return a.timeSeconds < b.timeSeconds;
+                  if (a.timeSeconds < b.timeSeconds)
+                      return true;
+                  if (b.timeSeconds < a.timeSeconds)
+                      return false;
 
                   // At a loop boundary, release the old note before retriggering.
                   return a.noteOff && !b.noteOff;
@@ -887,7 +890,7 @@ void MidiBrowser::pauseAudition()
     auditionPaused = true;
     stopTimer();
     processor.getSampler().allNotesOff();
-    if (processor.isMidiThruNoKit())
+    if (!midiThruHeldNotes.empty())
     {
         processor.queueMidiThruAllNotesOff();
         midiThruHeldNotes.clear();
@@ -916,7 +919,7 @@ void MidiBrowser::stopAudition()
     nextAuditionEvent = 0;
     pausedAtSeconds = 0.0;
     processor.getSampler().allNotesOff();
-    if (processor.isMidiThruNoKit())
+    if (!midiThruHeldNotes.empty())
     {
         processor.queueMidiThruAllNotesOff();
         midiThruHeldNotes.clear();
@@ -942,7 +945,7 @@ void MidiBrowser::timerCallback()
 
     if (loopButton.getToggleState() && elapsed >= auditionLoopSeconds)
     {
-        if (processor.isMidiThruNoKit())
+        if (!midiThruHeldNotes.empty())
         {
             processor.queueMidiThruAllNotesOff();
             midiThruHeldNotes.clear();
@@ -959,15 +962,17 @@ void MidiBrowser::timerCallback()
         const auto &event = auditionEvents[static_cast<size_t>(nextAuditionEvent)];
         if (processor.isMidiThruNoKit())
         {
+            const int heldKey = (event.channel << 8) | event.note;
+
             if (event.noteOff)
             {
-                if (midiThruHeldNotes.erase(event.note) > 0)
-                    processor.queueMidiThruNote(event.note, 0.0f, false);
+                if (midiThruHeldNotes.erase(heldKey) > 0)
+                    processor.queueMidiThruNote(event.note, 0.0f, false, event.channel);
             }
             else
             {
-                processor.queueMidiThruNote(event.note, event.velocity, true);
-                midiThruHeldNotes.insert(event.note);
+                processor.queueMidiThruNote(event.note, event.velocity, true, event.channel);
+                midiThruHeldNotes.insert(heldKey);
             }
         }
         else if (!event.noteOff)

@@ -140,7 +140,7 @@ class PluginProcessor : public juce::AudioProcessor
 
     /// Queues a note for the MIDI output. Used by the loop browser when the
     /// plugin is acting as a no-kit MIDI mapper.
-    void queueMidiThruNote(int note, float velocity, bool noteOn);
+    void queueMidiThruNote(int note, float velocity, bool noteOn, int channel = 1);
     void queueMidiThruAllNotesOff();
 
     /// Unloads the current kit so the plugin can be used as a pure MIDI mapper.

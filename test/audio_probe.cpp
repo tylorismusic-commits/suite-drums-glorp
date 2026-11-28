@@ -1056,8 +1056,8 @@ int main (int argc, char** argv)
 
         // Loop-browser audition path: notes queued from the message thread
         // must emerge from the plugin's MIDI output.
-        proc.queueMidiThruNote (38, 0.9f, true);
-        proc.queueMidiThruNote (42, 0.7f, true);
+        proc.queueMidiThruNote (38, 0.9f, true, 10);
+        proc.queueMidiThruNote (42, 0.7f, true, 10);
 
         juce::MidiBuffer queued;
         proc.processBlock (buffer, queued);
@@ -1066,7 +1066,8 @@ int main (int argc, char** argv)
         {
             const auto message = metadata.getMessage();
             if (message.isNoteOn())
-                std::cout << " " << message.getNoteNumber() << "@" << message.getFloatVelocity();
+                std::cout << " " << message.getNoteNumber() << "@" << message.getFloatVelocity()
+                          << "ch" << message.getChannel();
         }
         std::cout << std::endl;
 
