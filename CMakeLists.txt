@@ -142,7 +142,7 @@ juce_add_plugin(GlorpDrums
     COPY_PLUGIN_AFTER_BUILD FALSE
     IS_SYNTH                FALSE
     NEEDS_MIDI_INPUT        TRUE
-    NEEDS_MIDI_OUTPUT       FALSE
+    NEEDS_MIDI_OUTPUT       TRUE
     IS_MIDI_EFFECT          FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     ICON_BIG                assets/suite_drums_icon.png
