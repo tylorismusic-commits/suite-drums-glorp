@@ -1013,8 +1013,16 @@ int main (int argc, char** argv)
     if (std::getenv ("GLORP_PROBE_MIDITHRU") != nullptr)
     {
         proc.setMidiThruDestination ("Ugritone KVLT (native)");
+
+        // Reproduce the "Close Kit (MIDI Thru)" menu action: it must enable
+        // MIDI Thru as well as unload the kit.
+        proc.setMidiThruEnabled (false);
+        proc.closeKit();
+        const int closeOnlyCount = proc.getMidiMapInstrumentCount();
         proc.setMidiThruEnabled (true);
         proc.closeKit();
+        const int enableCloseCount = proc.getMidiMapInstrumentCount();
+
         proc.prepareToPlay (48000.0, 512);
 
         juce::AudioBuffer<float> buffer (2, 512);
@@ -1024,6 +1032,8 @@ int main (int argc, char** argv)
 
         proc.processBlock (buffer, midi);
 
+        std::cout << "MIDI thru close-only=" << closeOnlyCount
+                  << " enable+close=" << enableCloseCount << std::endl;
         std::cout << "MIDI thru virtual instruments=" << proc.getMidiMapInstrumentCount();
         for (int i = 0; i < proc.getMidiMapInstrumentCount(); ++i)
             std::cout << " [" << proc.getMidiMapInstrumentName (i).toStdString() << "]";

@@ -2138,8 +2138,13 @@ juce::PopupMenu Editor::buildPresetsMenu()
     menu.addItem("Close Kit (MIDI Thru)",
                  [this]
                  {
+                     // This is the one-stop action for the no-kit mapper: it
+                     // must enable MIDI Thru as well as unload the kit, or the
+                     // virtual destination map is never built.
+                     processor.setMidiThruEnabled(true);
                      processor.closeKit();
-                     statusText = "Kit closed. MIDI Thru can drive another instrument.";
+                     statusText = "MIDI Thru enabled. Kit closed; notes route to "
+                                  + processor.getMidiThruDestination() + ".";
                      repaint();
                  });
 
